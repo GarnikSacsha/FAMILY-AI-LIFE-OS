@@ -8,6 +8,7 @@ from aiogram.types import BotCommand
 from app.config.settings import settings
 from app.infrastructure.database.session import AsyncSessionLocal
 from app.integrations.oura.client import OuraClient
+from app.tools.health_tools import HealthTools
 from app.orchestration.orchestrator import MainOrchestrator
 
 logging.basicConfig(level=logging.INFO)
@@ -15,6 +16,12 @@ logger = logging.getLogger(__name__)
 
 bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
 dp = Dispatcher()
+
+
+def is_authorized_user(telegram_id: int) -> bool:
+    """Strict security check: only Denys and Oleksandra are permitted."""
+    allowed = {settings.DENYS_TELEGRAM_ID, settings.OLEKSANDRA_TELEGRAM_ID}
+    return telegram_id in allowed
 
 
 async def setup_bot_commands(bot_instance: Bot):
@@ -34,6 +41,10 @@ async def setup_bot_commands(bot_instance: Bot):
 
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message):
+    if not is_authorized_user(message.from_user.id):
+        await message.answer("🔒 Доступ ограничен. Этот бот является персональной семейной системой.")
+        return
+
     await message.answer(
         "🌿 **Добро пожаловать в Family AI Life OS!**\n\n"
         "Я — ваш семейный ассистент. Я помогаю следить за здоровьем, сном (Oura), "
@@ -45,6 +56,10 @@ async def cmd_start(message: types.Message):
 
 @dp.message(Command("help"))
 async def cmd_help(message: types.Message):
+    if not is_authorized_user(message.from_user.id):
+        await message.answer("🔒 Доступ ограничен.")
+        return
+
     await message.answer(
         "📖 **Доступные возможности:**\n"
         "• **/oura** — подключение Oura Ring\n"
@@ -58,21 +73,19 @@ async def cmd_help(message: types.Message):
 
 @dp.message(Command("oura"))
 async def cmd_oura_setup(message: types.Message):
+    if not is_authorized_user(message.from_user.id):
+        await message.answer("🔒 Доступ ограничен.")
+        return
+
     user_id = message.from_user.id
     auth_url = OuraClient.get_authorization_url(state=str(user_id))
     
-    client_id_status = "✅ Задан" if settings.OURA_CLIENT_ID else "❌ НЕ задан в Railway Variables"
-    redirect_uri_val = settings.OURA_REDIRECT_URI or "не задан"
-
     await message.answer(
         "💍 **Подключение Oura Ring:**\n\n"
         "1. Перейдите по ссылке ниже и войдите под вашим аккаунтом Oura:\n"
         f"🔗 [Нажмите здесь для входа в Oura]({auth_url})\n\n"
-        f"⚙️ **Параметры проверки:**\n"
-        f"• Client ID: `{client_id_status}`\n"
-        f"• Redirect URI: `{redirect_uri_val}`\n\n"
         "2. Нажмите кнопку **Approve / Разрешить**.\n"
-        "3. Браузер перенаправит вас на страницу. Скопируйте ссылку из адресной строки и **отправьте её мне ответом в этот чат**!",
+        "3. Перейдите по открывшейся странице. Скопируйте ссылку из адресной строки и **отправьте её мне ответом в этот чат**!",
         parse_mode=ParseMode.MARKDOWN,
         disable_web_page_preview=True
     )
@@ -81,6 +94,12 @@ async def cmd_oura_setup(message: types.Message):
 @dp.message()
 async def handle_user_message(message: types.Message):
     user_id = message.from_user.id
+    
+    # 🛡 Security Guard: reject unauthorized Telegram users instantly
+    if not is_authorized_user(user_id):
+        await message.answer("🔒 У вас нет доступа к этой семейной системе.")
+        return
+
     user_name = message.from_user.first_name or "Пользователь"
     text = message.text or message.caption or ""
 
@@ -89,14 +108,19 @@ async def handle_user_message(message: types.Message):
         code = text.split("code=")[-1].split("&")[0].strip()
         try:
             tokens = await OuraClient.exchange_code_for_tokens(code)
+            async with AsyncSessionLocal() as session:
+                await HealthTools.save_oura_tokens(session, telegram_id=user_id, tokens=tokens)
+            
             await message.answer(
-                "✅ **Oura Ring успешно подключено!**\n\n"
-                "Теперь я автоматически отслеживаю ваш сон, готовность (Readiness) и активность.",
+                "✅ **Oura Ring успешно подключено и авторизовано!**\n\n"
+                "Ваши данные защищены и привязаны исключительно к вашему профилю.",
                 parse_mode=ParseMode.MARKDOWN
             )
             return
         except Exception as e:
             logger.warning(f"Oura OAuth exchange error: {e}")
+            await message.answer("❌ Ошибка авторизации Oura. Попробуйте сгенерировать новую ссылку через /oura")
+            return
 
     photo_bytes = None
     if message.photo:
@@ -122,7 +146,7 @@ async def handle_user_message(message: types.Message):
 
 
 async def start_bot():
-    logger.info("Starting Family AI Life OS Telegram Bot...")
+    logger.info("Starting Family AI Life OS Telegram Bot with Identity Security Guard...")
     await setup_bot_commands(bot)
     await dp.start_polling(bot)
 

@@ -1,9 +1,10 @@
 import uuid
 from datetime import datetime, timezone
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domains.identity.models import User, OAuthToken
 from app.domains.health.models import Meal, OuraDailyMetric
 from app.integrations.gemini.client import GeminiVisionClient
 from app.integrations.oura.client import OuraClient
@@ -11,6 +12,56 @@ from app.integrations.oura.client import OuraClient
 
 class HealthTools:
     """Deterministic health domain tools for database & API interactions."""
+
+    @staticmethod
+    async def save_oura_tokens(
+        session: AsyncSession,
+        telegram_id: int,
+        tokens: Dict[str, Any],
+    ) -> bool:
+        """Stores or updates Oura OAuth tokens for a specific user securely in DB."""
+        stmt = select(User).where(User.telegram_id == telegram_id)
+        result = await session.execute(stmt)
+        user = result.scalar_one_or_none()
+
+        if not user:
+            # Create user on the fly if needed
+            user = User(
+                id=uuid.uuid4(),
+                telegram_id=telegram_id,
+                first_name="User",
+            )
+            session.add(user)
+            await session.flush()
+
+        access_token = tokens.get("access_token", "")
+        refresh_token = tokens.get("refresh_token")
+        expires_in = tokens.get("expires_in", 86400)
+        expires_at = datetime.now(timezone.utc)
+
+        token_stmt = select(OAuthToken).where(
+            OAuthToken.user_id == user.id,
+            OAuthToken.provider == "oura"
+        )
+        token_res = await session.execute(token_stmt)
+        oauth_record = token_res.scalar_one_or_none()
+
+        if oauth_record:
+            oauth_record.access_token_encrypted = access_token
+            oauth_record.refresh_token_encrypted = refresh_token
+            oauth_record.expires_at = expires_at
+        else:
+            oauth_record = OAuthToken(
+                user_id=user.id,
+                provider="oura",
+                access_token_encrypted=access_token,
+                refresh_token_encrypted=refresh_token,
+                expires_at=expires_at,
+            )
+            session.add(oauth_record)
+
+        await session.commit()
+        return True
 
     @staticmethod
     async def log_meal_photo(
@@ -50,23 +101,3 @@ class HealthTools:
             "coaching_tip": meal.coaching_tip,
             "status": "SUCCESS",
         }
-
-    @staticmethod
-    async def get_user_meals_today(
-        session: AsyncSession, user_id: uuid.UUID
-    ) -> List[Dict[str, Any]]:
-        """Retrieves all meals logged today for a user."""
-        stmt = select(Meal).where(Meal.user_id == user_id).order_by(Meal.consumed_at.desc())
-        result = await session.execute(stmt)
-        meals = result.scalars().all()
-
-        return [
-            {
-                "meal_id": str(m.id),
-                "dish_name": m.dish_name,
-                "calories": m.calories_est,
-                "macros": f"P: {m.proteins_g}g | F: {m.fats_g}g | C: {m.carbs_g}g",
-                "time": m.consumed_at.strftime("%H:%M"),
-            }
-            for m in meals
-        ]
