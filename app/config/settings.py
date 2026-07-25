@@ -37,8 +37,11 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: Optional[str] = None
     GEMINI_API_KEY: Optional[str] = None
     
-    OPENAI_FAST_MODEL: str = "gpt-4o-mini"
-    OPENAI_REASONING_MODEL: str = "gpt-4o"
+    # Model Assignments
+    OPENAI_FAST_MODEL: str = "gpt-5.6-terra"
+    OPENAI_REASONING_MODEL: str = "gpt-5.6-terra"
+    TERRA_MODEL_NAME: str = "gpt-5.6-terra"
+    
     GEMINI_VISION_MODEL: str = "gemini-2.5-flash"
     GEMINI_FINANCE_MODEL: str = "gemini-2.5-flash"
 
