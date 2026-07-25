@@ -1,5 +1,6 @@
 import os
 from typing import Optional
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -13,6 +14,18 @@ class Settings(BaseSettings):
     # Database & Cache
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/family_life_os"
     REDIS_URL: str = "redis://localhost:6379/0"
+
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def assemble_db_connection(cls, v: Optional[str]) -> str:
+        if not v:
+            return "postgresql+asyncpg://postgres:postgres@localhost:5432/family_life_os"
+        # Convert postgres:// or postgresql:// to postgresql+asyncpg:// for async SQLAlchemy
+        if v.startswith("postgres://"):
+            return v.replace("postgres://", "postgresql+asyncpg://", 1)
+        if v.startswith("postgresql://") and not v.startswith("postgresql+asyncpg://"):
+            return v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return v
 
     # Telegram Bot
     TELEGRAM_BOT_TOKEN: str = "1234567890:ABCdefGHIjklMNOpqrsTUVwxyz"
