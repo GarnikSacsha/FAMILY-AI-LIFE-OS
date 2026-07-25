@@ -6,6 +6,7 @@ from aiogram.enums import ParseMode
 
 from app.config.settings import settings
 from app.infrastructure.database.session import AsyncSessionLocal
+from app.integrations.oura.client import OuraClient
 from app.orchestration.orchestrator import MainOrchestrator
 
 logging.basicConfig(level=logging.INFO)
@@ -21,18 +22,35 @@ async def cmd_start(message: types.Message):
         "🌿 **Добро пожаловать в Family AI Life OS!**\n\n"
         "Я — ваш семейный ассистент. Я помогаю следить за здоровьем, сном (Oura), "
         "питанием по фото, семейным бюджетом, расходами и задачами.\n\n"
-        "Просто напишите мне свой запрос или отправьте фото еды/чека!"
+        "🔗 Для подключения Oura Ring введите команду: **/oura**\n"
+        "🥗 Или просто отправьте мне фото еды / чека!"
     )
 
 
 @dp.message(Command("help"))
 async def cmd_help(message: types.Message):
     await message.answer(
-        "📖 **Доступные возможности:**\n"
+        "📖 **Доступные команды:**\n"
+        "• **/oura** — привязать или проверить статус Oura Ring\n"
         "• 🥗 **Фото еды**: отправьте фото, и я оценю калории и БЖУ.\n"
-        "• 💍 **Oura Ring**: подключайте Oura для отслеживания сна и готовности.\n"
         "• 💳 **Финансы**: отправляйте чеки или расходы для учета бюджета.\n"
         "• 🛒 **Покупки**: говорите 'добавь молоко в список покупок'."
+    )
+
+
+@dp.message(Command("oura"))
+async def cmd_oura_setup(message: types.Message):
+    user_id = message.from_user.id
+    auth_url = OuraClient.get_authorization_url(state=str(user_id))
+    
+    await message.answer(
+        "💍 **Подключение Oura Ring:**\n\n"
+        "1. Перейдите по ссылке ниже и войдите под вашим аккаунтом Oura:\n"
+        f"🔗 [Авторизоваться в Oura Ring]({auth_url})\n\n"
+        "2. Нажмите кнопку **Approve / Разрешить**.\n"
+        "3. Браузер перенаправит вас на страницу. Скопируйте ссылку из адресной строки (или полученный код `code=...`) и **отправьте её мне ответом в этот чат**!",
+        parse_mode=ParseMode.MARKDOWN,
+        disable_web_page_preview=True
     )
 
 
@@ -40,18 +58,31 @@ async def cmd_help(message: types.Message):
 async def handle_user_message(message: types.Message):
     user_id = message.from_user.id
     user_name = message.from_user.first_name or "Пользователь"
-    
+    text = message.text or message.caption or ""
+
+    # OAuth Code Capturing from User input
+    if "code=" in text or (len(text.strip()) > 20 and not text.startswith("/") and not message.photo):
+        code = text.split("code=")[-1].split("&")[0].strip()
+        try:
+            tokens = await OuraClient.exchange_code_for_tokens(code)
+            await message.answer(
+                "✅ **Oura Ring успешно подключено!**\n\n"
+                "Теперь я автоматически отслеживаю ваш сон, готовность (Readiness) и активность.",
+                parse_mode=ParseMode.MARKDOWN
+            )
+            return
+        except Exception as e:
+            logger.warning(f"Oura OAuth exchange error: {e}")
+
     photo_bytes = None
     if message.photo:
-        # Get highest resolution photo
         photo = message.photo[-1]
         file_info = await bot.get_file(photo.file_id)
         downloaded_file = await bot.download_file(file_info.file_path)
         photo_bytes = downloaded_file.read()
 
     async with AsyncSessionLocal() as session:
-        # Placeholder UUIDs for Denys & Oleksandra single-household setup
-        user_uuid = settings.DENYS_TELEGRAM_ID
+        user_uuid = settings.DENYS_TELEGRAM_ID if user_id == settings.DENYS_TELEGRAM_ID else settings.OLEKSANDRA_TELEGRAM_ID
         household_uuid = user_uuid
 
         response_text = await MainOrchestrator.process_user_message(
@@ -59,7 +90,7 @@ async def handle_user_message(message: types.Message):
             user_id=user_uuid,
             household_id=household_uuid,
             user_name=user_name,
-            message_text=message.text or message.caption or "",
+            message_text=text,
             photo_bytes=photo_bytes,
         )
 
