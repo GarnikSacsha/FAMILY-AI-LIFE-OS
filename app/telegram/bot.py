@@ -61,12 +61,18 @@ async def cmd_oura_setup(message: types.Message):
     user_id = message.from_user.id
     auth_url = OuraClient.get_authorization_url(state=str(user_id))
     
+    client_id_status = "✅ Задан" if settings.OURA_CLIENT_ID else "❌ НЕ задан в Railway Variables"
+    redirect_uri_val = settings.OURA_REDIRECT_URI or "не задан"
+
     await message.answer(
         "💍 **Подключение Oura Ring:**\n\n"
         "1. Перейдите по ссылке ниже и войдите под вашим аккаунтом Oura:\n"
-        f"🔗 [Авторизоваться в Oura Ring]({auth_url})\n\n"
+        f"🔗 [Нажмите здесь для входа в Oura]({auth_url})\n\n"
+        f"⚙️ **Параметры проверки:**\n"
+        f"• Client ID: `{client_id_status}`\n"
+        f"• Redirect URI: `{redirect_uri_val}`\n\n"
         "2. Нажмите кнопку **Approve / Разрешить**.\n"
-        "3. Браузер перенаправит вас на страницу. Скопируйте ссылку из адресной строки (или полученный код `code=...`) и **отправьте её мне ответом в этот чат**!",
+        "3. Браузер перенаправит вас на страницу. Скопируйте ссылку из адресной строки и **отправьте её мне ответом в этот чат**!",
         parse_mode=ParseMode.MARKDOWN,
         disable_web_page_preview=True
     )
