@@ -1,3 +1,4 @@
+import urllib.parse
 import aiohttp
 from typing import Dict, Any, Optional
 from datetime import date
@@ -13,14 +14,13 @@ class OuraClient:
     def get_authorization_url(cls, state: str = "default") -> str:
         """Returns the OAuth2 authorization URL for Oura Ring."""
         params = {
-            "client_id": settings.OURA_CLIENT_ID or "YOUR_CLIENT_ID",
+            "client_id": settings.OURA_CLIENT_ID or "",
             "redirect_uri": settings.OURA_REDIRECT_URI,
             "response_type": "code",
-            "scope": "personal daily sleep activity workout heartrate spo2 stress",
+            "scope": "email personal daily heartrate tag workout session spo2 stress heart_health ring_configuration",
             "state": state,
         }
-        query_string = "&".join(f"{k}={v}" for k, v in params.items())
-        return f"{cls.AUTH_URL}?{query_string}"
+        return f"{cls.AUTH_URL}?{urllib.parse.urlencode(params)}"
 
     @classmethod
     async def exchange_code_for_tokens(cls, code: str) -> Dict[str, Any]:
