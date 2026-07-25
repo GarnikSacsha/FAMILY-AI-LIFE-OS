@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,36 +11,39 @@ from app.integrations.oura.client import OuraClient
 
 
 class HealthTools:
-    """Deterministic health domain tools for database & API interactions."""
+    """Deterministic health domain tools adhering to Unit of Work (no explicit commit inside tools)."""
 
     @staticmethod
     async def save_oura_tokens(
         session: AsyncSession,
         telegram_id: int,
         tokens: Dict[str, Any],
+        user_id: Optional[uuid.UUID] = None,
     ) -> bool:
-        """Stores or updates Oura OAuth tokens for a specific user securely in DB."""
-        stmt = select(User).where(User.telegram_id == telegram_id)
-        result = await session.execute(stmt)
-        user = result.scalar_one_or_none()
+        """Stores or updates Oura OAuth tokens within the active session transaction (uses flush, not commit)."""
+        if not user_id and telegram_id > 0:
+            stmt = select(User).where(User.telegram_id == telegram_id)
+            result = await session.execute(stmt)
+            user = result.scalar_one_or_none()
+            if not user:
+                user = User(
+                    id=uuid.uuid4(),
+                    telegram_id=telegram_id,
+                    first_name="User",
+                )
+                session.add(user)
+                await session.flush()
+            user_id = user.id
 
-        if not user:
-            # Create user on the fly if needed
-            user = User(
-                id=uuid.uuid4(),
-                telegram_id=telegram_id,
-                first_name="User",
-            )
-            session.add(user)
-            await session.flush()
+        if not user_id:
+            raise ValueError("save_oura_tokens requires a valid user_id or registered telegram_id.")
 
         access_token = tokens.get("access_token", "")
         refresh_token = tokens.get("refresh_token")
-        expires_in = tokens.get("expires_in", 86400)
         expires_at = datetime.now(timezone.utc)
 
         token_stmt = select(OAuthToken).where(
-            OAuthToken.user_id == user.id,
+            OAuthToken.user_id == user_id,
             OAuthToken.provider == "oura"
         )
         token_res = await session.execute(token_stmt)
@@ -52,7 +55,7 @@ class HealthTools:
             oauth_record.expires_at = expires_at
         else:
             oauth_record = OAuthToken(
-                user_id=user.id,
+                user_id=user_id,
                 provider="oura",
                 access_token_encrypted=access_token,
                 refresh_token_encrypted=refresh_token,
@@ -60,7 +63,7 @@ class HealthTools:
             )
             session.add(oauth_record)
 
-        await session.commit()
+        await session.flush()
         return True
 
     @staticmethod
