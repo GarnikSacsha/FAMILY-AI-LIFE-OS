@@ -3,6 +3,7 @@ import logging
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart, Command
 from aiogram.enums import ParseMode
+from aiogram.types import BotCommand
 
 from app.config.settings import settings
 from app.infrastructure.database.session import AsyncSessionLocal
@@ -14,6 +15,21 @@ logger = logging.getLogger(__name__)
 
 bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
 dp = Dispatcher()
+
+
+async def setup_bot_commands(bot_instance: Bot):
+    """Registers official Telegram slash commands menu."""
+    commands = [
+        BotCommand(command="start", description="🌿 Запустить семейного ассистента"),
+        BotCommand(command="help", description="📖 Справка и список возможностей"),
+        BotCommand(command="oura", description="💍 Подключить или проверить Oura Ring"),
+        BotCommand(command="tasks", description="📋 Посмотреть текущие задачи"),
+        BotCommand(command="shopping", description="🛒 Семейный список покупок"),
+        BotCommand(command="budget", description="💳 Расходы и бюджет месяца"),
+        BotCommand(command="health", description="🥗 Сводка здоровья и питания"),
+    ]
+    await bot_instance.set_my_commands(commands)
+    logger.info("Telegram Bot slash commands registered successfully.")
 
 
 @dp.message(CommandStart())
@@ -30,11 +46,13 @@ async def cmd_start(message: types.Message):
 @dp.message(Command("help"))
 async def cmd_help(message: types.Message):
     await message.answer(
-        "📖 **Доступные команды:**\n"
-        "• **/oura** — привязать или проверить статус Oura Ring\n"
+        "📖 **Доступные возможности:**\n"
+        "• **/oura** — подключение Oura Ring\n"
+        "• **/shopping** — посмотреть семейный список покупок\n"
+        "• **/tasks** — показать список задач\n"
+        "• **/budget** — сводка трат за месяц\n"
         "• 🥗 **Фото еды**: отправьте фото, и я оценю калории и БЖУ.\n"
-        "• 💳 **Финансы**: отправляйте чеки или расходы для учета бюджета.\n"
-        "• 🛒 **Покупки**: говорите 'добавь молоко в список покупок'."
+        "• 💳 **Чеки**: отправьте фото чека для учёта в бюджете."
     )
 
 
@@ -99,6 +117,7 @@ async def handle_user_message(message: types.Message):
 
 async def start_bot():
     logger.info("Starting Family AI Life OS Telegram Bot...")
+    await setup_bot_commands(bot)
     await dp.start_polling(bot)
 
 
