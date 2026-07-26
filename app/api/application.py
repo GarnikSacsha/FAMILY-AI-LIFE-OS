@@ -8,7 +8,7 @@ from fastapi import FastAPI, Response, status
 from app.api.oauth import router as oauth_router
 from app.config.settings import settings
 from app.infrastructure.database.session import engine
-from app.telegram.bot import bot, start_bot
+from app.telegram.bot import bot, polling_health, start_bot
 
 logger = logging.getLogger(__name__)
 
@@ -21,21 +21,20 @@ async def _supervise_telegram_polling(application: FastAPI) -> None:
     retry_delay = TELEGRAM_RETRY_INITIAL_SECONDS
 
     while True:
-        application.state.telegram_polling = "running"
         try:
             await start_bot()
         except asyncio.CancelledError:
-            application.state.telegram_polling = "stopped"
+            polling_health.mark_stopped()
             raise
         except Exception as error:
-            application.state.telegram_polling = "stopped"
+            polling_health.mark_failure()
             logger.error(
                 "Telegram polling failed (%s); retrying in %.1f seconds.",
                 type(error).__name__,
                 retry_delay,
             )
         else:
-            application.state.telegram_polling = "stopped"
+            polling_health.mark_stopped()
             logger.error(
                 "Telegram polling stopped unexpectedly; retrying in %.1f seconds.",
                 retry_delay,
@@ -51,9 +50,8 @@ def create_application(*, start_telegram: bool = True) -> FastAPI:
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         telegram_task: asyncio.Task[None] | None = None
-        application.state.telegram_polling = "disabled"
+        polling_health.reset(enabled=start_telegram)
         if start_telegram:
-            application.state.telegram_polling = "starting"
             telegram_task = asyncio.create_task(
                 _supervise_telegram_polling(application),
                 name="telegram-polling-supervisor",
@@ -79,7 +77,7 @@ def create_application(*, start_telegram: bool = True) -> FastAPI:
 
     @application.get("/health", tags=["System"])
     async def health(response: Response) -> dict[str, str]:
-        telegram_polling = application.state.telegram_polling
+        telegram_polling = polling_health.current_status()
         if start_telegram and telegram_polling != "running":
             response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
             return {

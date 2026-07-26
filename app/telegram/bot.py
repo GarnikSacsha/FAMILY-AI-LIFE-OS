@@ -1,10 +1,18 @@
 import io
 import logging
-from typing import Any
+import time
+from typing import Any, cast
 
 from aiogram import Bot, Dispatcher, types
+from aiogram.client.session.middlewares.base import (
+    BaseRequestMiddleware,
+    NextRequestMiddlewareType,
+)
 from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramConflictError
 from aiogram.filters import Command, CommandStart
+from aiogram.methods import GetUpdates, Response, TelegramMethod
+from aiogram.methods.base import TelegramType
 from aiogram.types import BotCommand
 
 from app.config.settings import settings
@@ -20,6 +28,45 @@ from app.security.oauth import OAuthStateManager
 
 logger = logging.getLogger(__name__)
 
+POLLING_STALE_AFTER_SECONDS = 45.0
+
+
+class TelegramPollingHealth:
+    """Track real Telegram getUpdates responses instead of task existence."""
+
+    def __init__(self) -> None:
+        self._status = "disabled"
+        self._last_success_at: float | None = None
+
+    def reset(self, *, enabled: bool) -> None:
+        self._status = "starting" if enabled else "disabled"
+        self._last_success_at = None
+
+    def mark_starting(self) -> None:
+        self.reset(enabled=True)
+
+    def mark_success(self) -> None:
+        self._status = "running"
+        self._last_success_at = time.monotonic()
+
+    def mark_failure(self, *, conflict: bool = False) -> None:
+        self._status = "conflict" if conflict else "unavailable"
+
+    def mark_stopped(self) -> None:
+        self._status = "stopped"
+
+    def current_status(self) -> str:
+        if (
+            self._status == "running"
+            and self._last_success_at is not None
+            and time.monotonic() - self._last_success_at > POLLING_STALE_AFTER_SECONDS
+        ):
+            return "stale"
+        return self._status
+
+
+polling_health = TelegramPollingHealth()
+
 
 def _secret_value(value: Any) -> str:
     """Accept plain strings and Pydantic SecretStr without leaking either."""
@@ -29,6 +76,39 @@ def _secret_value(value: Any) -> str:
 
 bot = Bot(token=_secret_value(settings.TELEGRAM_BOT_TOKEN))
 dp = Dispatcher()
+
+
+class _PollingHealthMiddleware(BaseRequestMiddleware):
+    async def __call__(
+        self,
+        make_request: NextRequestMiddlewareType[TelegramType],
+        bot: Bot,
+        method: TelegramMethod[TelegramType],
+    ) -> Response[TelegramType]:
+        """Observe getUpdates without changing aiogram's retry behavior."""
+        if not isinstance(method, GetUpdates):
+            return await make_request(bot, method)
+
+        try:
+            response = await make_request(
+                bot,
+                cast(TelegramMethod[TelegramType], method),
+            )
+        except TelegramConflictError:
+            polling_health.mark_failure(conflict=True)
+            raise
+        except Exception:
+            polling_health.mark_failure()
+            raise
+
+        polling_health.mark_success()
+        return response
+
+
+_track_polling_requests = _PollingHealthMiddleware()
+
+
+bot.session.middleware(_track_polling_requests)
 
 
 def is_authorized_user(telegram_id: int) -> bool:
@@ -200,7 +280,15 @@ async def handle_user_message(message: types.Message) -> None:
 
 
 async def start_bot() -> None:
+    polling_health.mark_starting()
     logger.info("Starting Telegram polling.")
+    identity = await bot.get_me()
+    logger.info(
+        "Telegram bot identity verified: @%s (id=%d).",
+        identity.username or "<none>",
+        identity.id,
+    )
+    await bot.delete_webhook(drop_pending_updates=False)
     await setup_bot_commands(bot)
     await dp.start_polling(
         bot,
