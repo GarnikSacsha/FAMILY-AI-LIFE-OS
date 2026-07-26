@@ -63,6 +63,7 @@ class Settings(BaseSettings):
     # Google Sheets Integration
     GOOGLE_SHEETS_SPREADSHEET_ID: str | None = None
     GOOGLE_CREDENTIALS_JSON_PATH: str | None = None
+    GOOGLE_CREDENTIALS_JSON: SecretStr | None = None
 
     # S3 Object Storage
     S3_ENDPOINT_URL: str | None = None
