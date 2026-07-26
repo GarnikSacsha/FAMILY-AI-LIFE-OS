@@ -147,6 +147,135 @@ class MainOrchestrator:
             ),
         )
 
+    @staticmethod
+    def _format_duration(seconds: object) -> str | None:
+        if not isinstance(seconds, (int, float)) or isinstance(seconds, bool):
+            return None
+        total_minutes = max(0, round(seconds / 60))
+        hours, minutes = divmod(total_minutes, 60)
+        if hours and minutes:
+            return f"{hours}ч {minutes}м"
+        if hours:
+            return f"{hours}ч"
+        return f"{minutes}м"
+
+    @classmethod
+    def _format_oura_summary(cls, summary: dict[str, object]) -> str:
+        month_names = (
+            "",
+            "января",
+            "февраля",
+            "марта",
+            "апреля",
+            "мая",
+            "июня",
+            "июля",
+            "августа",
+            "сентября",
+            "октября",
+            "ноября",
+            "декабря",
+        )
+        try:
+            summary_day = datetime.strptime(str(summary["date"]), "%Y-%m-%d").date()
+            heading_date = f"{summary_day.day} {month_names[summary_day.month]} {summary_day.year}"
+        except (KeyError, ValueError):
+            heading_date = str(summary.get("date", "сегодня"))
+
+        def value_text(value: object, suffix: str = "") -> str:
+            if value is None:
+                return "нет данных"
+            if isinstance(value, float) and value.is_integer():
+                value = int(value)
+            return f"{value}{suffix}"
+
+        sleep_lines = [f"• Score: {value_text(summary.get('sleep_score'))}"]
+        sleep_fields = (
+            ("Спал", "total_sleep_seconds"),
+            ("Deep", "deep_sleep_seconds"),
+            ("REM", "rem_sleep_seconds"),
+            ("Awake", "awake_seconds"),
+        )
+        for label, key in sleep_fields:
+            duration = cls._format_duration(summary.get(key))
+            if duration is not None:
+                sleep_lines.append(f"• {label}: {duration}")
+        if summary.get("sleep_efficiency") is not None:
+            sleep_lines.append(f"• Эффективность: {value_text(summary['sleep_efficiency'], '%')}")
+
+        readiness_lines = [f"• Readiness: {value_text(summary.get('readiness_score'))}"]
+        if summary.get("average_hrv_ms") is not None:
+            readiness_lines.append(f"• HRV: {value_text(summary['average_hrv_ms'], ' ms')}")
+        if summary.get("lowest_heart_rate_bpm") is not None:
+            readiness_lines.append(f"• Min HR: {value_text(summary['lowest_heart_rate_bpm'], ' bpm')}")
+        temperature = summary.get("temperature_deviation_c")
+        if isinstance(temperature, (int, float)) and not isinstance(temperature, bool):
+            readiness_lines.append(f"• Температура: {temperature:+g}°C")
+        if summary.get("spo2_average_percent") is not None:
+            readiness_lines.append(f"• SpO₂: {value_text(summary['spo2_average_percent'], '%')}")
+
+        activity_values = (
+            summary.get("activity_score"),
+            summary.get("steps"),
+            summary.get("active_calories"),
+            summary.get("total_calories"),
+            summary.get("high_activity_seconds"),
+            summary.get("medium_activity_seconds"),
+        )
+        activity_lines: list[str] = []
+        if any(value is not None for value in activity_values):
+            activity_lines.append(f"• Score: {value_text(summary.get('activity_score'))}")
+            if summary.get("steps") is not None:
+                activity_lines.append(f"• Шаги: {value_text(summary['steps'])}")
+            if summary.get("total_calories") is not None:
+                activity_lines.append(f"• Калории: {value_text(summary['total_calories'], ' ккал')}")
+            if summary.get("active_calories") is not None:
+                activity_lines.append(
+                    f"• Активные калории: {value_text(summary['active_calories'], ' ккал')}"
+                )
+            high_seconds = summary.get("high_activity_seconds") or 0
+            medium_seconds = summary.get("medium_activity_seconds") or 0
+            if isinstance(high_seconds, (int, float)) and isinstance(medium_seconds, (int, float)):
+                active_duration = cls._format_duration(high_seconds + medium_seconds)
+                if active_duration is not None:
+                    activity_lines.append(f"• Средняя/высокая активность: {active_duration}")
+        else:
+            activity_lines.append("• Данные за этот день ещё не сформированы Oura")
+
+        blocks = [
+            f"📅 {heading_date}",
+            "😴 Сон\n" + "\n".join(sleep_lines),
+            "❤️ Восстановление\n" + "\n".join(readiness_lines),
+            "🏃 Активность\n" + "\n".join(activity_lines),
+        ]
+
+        stress_summary = summary.get("stress_summary")
+        stress_high = summary.get("stress_high")
+        recovery_high = summary.get("recovery_high")
+        if any(value is not None for value in (stress_summary, stress_high, recovery_high)):
+            stress_names = {
+                "restored": "Восстановительный день",
+                "normal": "Обычный уровень",
+                "stressful": "Повышенная нагрузка",
+            }
+            stress_lines = []
+            if stress_summary is not None:
+                stress_lines.append(f"• Сводка: {stress_names.get(str(stress_summary), stress_summary)}")
+            if stress_high is not None:
+                stress_duration = cls._format_duration(stress_high)
+                if stress_duration is not None:
+                    stress_lines.append(f"• Высокий стресс: {stress_duration}")
+            if recovery_high is not None:
+                recovery_duration = cls._format_duration(recovery_high)
+                if recovery_duration is not None:
+                    stress_lines.append(f"• Восстановление: {recovery_duration}")
+            blocks.append("🧠 Стресс\n" + "\n".join(stress_lines))
+
+        analysis = summary.get("analysis")
+        if isinstance(analysis, str) and analysis:
+            blocks.append(f"🤖 Анализ\n{analysis}")
+        return "\n\n".join(blocks)
+
     @classmethod
     async def process_user_message(
         cls,
@@ -200,23 +329,15 @@ class MainOrchestrator:
                     "или доступ был отозван, используйте /oura reconnect в личном чате."
                 )
 
-            def score_text(value: object) -> str:
-                return str(value) if value is not None else "нет данных"
-
-            sleep = score_text(summary["sleep_score"])
-            readiness = score_text(summary["readiness_score"])
-            activity = score_text(summary["activity_score"])
-            if all(value == "нет данных" for value in (sleep, readiness, activity)):
+            if all(
+                summary.get(key) is None
+                for key in ("sleep_score", "readiness_score", "activity_score")
+            ):
                 return (
                     f"💍 Oura подключена, но за {summary['date']} данных пока нет. "
                     "Откройте приложение Oura и синхронизируйте кольцо."
                 )
-            return (
-                f"💍 Сводка Oura за {summary['date']}:\n"
-                f"• Сон: {sleep}\n"
-                f"• Готовность: {readiness}\n"
-                f"• Активность: {activity}"
-            )
+            return cls._format_oura_summary(summary)
 
         # Case 1: Food Photo Vision Analysis
         if intent == "FOOD_NUTRITION_ANALYSIS" and photo_bytes:

@@ -467,12 +467,72 @@ async def test_oura_daily_collection_rejects_provider_error_without_body(monkeyp
 
 
 @pytest.mark.asyncio
-async def test_oura_daily_summary_combines_three_provider_scores():
+async def test_oura_daily_summary_combines_detailed_provider_metrics():
     target_day = date(2026, 7, 26)
     collections = [
         {"data": [{"day": target_day.isoformat(), "score": 82}]},
-        {"data": [{"day": target_day.isoformat(), "score": 77}]},
-        {"data": [{"day": target_day.isoformat(), "score": 91}]},
+        {
+            "data": [
+                {
+                    "day": target_day.isoformat(),
+                    "score": 77,
+                    "temperature_deviation": 0.1,
+                    "contributors": {"recovery_index": 78},
+                }
+            ]
+        },
+        {
+            "data": [
+                {
+                    "day": target_day.isoformat(),
+                    "score": 91,
+                    "steps": 8431,
+                    "active_calories": 521,
+                    "total_calories": 2316,
+                    "high_activity_time": 600,
+                    "medium_activity_time": 2220,
+                }
+            ]
+        },
+        {
+            "data": [
+                {
+                    "day": target_day.isoformat(),
+                    "type": "rest",
+                    "total_sleep_duration": 1800,
+                },
+                {
+                    "day": target_day.isoformat(),
+                    "type": "long_sleep",
+                    "total_sleep_duration": 26280,
+                    "deep_sleep_duration": 6120,
+                    "rem_sleep_duration": 6900,
+                    "awake_time": 1080,
+                    "efficiency": 91,
+                    "average_hrv": 61,
+                    "lowest_heart_rate": 48,
+                },
+            ]
+        },
+        {
+            "data": [
+                {
+                    "day": target_day.isoformat(),
+                    "spo2_percentage": {"average": 97.4},
+                    "breathing_disturbance_index": 1.2,
+                }
+            ]
+        },
+        {
+            "data": [
+                {
+                    "day": target_day.isoformat(),
+                    "day_summary": "normal",
+                    "stress_high": 2520,
+                    "recovery_high": 4080,
+                }
+            ]
+        },
     ]
     with (
         patch.object(
@@ -492,10 +552,102 @@ async def test_oura_daily_summary_combines_three_provider_scores():
             day=target_day,
         )
 
-    assert summary == {
-        "date": target_day.isoformat(),
-        "sleep_score": 82,
-        "readiness_score": 77,
-        "activity_score": 91,
-    }
-    assert get_collection.await_count == 3
+    assert summary["date"] == target_day.isoformat()
+    assert summary["sleep_score"] == 82
+    assert summary["readiness_score"] == 77
+    assert summary["activity_score"] == 91
+    assert summary["total_sleep_seconds"] == 26280
+    assert summary["deep_sleep_seconds"] == 6120
+    assert summary["rem_sleep_seconds"] == 6900
+    assert summary["awake_seconds"] == 1080
+    assert summary["sleep_efficiency"] == 91
+    assert summary["average_hrv_ms"] == 61
+    assert summary["lowest_heart_rate_bpm"] == 48
+    assert summary["temperature_deviation_c"] == 0.1
+    assert summary["steps"] == 8431
+    assert summary["active_calories"] == 521
+    assert summary["total_calories"] == 2316
+    assert summary["spo2_average_percent"] == 97.4
+    assert summary["stress_summary"] == "normal"
+    assert summary["stress_high"] == 2520
+    assert summary["recovery_high"] == 4080
+    assert get_collection.await_count == 6
+
+
+@pytest.mark.asyncio
+async def test_oura_daily_summary_keeps_core_data_when_optional_endpoint_is_forbidden():
+    target_day = date(2026, 7, 26)
+    collections = [
+        {"data": [{"day": target_day.isoformat(), "score": 73}]},
+        {"data": [{"day": target_day.isoformat(), "score": 75}]},
+        {"data": []},
+        {"data": []},
+        OuraOAuthError("Oura data request failed.", status_code=403),
+        OuraOAuthError("Oura data request failed.", status_code=403),
+    ]
+    with (
+        patch.object(
+            HealthTools,
+            "get_valid_oura_access_token",
+            new=AsyncMock(return_value="access"),
+        ),
+        patch.object(
+            OuraClient,
+            "get_daily_collection",
+            new=AsyncMock(side_effect=collections),
+        ),
+    ):
+        summary = await HealthTools.get_oura_daily_summary(
+            object(),
+            user_id=uuid.uuid4(),
+            day=target_day,
+        )
+
+    assert summary["sleep_score"] == 73
+    assert summary["readiness_score"] == 75
+    assert summary["activity_score"] is None
+    assert summary["spo2_average_percent"] is None
+    assert summary["stress_summary"] is None
+
+
+def test_oura_summary_formatter_renders_rich_sections():
+    response = MainOrchestrator._format_oura_summary(
+        {
+            "date": "2026-07-26",
+            "sleep_score": 73,
+            "total_sleep_seconds": 26280,
+            "deep_sleep_seconds": 6120,
+            "rem_sleep_seconds": 6900,
+            "awake_seconds": 1080,
+            "sleep_efficiency": 91,
+            "readiness_score": 75,
+            "average_hrv_ms": 61,
+            "lowest_heart_rate_bpm": 48,
+            "temperature_deviation_c": 0.1,
+            "spo2_average_percent": 97.4,
+            "activity_score": 80,
+            "steps": 8431,
+            "total_calories": 2316,
+            "active_calories": 521,
+            "high_activity_seconds": 600,
+            "medium_activity_seconds": 2220,
+            "stress_summary": "normal",
+            "stress_high": 2520,
+            "recovery_high": 4080,
+            "analysis": "Сегодня лучше выбрать умеренную нагрузку.",
+        }
+    )
+
+    assert "📅 26 июля 2026" in response
+    assert "• Спал: 7ч 18м" in response
+    assert "• Deep: 1ч 42м" in response
+    assert "• REM: 1ч 55м" in response
+    assert "• HRV: 61 ms" in response
+    assert "• Min HR: 48 bpm" in response
+    assert "• Температура: +0.1°C" in response
+    assert "• Шаги: 8431" in response
+    assert "• Средняя/высокая активность: 47м" in response
+    assert "🧠 Стресс" in response
+    assert "• Высокий стресс: 42м" in response
+    assert "• Восстановление: 1ч 8м" in response
+    assert "🤖 Анализ" in response

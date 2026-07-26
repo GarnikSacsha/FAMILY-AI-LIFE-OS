@@ -187,18 +187,69 @@ class HealthTools:
         return str(tokens["access_token"])
 
     @staticmethod
-    def _daily_score(payload: Mapping[str, Any], target_day: date) -> int | float | None:
+    def _day_record(payload: Mapping[str, Any], target_day: date) -> Mapping[str, Any] | None:
         data = payload.get("data")
         if not isinstance(data, list):
             return None
         target = target_day.isoformat()
         for item in data:
-            if not isinstance(item, dict) or item.get("day") != target:
-                continue
-            score = item.get("score")
-            if isinstance(score, (int, float)) and not isinstance(score, bool):
-                return score
+            if isinstance(item, dict) and item.get("day") == target:
+                return item
         return None
+
+    @staticmethod
+    def _number(value: object) -> int | float | None:
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return value
+        return None
+
+    @staticmethod
+    def _main_sleep_record(payload: Mapping[str, Any], target_day: date) -> Mapping[str, Any] | None:
+        data = payload.get("data")
+        if not isinstance(data, list):
+            return None
+        target = target_day.isoformat()
+        candidates = [
+            item
+            for item in data
+            if isinstance(item, dict) and item.get("day") == target
+        ]
+        if not candidates:
+            return None
+        long_sleeps = [item for item in candidates if item.get("type") == "long_sleep"]
+        pool = long_sleeps or candidates
+        return max(
+            pool,
+            key=lambda item: HealthTools._number(item.get("total_sleep_duration")) or 0,
+        )
+
+    @staticmethod
+    def _oura_analysis(summary: Mapping[str, Any]) -> str:
+        readiness = HealthTools._number(summary.get("readiness_score"))
+        sleep_score = HealthTools._number(summary.get("sleep_score"))
+        total_sleep = HealthTools._number(summary.get("total_sleep_seconds"))
+
+        if readiness is not None and readiness < 70:
+            return (
+                "Восстановление сегодня ниже оптимального. Лучше выбрать лёгкую нагрузку, "
+                "добавить прогулку и дать приоритет раннему сну."
+            )
+        if (sleep_score is not None and sleep_score < 70) or (
+            total_sleep is not None and total_sleep < 7 * 60 * 60
+        ):
+            return (
+                "Сон оказался короче или слабее желаемого. Снизьте интенсивность нагрузки "
+                "и постарайтесь лечь спать раньше."
+            )
+        if readiness is not None and readiness >= 85:
+            return (
+                "Показатели восстановления хорошие. Обычная нагрузка выглядит уместно, "
+                "если самочувствие это подтверждает."
+            )
+        return (
+            "Восстановление выглядит умеренным. Подойдёт обычный день без перегрузки; "
+            "ориентируйтесь также на собственное самочувствие."
+        )
 
     @staticmethod
     async def get_oura_daily_summary(
@@ -208,41 +259,110 @@ class HealthTools:
         timezone_name: str = "Europe/Kyiv",
         day: date | None = None,
     ) -> dict[str, Any]:
-        """Fetch today's sleep, readiness, and activity scores from Oura V2."""
+        """Fetch a detailed daily health summary from allowlisted Oura V2 endpoints."""
         target_day = day or datetime.now(ZoneInfo(timezone_name)).date()
         access_token = await HealthTools.get_valid_oura_access_token(
             session,
             user_id=user_id,
         )
-        try:
-            sleep, readiness, activity = await asyncio.gather(
+        collection_names = (
+            "daily_sleep",
+            "daily_readiness",
+            "daily_activity",
+            "sleep",
+            "daily_spo2",
+            "daily_stress",
+        )
+        results = await asyncio.gather(
+            *(
                 OuraClient.get_daily_collection(
-                    "daily_sleep",
+                    collection,
                     access_token=access_token,
                     start_date=target_day,
                     end_date=target_day,
-                ),
-                OuraClient.get_daily_collection(
-                    "daily_readiness",
-                    access_token=access_token,
-                    start_date=target_day,
-                    end_date=target_day,
-                ),
-                OuraClient.get_daily_collection(
-                    "daily_activity",
-                    access_token=access_token,
-                    start_date=target_day,
-                    end_date=target_day,
-                ),
-            )
-        except OuraOAuthError as exc:
-            raise HealthIntegrationError("Oura data is temporarily unavailable.") from exc
-        return {
-            "date": target_day.isoformat(),
-            "sleep_score": HealthTools._daily_score(sleep, target_day),
-            "readiness_score": HealthTools._daily_score(readiness, target_day),
-            "activity_score": HealthTools._daily_score(activity, target_day),
+                )
+                for collection in collection_names
+            ),
+            return_exceptions=True,
+        )
+        provider_errors = [result for result in results if isinstance(result, OuraOAuthError)]
+        if any(error.status_code == 401 for error in provider_errors):
+            raise HealthIntegrationError("Oura connection must be renewed.")
+
+        payloads: dict[str, Mapping[str, Any]] = {
+            name: result
+            for name, result in zip(collection_names, results, strict=True)
+            if isinstance(result, dict)
         }
+        if not any(name in payloads for name in collection_names[:3]):
+            first_error = next((result for result in results if isinstance(result, Exception)), None)
+            raise HealthIntegrationError("Oura data is temporarily unavailable.") from first_error
+
+        daily_sleep = HealthTools._day_record(payloads.get("daily_sleep", {}), target_day)
+        readiness = HealthTools._day_record(payloads.get("daily_readiness", {}), target_day)
+        activity = HealthTools._day_record(payloads.get("daily_activity", {}), target_day)
+        detailed_sleep = HealthTools._main_sleep_record(payloads.get("sleep", {}), target_day)
+        spo2 = HealthTools._day_record(payloads.get("daily_spo2", {}), target_day)
+        stress = HealthTools._day_record(payloads.get("daily_stress", {}), target_day)
+
+        readiness_contributors: Mapping[str, Any] = {}
+        if isinstance(readiness, Mapping):
+            contributors = readiness.get("contributors")
+            if isinstance(contributors, Mapping):
+                readiness_contributors = contributors
+
+        spo2_percentage: Mapping[str, Any] = {}
+        if isinstance(spo2, Mapping):
+            percentage = spo2.get("spo2_percentage")
+            if isinstance(percentage, Mapping):
+                spo2_percentage = percentage
+        summary = {
+            "date": target_day.isoformat(),
+            "sleep_score": HealthTools._number(daily_sleep.get("score")) if daily_sleep else None,
+            "readiness_score": HealthTools._number(readiness.get("score")) if readiness else None,
+            "activity_score": HealthTools._number(activity.get("score")) if activity else None,
+            "total_sleep_seconds": (
+                HealthTools._number(detailed_sleep.get("total_sleep_duration")) if detailed_sleep else None
+            ),
+            "deep_sleep_seconds": (
+                HealthTools._number(detailed_sleep.get("deep_sleep_duration")) if detailed_sleep else None
+            ),
+            "rem_sleep_seconds": (
+                HealthTools._number(detailed_sleep.get("rem_sleep_duration")) if detailed_sleep else None
+            ),
+            "awake_seconds": HealthTools._number(detailed_sleep.get("awake_time")) if detailed_sleep else None,
+            "sleep_efficiency": (
+                HealthTools._number(detailed_sleep.get("efficiency")) if detailed_sleep else None
+            ),
+            "average_hrv_ms": (
+                HealthTools._number(detailed_sleep.get("average_hrv")) if detailed_sleep else None
+            ),
+            "lowest_heart_rate_bpm": (
+                HealthTools._number(detailed_sleep.get("lowest_heart_rate")) if detailed_sleep else None
+            ),
+            "temperature_deviation_c": (
+                HealthTools._number(readiness.get("temperature_deviation")) if readiness else None
+            ),
+            "recovery_index": HealthTools._number(readiness_contributors.get("recovery_index")),
+            "steps": HealthTools._number(activity.get("steps")) if activity else None,
+            "active_calories": HealthTools._number(activity.get("active_calories")) if activity else None,
+            "total_calories": HealthTools._number(activity.get("total_calories")) if activity else None,
+            "high_activity_seconds": (
+                HealthTools._number(activity.get("high_activity_time")) if activity else None
+            ),
+            "medium_activity_seconds": (
+                HealthTools._number(activity.get("medium_activity_time")) if activity else None
+            ),
+            "spo2_average_percent": HealthTools._number(spo2_percentage.get("average")),
+            "breathing_disturbance_index": (
+                HealthTools._number(spo2.get("breathing_disturbance_index")) if spo2 else None
+            ),
+            "stress_summary": stress.get("day_summary") if stress else None,
+            "stress_high": HealthTools._number(stress.get("stress_high")) if stress else None,
+            "recovery_high": HealthTools._number(stress.get("recovery_high")) if stress else None,
+        }
+        summary["analysis"] = HealthTools._oura_analysis(summary)
+        return summary
 
     @staticmethod
     async def log_meal_photo(

@@ -21,11 +21,14 @@ class OuraClient:
     # This is the provider endpoint, not a credential.
     TOKEN_URL = "https://api.ouraring.com/oauth/token"  # noqa: S105  # nosec B105
     AUTH_URL = "https://cloud.ouraring.com/oauth/authorize"
-    DAILY_COLLECTIONS = frozenset(
+    DATE_COLLECTIONS = frozenset(
         {
             "daily_sleep",
             "daily_readiness",
             "daily_activity",
+            "daily_spo2",
+            "daily_stress",
+            "sleep",
         }
     )
 
@@ -142,9 +145,9 @@ class OuraClient:
         start_date: date,
         end_date: date,
     ) -> dict[str, Any]:
-        """Read one allowlisted Oura V2 daily collection without leaking responses."""
-        if collection not in cls.DAILY_COLLECTIONS:
-            raise ValueError("Unsupported Oura daily collection.")
+        """Read one allowlisted date-based Oura V2 collection without leaking responses."""
+        if collection not in cls.DATE_COLLECTIONS:
+            raise ValueError("Unsupported Oura date collection.")
         if not access_token or not access_token.strip():
             raise OuraOAuthError("Oura access token is unavailable.")
         if end_date < start_date:
