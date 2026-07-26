@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "status": "FIX_PROVEN",
+  "reason": "The same reproducer changed from failing to passing and broader checks passed.",
+  "reproduction": "confirmed",
+  "full_suite": "passed",
+  "same_command": true,
+  "before": {
+    "schema_version": 1,
+    "label": "reproduced",
+    "captured_at": "2026-07-26T12:59:00+00:00",
+    "command": [
+      "py",
+      "-3.10",
+      "-m",
+      "pytest",
+      "tests/test_orchestrator_agent_regressions.py",
+      "-q"
+    ],
+    "cwd": "C:/Users/\u0414\u0435\u043d\u0438\u0441/Desktop/\u0412\u0441\u044f\u043a\u043e\u0435 \u0432\u0430\u0439\u0431\u043a\u043e\u0434\u0438\u043d\u0433/\u041f\u0440\u043e\u0441\u0442\u043e \u0442\u0435\u0441\u0442 \u0432\u0441\u044f\u043a\u043e\u0435/FAMILY-AI-LIFE-OS",
+    "runtime": "Python 3.10 on Windows AMD64",
+    "duration_ms": 2300.0,
+    "exit_code": 1,
+    "timed_out": false,
+    "stdout": "FF [100%]\nFAILED test_general_message_uses_reasoning_provider: expected the mocked reasoning response, received the static fallback template.\nFAILED test_natural_language_expense_is_logged: expected FinanceAgent.categorize_and_log_transaction to be awaited once, awaited 0 times.\n2 failed in 1.07s",
+    "stderr": "",
+    "stdout_truncated": false,
+    "stderr_truncated": false,
+    "secrets_redacted": true
+  },
+  "after": {
+    "schema_version": 1,
+    "label": "fixed",
+    "captured_at": "2026-07-26T13:01:50.468949+00:00",
+    "command": [
+      "py",
+      "-3.10",
+      "-m",
+      "pytest",
+      "tests/test_orchestrator_agent_regressions.py",
+      "-q"
+    ],
+    "cwd": "C:\\Users\\\u0414\u0435\u043d\u0438\u0441\\Desktop\\\u0412\u0441\u044f\u043a\u043e\u0435 \u0432\u0430\u0439\u0431\u043a\u043e\u0434\u0438\u043d\u0433\\\u041f\u0440\u043e\u0441\u0442\u043e \u0442\u0435\u0441\u0442 \u0432\u0441\u044f\u043a\u043e\u0435\\FAMILY-AI-LIFE-OS",
+    "runtime": "Python 3.10.0 on Windows AMD64",
+    "duration_ms": 1736.678,
+    "exit_code": 0,
+    "timed_out": false,
+    "stdout": "..                                                                       [100%]\r\n2 passed in 0.85s\r\n",
+    "stderr": "",
+    "stdout_truncated": false,
+    "stderr_truncated": false,
+    "secrets_redacted": true
+  }
+}

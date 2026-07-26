@@ -1,3 +1,4 @@
+import re
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -13,6 +14,16 @@ from app.tools.planner_tools import PlannerTools
 
 class MainOrchestrator:
     """Main Orchestrator Agent for Family AI Life OS."""
+
+    _EXPENSE_AMOUNT = re.compile(
+        r"(?P<amount>\d+(?:[.,]\d{1,2})?)\s*(?:грн(?:\.|ивен|ивні)?|uah|₴)\b",
+        re.IGNORECASE,
+    )
+    _EXPENSE_PREFIX = re.compile(
+        r"\b(?:запиши|записать|добавь|добавить|пожалуйста|"
+        r"мои|наши|траты|расходы|сегодняшние|сегодня|за)\b",
+        re.IGNORECASE,
+    )
 
     @staticmethod
     def _routing_text(message_text: str) -> str:
@@ -104,6 +115,39 @@ class MainOrchestrator:
         return "💳 **Общие расходы семьи в этом месяце:**\n\n" + "\n\n".join(sections)
 
     @classmethod
+    def _extract_expense(cls, message_text: str) -> tuple[float, str] | None:
+        amount_match = cls._EXPENSE_AMOUNT.search(message_text)
+        if amount_match is None:
+            return None
+
+        amount = float(amount_match.group("amount").replace(",", "."))
+        merchant_source = message_text[: amount_match.start()].strip(" \t\n,;:—-")
+        merchant_parts = [part.strip() for part in re.split(r"[,;:\n]", merchant_source) if part.strip()]
+        merchant = merchant_parts[-1] if merchant_parts else merchant_source
+        merchant = cls._EXPENSE_PREFIX.sub(" ", merchant)
+        merchant = " ".join(merchant.split()).strip(" \t\n,;:—-")
+        return amount, merchant or "Расход"
+
+    @staticmethod
+    async def _generate_general_response(message_text: str, user_name: str) -> str:
+        from app.integrations.llm.provider import TerraReasoningProvider
+
+        provider = TerraReasoningProvider()
+        return await provider.generate_text(
+            prompt=message_text,
+            system_instruction=(
+                "Role: You are Family AI Life OS, the private family assistant for Denys and Oleksandra. "
+                f"You are speaking with {user_name}. "
+                "Personality: warm, natural, attentive, practical, and lightly humorous when appropriate. "
+                "Goal: respond helpfully to the user's current message and maintain a genuine conversation. "
+                "Constraints: never claim that a payment, database change, task, reminder, health action, "
+                "or external operation was completed unless a deterministic application tool confirmed it. "
+                "Do not diagnose medical conditions. Protect private family information. "
+                "Output: answer in the language used by the user, as concise plain text without Markdown."
+            ),
+        )
+
+    @classmethod
     async def process_user_message(
         cls,
         session: AsyncSession,
@@ -154,6 +198,27 @@ class MainOrchestrator:
                 )
                 return cls._format_spending_summary(summary)
 
+            expense = cls._extract_expense(message_text)
+            if expense is not None:
+                from app.agents.finance.agent import FinanceAgent
+
+                amount, merchant = expense
+                result = await FinanceAgent().categorize_and_log_transaction(
+                    session=session,
+                    owner_type="household",
+                    owner_id=household_id,
+                    amount=amount,
+                    merchant=merchant,
+                    description=message_text,
+                )
+                if result.get("status") == "SUCCESS":
+                    return (
+                        f"💳 Записал расход: **{result['amount']} {result['currency']}** — "
+                        f"**{result['merchant']}** ({result['category']})."
+                    )
+                if result.get("status") == "DUPLICATE":
+                    return "💳 Этот расход уже был записан ранее."
+
         # Case 3: Shopping List & Planning
         if intent == "PLANNING_OR_REMINDER":
             if (
@@ -186,8 +251,4 @@ class MainOrchestrator:
                 formatted = "\n".join([f"• {i['item_name']}" for i in items])
                 return f"🛒 **Текущий список покупок:**\n{formatted}"
 
-        # Default fallback response
-        return (
-            f"Привет, {user_name}! Я ваш семейный ассистент Family AI Life OS.\n"
-            f"Я принял ваш запрос. Какую задачу мы выполняем сегодня?"
-        )
+        return await cls._generate_general_response(message_text, user_name)
