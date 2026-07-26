@@ -42,7 +42,20 @@ class IntentRouter:
         # Finance Domain Patterns
         if any(
             w in text
-            for w in ["потратили", "расходы", "бюджет", "купили", "чек", "цена", "стоит", "деньги", "грн", "долларов"]
+            for w in [
+                "потратили",
+                "расходы",
+                "бюджет",
+                "купили",
+                "чек",
+                "цена",
+                "стоит",
+                "деньги",
+                "грн",
+                "долларов",
+                "таблиц",
+                "google sheet",
+            ]
         ):
             return {
                 "intent": "FINANCIAL_QUERY_OR_LOG",

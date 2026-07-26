@@ -22,9 +22,11 @@ from app.domains.identity.service import (
     PermissionDeniedError,
 )
 from app.infrastructure.database.session import unit_of_work
+from app.integrations.google.oauth import GoogleOAuthClient
 from app.integrations.oura.client import OuraClient
 from app.orchestration.orchestrator import MainOrchestrator
 from app.security.oauth import OAuthStateManager
+from app.tools.google_tools import GoogleWorkspaceError, GoogleWorkspaceTools
 
 logger = logging.getLogger(__name__)
 
@@ -154,6 +156,9 @@ async def setup_bot_commands(bot_instance: Bot) -> None:
         BotCommand(command="start", description="🌿 Запустить семейного ассистента"),
         BotCommand(command="help", description="📖 Справка и возможности"),
         BotCommand(command="oura", description="💍 Подключить Oura Ring"),
+        BotCommand(command="google", description="🔗 Подключить Gmail и Calendar"),
+        BotCommand(command="mail", description="✉️ Последние письма"),
+        BotCommand(command="calendar", description="📅 Ближайшие события"),
         BotCommand(command="tasks", description="📋 Текущие задачи"),
         BotCommand(command="shopping", description="🛒 Семейный список покупок"),
         BotCommand(command="budget", description="💳 Расходы за месяц"),
@@ -200,6 +205,9 @@ async def cmd_help(message: types.Message) -> None:
     await message.answer(
         "📖 **Доступные возможности:**\n"
         "• **/oura** — подключение Oura Ring только в личном чате\n"
+        "• **/google** — подключение личных Gmail и Calendar\n"
+        "• **/mail** — последние письма в личном чате\n"
+        "• **/calendar** — ближайшие события в личном чате\n"
         "• **/shopping** — семейный список покупок\n"
         "• **/tasks** — текущие задачи\n"
         "• **/budget** — расходы текущего месяца\n"
@@ -238,6 +246,92 @@ async def cmd_oura_setup(message: types.Message) -> None:
         parse_mode=ParseMode.MARKDOWN,
         disable_web_page_preview=True,
     )
+
+
+@dp.message(Command("google"))
+async def cmd_google_setup(message: types.Message) -> None:
+    try:
+        async with unit_of_work() as session:
+            actor = await _resolve_actor(session, message)
+            IdentityService.validate_domain_access(actor, "oauth")
+            raw_state, _ = await OAuthStateManager.create_state(
+                session,
+                user_id=actor.user_id,
+                provider="google",
+            )
+            auth_url = GoogleOAuthClient.get_authorization_url(state=raw_state)
+    except PermissionDeniedError:
+        await _answer_access_denied(message)
+        return
+    except Exception as error:
+        logger.error("Failed to initialize Google authorization (%s).", type(error).__name__)
+        await message.answer("❌ Google OAuth пока не настроен. Добавьте OAuth Client ID, Secret и Redirect URI.")
+        return
+
+    await message.answer(
+        "🔗 **Подключение Google:**\n\n"
+        f"[Открыть защищённую страницу Google]({auth_url})\n\n"
+        "Подключение выполняется отдельно для каждого семейного аккаунта. "
+        "После подтверждения вернитесь в Telegram.",
+        parse_mode=ParseMode.MARKDOWN,
+        disable_web_page_preview=True,
+    )
+
+
+@dp.message(Command("mail"))
+async def cmd_mail(message: types.Message) -> None:
+    try:
+        async with unit_of_work() as session:
+            actor = await _resolve_actor(session, message)
+            IdentityService.validate_domain_access(actor, "email")
+            messages = await GoogleWorkspaceTools.list_recent_mail(
+                session,
+                user_id=actor.user_id,
+            )
+    except PermissionDeniedError:
+        await _answer_access_denied(message)
+        return
+    except GoogleWorkspaceError:
+        await message.answer("✉️ Сначала подключите личный Google-аккаунт командой /google.")
+        return
+    except Exception as error:
+        logger.error("Gmail listing failed (%s).", type(error).__name__)
+        await _answer_service_unavailable(message)
+        return
+
+    if not messages:
+        await message.answer("✉️ Во входящих письмах ничего не найдено.")
+        return
+    lines = [f"{index}. {item['subject']}\nОт: {item['from']}" for index, item in enumerate(messages, start=1)]
+    await message.answer("✉️ Последние письма:\n\n" + "\n\n".join(lines))
+
+
+@dp.message(Command("calendar"))
+async def cmd_calendar(message: types.Message) -> None:
+    try:
+        async with unit_of_work() as session:
+            actor = await _resolve_actor(session, message)
+            IdentityService.validate_domain_access(actor, "calendar")
+            events = await GoogleWorkspaceTools.list_upcoming_events(
+                session,
+                user_id=actor.user_id,
+            )
+    except PermissionDeniedError:
+        await _answer_access_denied(message)
+        return
+    except GoogleWorkspaceError:
+        await message.answer("📅 Сначала подключите личный Google-аккаунт командой /google.")
+        return
+    except Exception as error:
+        logger.error("Calendar listing failed (%s).", type(error).__name__)
+        await _answer_service_unavailable(message)
+        return
+
+    if not events:
+        await message.answer("📅 Ближайших событий не найдено.")
+        return
+    lines = [f"{index}. {item['summary']}\nНачало: {item['start']}" for index, item in enumerate(events, start=1)]
+    await message.answer("📅 Ближайшие события:\n\n" + "\n\n".join(lines))
 
 
 @dp.message()

@@ -1,0 +1,171 @@
+import base64
+import uuid
+from datetime import datetime, timezone
+from unittest.mock import AsyncMock, Mock, patch
+from urllib.parse import parse_qs, urlparse
+
+import pytest
+from pydantic import SecretStr
+
+from app.api.oauth import google_oauth_callback
+from app.config.settings import settings
+from app.infrastructure.integrations.google_sheets_worker import TransactionSyncItem
+from app.integrations.google.oauth import GoogleOAuthClient
+from app.integrations.google.sheets import GoogleSheetsClient
+from app.security.token_cipher import TokenCipher
+from app.tools.google_tools import GoogleWorkspaceTools
+
+
+def _session_returning(record=None):
+    result = Mock()
+    result.scalar_one_or_none.return_value = record
+    session = Mock()
+    session.execute = AsyncMock(return_value=result)
+    session.flush = AsyncMock()
+    session.add = Mock()
+    return session
+
+
+def test_google_authorization_url_requests_offline_user_scopes(monkeypatch):
+    monkeypatch.setattr(settings, "GOOGLE_OAUTH_CLIENT_ID", "client-id")
+    monkeypatch.setattr(settings, "GOOGLE_OAUTH_CLIENT_SECRET", SecretStr("client-secret"))
+    monkeypatch.setattr(
+        settings,
+        "GOOGLE_OAUTH_REDIRECT_URI",
+        "https://family.example.com/oauth/google/callback",
+    )
+
+    url = GoogleOAuthClient.get_authorization_url(state="s" * 48)
+    query = parse_qs(urlparse(url).query)
+
+    assert query["access_type"] == ["offline"]
+    assert query["prompt"] == ["consent"]
+    assert query["redirect_uri"] == ["https://family.example.com/oauth/google/callback"]
+    scopes = set(query["scope"][0].split())
+    assert "https://www.googleapis.com/auth/gmail.readonly" in scopes
+    assert "https://www.googleapis.com/auth/gmail.compose" in scopes
+    assert "https://www.googleapis.com/auth/calendar.events" in scopes
+
+
+@pytest.mark.asyncio
+async def test_google_callback_saves_tokens_for_state_bound_user():
+    session = AsyncMock()
+    user_id = uuid.uuid4()
+    tokens = {
+        "access_token": "access",
+        "refresh_token": "refresh",
+        "expires_in": 3600,
+        "scope": "openid email",
+    }
+    with (
+        patch(
+            "app.api.oauth.OAuthStateManager.validate_and_consume_state",
+            new=AsyncMock(return_value=user_id),
+        ),
+        patch(
+            "app.api.oauth.GoogleOAuthClient.exchange_code_for_tokens",
+            new=AsyncMock(return_value=tokens),
+        ),
+        patch(
+            "app.api.oauth.GoogleWorkspaceTools.save_google_tokens",
+            new=AsyncMock(),
+        ) as save_tokens,
+    ):
+        response = await google_oauth_callback(
+            code="valid-code",
+            state="valid-state",
+            error=None,
+            session=session,
+        )
+
+    assert response.status_code == 200
+    save_tokens.assert_awaited_once_with(
+        session,
+        user_id=user_id,
+        tokens=tokens,
+    )
+
+
+@pytest.mark.asyncio
+async def test_google_tokens_are_encrypted_per_user():
+    session = _session_returning()
+    user_id = uuid.uuid4()
+    cipher = TokenCipher(base64.b64encode(b"g" * 32).decode("ascii"))
+
+    await GoogleWorkspaceTools.save_google_tokens(
+        session,
+        user_id=user_id,
+        tokens={
+            "access_token": "plain-google-access",
+            "refresh_token": "plain-google-refresh",
+            "expires_in": 3600,
+            "scope": "openid email",
+        },
+        cipher=cipher,
+    )
+
+    record = session.add.call_args.args[0]
+    assert "plain-google-access" not in record.access_token_encrypted
+    assert "plain-google-refresh" not in record.refresh_token_encrypted
+    assert (
+        cipher.decrypt(
+            record.refresh_token_encrypted,
+            user_id=user_id,
+            provider="google",
+            token_type="refresh_token",
+        )
+        == "plain-google-refresh"
+    )
+
+
+@pytest.mark.asyncio
+async def test_sheets_append_skips_existing_transaction(monkeypatch):
+    monkeypatch.setattr(settings, "GOOGLE_SHEETS_SPREADSHEET_ID", "spreadsheet")
+    monkeypatch.setattr(settings, "GOOGLE_SHEETS_RANGE", "A:I")
+    transaction_id = str(uuid.uuid4())
+    request = AsyncMock(return_value={"values": [["", "", "", "", "", "", "", "", transaction_id]]})
+
+    with (
+        patch.object(GoogleSheetsClient, "_access_token", new=AsyncMock(return_value="token")),
+        patch.object(GoogleSheetsClient, "_request", new=request),
+    ):
+        await GoogleSheetsClient.append_transaction([""] * 8 + [transaction_id])
+
+    request.assert_awaited_once()
+    assert request.await_args.args[0] == "GET"
+
+
+@pytest.mark.asyncio
+async def test_sheets_append_adds_new_transaction(monkeypatch):
+    monkeypatch.setattr(settings, "GOOGLE_SHEETS_SPREADSHEET_ID", "spreadsheet")
+    monkeypatch.setattr(settings, "GOOGLE_SHEETS_RANGE", "A:I")
+    row = ["2026-07-26", "базар", "Groceries", "1900.00", "UAH", "expense", "manual", "household", "tx"]
+    request = AsyncMock(side_effect=[{"values": []}, {"updates": {}}])
+
+    with (
+        patch.object(GoogleSheetsClient, "_access_token", new=AsyncMock(return_value="token")),
+        patch.object(GoogleSheetsClient, "_request", new=request),
+    ):
+        await GoogleSheetsClient.append_transaction(row)
+
+    assert request.await_count == 2
+    assert request.await_args_list[1].args[0] == "POST"
+    assert request.await_args_list[1].kwargs["json_body"]["values"] == [row]
+
+
+def test_sheet_worker_row_has_stable_transaction_identity():
+    transaction_id = uuid.uuid4()
+    item = TransactionSyncItem(
+        id=transaction_id,
+        occurred_at=datetime(2026, 7, 26, 12, tzinfo=timezone.utc),
+        merchant="базар",
+        category="Groceries",
+        amount="1900.00",
+        currency="UAH",
+        direction="expense",
+        source="manual",
+        owner_type="household",
+    )
+
+    assert item.as_sheet_row()[-1] == str(transaction_id)
+    assert len(item.as_sheet_row()) == 9

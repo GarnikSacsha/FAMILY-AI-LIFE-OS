@@ -76,6 +76,13 @@ class IdentityService:
     @classmethod
     def validate_domain_access(cls, actor: ActorContext, domain: str) -> None:
         """Enforces private-only restrictions for sensitive domains."""
-        sensitive_domains = {"health", "oauth", "medical_docs", "personal_memory"}
+        sensitive_domains = {
+            "health",
+            "oauth",
+            "medical_docs",
+            "personal_memory",
+            "email",
+            "calendar",
+        }
         if domain in sensitive_domains and actor.chat_type != "private":
             raise PermissionDeniedError("Access denied.")

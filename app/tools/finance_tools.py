@@ -219,3 +219,32 @@ class FinanceTools:
             currency_summary["total_expense"] = str(currency_summary["total_expense"].quantize(MONEY_QUANTUM))
 
         return {"currencies": summary_by_currency}
+
+    @staticmethod
+    async def get_latest_sheet_sync_status(
+        session: AsyncSession,
+        *,
+        owner_id: uuid.UUID,
+    ) -> dict[str, str] | None:
+        if not isinstance(owner_id, uuid.UUID):
+            raise ValueError("owner_id must be an internal UUID.")
+        result = await session.execute(
+            select(FinancialTransaction)
+            .where(FinancialTransaction.owner_id == owner_id)
+            .order_by(
+                FinancialTransaction.occurred_at.desc(),
+                FinancialTransaction.created_at.desc(),
+                FinancialTransaction.id.desc(),
+            )
+            .limit(1)
+        )
+        transaction = result.scalar_one_or_none()
+        if transaction is None:
+            return None
+        return {
+            "transaction_id": str(transaction.id),
+            "merchant": transaction.merchant,
+            "amount": str(transaction.amount),
+            "currency": transaction.currency,
+            "status": transaction.sheets_sync_status,
+        }

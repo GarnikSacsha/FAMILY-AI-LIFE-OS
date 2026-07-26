@@ -105,3 +105,22 @@ def test_database_url_rejects_concatenated_connection_strings():
 def test_production_database_cannot_target_localhost():
     with pytest.raises(ValidationError, match="cannot target localhost"):
         production_settings(DATABASE_URL=("postgresql+asyncpg://postgres:postgres@localhost:5432/family_life_os"))
+
+
+def test_google_oauth_requires_complete_https_configuration_in_production():
+    with pytest.raises(ValidationError, match="GOOGLE_OAUTH_CLIENT_SECRET"):
+        production_settings(GOOGLE_OAUTH_CLIENT_ID="client-id")
+
+    with pytest.raises(ValidationError, match="GOOGLE_OAUTH_REDIRECT_URI"):
+        production_settings(
+            GOOGLE_OAUTH_CLIENT_ID="client-id",
+            GOOGLE_OAUTH_CLIENT_SECRET="client-secret",
+            GOOGLE_OAUTH_REDIRECT_URI="http://localhost/oauth/google/callback",
+        )
+
+    configured = production_settings(
+        GOOGLE_OAUTH_CLIENT_ID="client-id",
+        GOOGLE_OAUTH_CLIENT_SECRET="client-secret",
+        GOOGLE_OAUTH_REDIRECT_URI="https://family.example.com/oauth/google/callback",
+    )
+    assert str(configured.GOOGLE_OAUTH_CLIENT_SECRET) == "**********"

@@ -77,6 +77,12 @@ class Settings(BaseSettings):
     GOOGLE_SHEETS_SPREADSHEET_ID: str | None = None
     GOOGLE_CREDENTIALS_JSON_PATH: str | None = None
     GOOGLE_CREDENTIALS_JSON: SecretStr | None = None
+    GOOGLE_SHEETS_RANGE: str = "A:I"
+
+    # Google user OAuth (personal Gmail and Calendar accounts)
+    GOOGLE_OAUTH_CLIENT_ID: str | None = None
+    GOOGLE_OAUTH_CLIENT_SECRET: SecretStr | None = None
+    GOOGLE_OAUTH_REDIRECT_URI: str = "http://localhost:8000/oauth/google/callback"
 
     # S3 Object Storage
     S3_ENDPOINT_URL: str | None = None
@@ -160,6 +166,24 @@ class Settings(BaseSettings):
             raise ValueError("OURA_REDIRECT_URI must use HTTPS in production.")
         if not redirect_uri.endswith("/oauth/oura/callback"):
             raise ValueError("OURA_REDIRECT_URI must end with /oauth/oura/callback.")
+
+        google_oauth_values = (
+            self.GOOGLE_OAUTH_CLIENT_ID,
+            self.GOOGLE_OAUTH_CLIENT_SECRET,
+        )
+        if any(value is not None for value in google_oauth_values):
+            if not self.GOOGLE_OAUTH_CLIENT_ID or not self.GOOGLE_OAUTH_CLIENT_ID.strip():
+                raise ValueError("GOOGLE_OAUTH_CLIENT_ID is required when Google OAuth is configured.")
+            if (
+                self.GOOGLE_OAUTH_CLIENT_SECRET is None
+                or not self.GOOGLE_OAUTH_CLIENT_SECRET.get_secret_value().strip()
+            ):
+                raise ValueError("GOOGLE_OAUTH_CLIENT_SECRET is required when Google OAuth is configured.")
+            google_redirect_uri = self.GOOGLE_OAUTH_REDIRECT_URI.strip().lower()
+            if not google_redirect_uri.startswith("https://"):
+                raise ValueError("GOOGLE_OAUTH_REDIRECT_URI must use HTTPS in production.")
+            if not google_redirect_uri.endswith("/oauth/google/callback"):
+                raise ValueError("GOOGLE_OAUTH_REDIRECT_URI must end with /oauth/google/callback.")
         return self
 
     model_config = SettingsConfigDict(

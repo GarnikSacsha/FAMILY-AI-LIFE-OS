@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import JSON, CheckConstraint, DateTime, Float, Index, Numeric, String, text
+from sqlalchemy import JSON, CheckConstraint, DateTime, Float, Index, Integer, Numeric, String, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.infrastructure.database.base import Base, TimestampMixin
@@ -22,6 +22,10 @@ class FinancialTransaction(Base, TimestampMixin):
             "confidence >= 0 AND confidence <= 1",
             name="ck_financial_transactions_confidence",
         ),
+        CheckConstraint(
+            "sheets_sync_status IN ('pending', 'syncing', 'synced', 'failed', 'disabled')",
+            name="ck_financial_transactions_sheets_sync_status",
+        ),
         Index(
             "uq_financial_transactions_import_identity",
             "source",
@@ -34,6 +38,11 @@ class FinancialTransaction(Base, TimestampMixin):
             sqlite_where=text("external_id IS NOT NULL"),
         ),
         Index("ix_financial_transactions_owner_occurred", "owner_id", "occurred_at"),
+        Index(
+            "ix_financial_transactions_sheets_sync",
+            "sheets_sync_status",
+            "created_at",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -58,3 +67,8 @@ class FinancialTransaction(Base, TimestampMixin):
 
     receipt_storage_key: Mapped[str | None] = mapped_column(String(255))
     raw_metadata: Mapped[dict | None] = mapped_column(JSON)
+
+    sheets_sync_status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)
+    sheets_sync_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    sheets_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    sheets_sync_error: Mapped[str | None] = mapped_column(String(100))

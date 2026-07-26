@@ -214,10 +214,30 @@ class MainOrchestrator:
                 if result.get("status") == "SUCCESS":
                     return (
                         f"💳 Записал расход: **{result['amount']} {result['currency']}** — "
-                        f"**{result['merchant']}** ({result['category']})."
+                        f"**{result['merchant']}** ({result['category']}).\n"
+                        "Синхронизация с Google Sheets поставлена в очередь."
                     )
                 if result.get("status") == "DUPLICATE":
                     return "💳 Этот расход уже был записан ранее."
+
+            if "таблиц" in message_text.lower() or "google sheet" in message_text.lower():
+                sync = await FinanceTools.get_latest_sheet_sync_status(
+                    session,
+                    owner_id=household_id,
+                )
+                if sync is None:
+                    return "💳 Пока нет расходов для синхронизации с Google Sheets."
+                status_text = {
+                    "synced": "уже добавлена в Google Sheets",
+                    "pending": "ожидает синхронизации с Google Sheets",
+                    "syncing": "сейчас синхронизируется с Google Sheets",
+                    "failed": "пока не синхронизировалась; бот повторит попытку автоматически",
+                    "disabled": "создана до включения автоматической синхронизации",
+                }.get(sync["status"], "имеет неизвестный статус синхронизации")
+                return (
+                    f"💳 Последняя запись: **{sync['amount']} {sync['currency']}** — "
+                    f"**{sync['merchant']}**; {status_text}."
+                )
 
         # Case 3: Shopping List & Planning
         if intent == "PLANNING_OR_REMINDER":
