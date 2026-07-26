@@ -32,6 +32,15 @@ def test_development_settings_are_usable_without_production_secrets(monkeypatch)
     assert configured.HTTP_PORT == 8000
 
 
+def test_railway_port_alias_is_supported(monkeypatch):
+    monkeypatch.delenv("HTTP_PORT", raising=False)
+    monkeypatch.setenv("PORT", "54321")
+
+    configured = Settings(ENVIRONMENT="test", _env_file=None)
+
+    assert configured.HTTP_PORT == 54321
+
+
 def test_production_requires_token_encryption_key():
     with pytest.raises(ValidationError, match="TOKEN_ENCRYPTION_KEY"):
         production_settings(TOKEN_ENCRYPTION_KEY=None)

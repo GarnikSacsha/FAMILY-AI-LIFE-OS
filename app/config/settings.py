@@ -2,7 +2,7 @@ import base64
 import binascii
 from typing import Literal
 
-from pydantic import SecretStr, field_validator, model_validator
+from pydantic import AliasChoices, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,7 +14,10 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "development-only-change-me"  # noqa: S105 - rejected in production
     # The container listener is not an authorization boundary.
     HTTP_HOST: str = "0.0.0.0"  # noqa: S104  # nosec B104
-    HTTP_PORT: int = 8000
+    HTTP_PORT: int = Field(
+        default=8000,
+        validation_alias=AliasChoices("HTTP_PORT", "PORT"),
+    )
 
     # Database & Cache
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/family_life_os"
