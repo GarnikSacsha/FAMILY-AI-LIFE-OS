@@ -22,6 +22,7 @@ env:
   OURA_CLIENT_SECRET: test-oura-secret
   OURA_REDIRECT_URI: http://localhost:8080/oauth/oura/callback
   DATABASE_URL: postgresql+asyncpg://family_os:test-password@localhost:5432/family_life_os_test
+  TEST_DATABASE_URL: postgresql+asyncpg://family_os:test-password@localhost:5432/family_life_os_test
   REDIS_URL: redis://:test-password@localhost:6379/0
 
 jobs:
@@ -42,10 +43,10 @@ jobs:
         image: redis:7.4.2-alpine
         ports: ["6379:6379"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: "3.12"
           cache: pip
@@ -55,7 +56,7 @@ jobs:
       - run: ruff check .
       - run: mypy app
       - run: alembic upgrade head
-      - run: pytest --cov=app --cov-branch --cov-report=xml --cov-fail-under=80
+      - run: python -m pytest --cov=app --cov-branch --cov-report=xml --cov-fail-under=80
       - run: alembic downgrade base
       - run: alembic upgrade head
       - run: alembic check
@@ -66,13 +67,19 @@ jobs:
   container:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/build-push-action@v6
-        with:
-          context: .
-          load: true
-          tags: family-ai-life-os:ci
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Build container image
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            if docker build --tag family-ai-life-os:ci .; then
+              exit 0
+            fi
+            if [[ "$attempt" -lt 3 ]]; then
+              sleep $((attempt * 10))
+            fi
+          done
+          exit 1
       - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: family-ai-life-os:ci
@@ -84,7 +91,9 @@ jobs:
   secrets:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v2
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
