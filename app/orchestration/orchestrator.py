@@ -230,9 +230,7 @@ class MainOrchestrator:
             if summary.get("total_calories") is not None:
                 activity_lines.append(f"• Калории: {value_text(summary['total_calories'], ' ккал')}")
             if summary.get("active_calories") is not None:
-                activity_lines.append(
-                    f"• Активные калории: {value_text(summary['active_calories'], ' ккал')}"
-                )
+                activity_lines.append(f"• Активные калории: {value_text(summary['active_calories'], ' ккал')}")
             high_seconds = summary.get("high_activity_seconds") or 0
             medium_seconds = summary.get("medium_activity_seconds") or 0
             if isinstance(high_seconds, (int, float)) and isinstance(medium_seconds, (int, float)):
@@ -329,10 +327,7 @@ class MainOrchestrator:
                     "или доступ был отозван, используйте /oura reconnect в личном чате."
                 )
 
-            if all(
-                summary.get(key) is None
-                for key in ("sleep_score", "readiness_score", "activity_score")
-            ):
+            if all(summary.get(key) is None for key in ("sleep_score", "readiness_score", "activity_score")):
                 return (
                     f"💍 Oura подключена, но за {summary['date']} данных пока нет. "
                     "Откройте приложение Oura и синхронизируйте кольцо."

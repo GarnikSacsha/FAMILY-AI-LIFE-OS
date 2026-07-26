@@ -209,11 +209,7 @@ class HealthTools:
         if not isinstance(data, list):
             return None
         target = target_day.isoformat()
-        candidates = [
-            item
-            for item in data
-            if isinstance(item, dict) and item.get("day") == target
-        ]
+        candidates = [item for item in data if isinstance(item, dict) and item.get("day") == target]
         if not candidates:
             return None
         long_sleeps = [item for item in candidates if item.get("type") == "long_sleep"]
@@ -234,9 +230,7 @@ class HealthTools:
                 "Восстановление сегодня ниже оптимального. Лучше выбрать лёгкую нагрузку, "
                 "добавить прогулку и дать приоритет раннему сну."
             )
-        if (sleep_score is not None and sleep_score < 70) or (
-            total_sleep is not None and total_sleep < 7 * 60 * 60
-        ):
+        if (sleep_score is not None and sleep_score < 70) or (total_sleep is not None and total_sleep < 7 * 60 * 60):
             return (
                 "Сон оказался короче или слабее желаемого. Снизьте интенсивность нагрузки "
                 "и постарайтесь лечь спать раньше."
@@ -290,9 +284,7 @@ class HealthTools:
             raise HealthIntegrationError("Oura connection must be renewed.")
 
         payloads: dict[str, Mapping[str, Any]] = {
-            name: result
-            for name, result in zip(collection_names, results, strict=True)
-            if isinstance(result, dict)
+            name: result for name, result in zip(collection_names, results, strict=True) if isinstance(result, dict)
         }
         if not any(name in payloads for name in collection_names[:3]):
             first_error = next((result for result in results if isinstance(result, Exception)), None)
@@ -331,12 +323,8 @@ class HealthTools:
                 HealthTools._number(detailed_sleep.get("rem_sleep_duration")) if detailed_sleep else None
             ),
             "awake_seconds": HealthTools._number(detailed_sleep.get("awake_time")) if detailed_sleep else None,
-            "sleep_efficiency": (
-                HealthTools._number(detailed_sleep.get("efficiency")) if detailed_sleep else None
-            ),
-            "average_hrv_ms": (
-                HealthTools._number(detailed_sleep.get("average_hrv")) if detailed_sleep else None
-            ),
+            "sleep_efficiency": (HealthTools._number(detailed_sleep.get("efficiency")) if detailed_sleep else None),
+            "average_hrv_ms": (HealthTools._number(detailed_sleep.get("average_hrv")) if detailed_sleep else None),
             "lowest_heart_rate_bpm": (
                 HealthTools._number(detailed_sleep.get("lowest_heart_rate")) if detailed_sleep else None
             ),
@@ -347,9 +335,7 @@ class HealthTools:
             "steps": HealthTools._number(activity.get("steps")) if activity else None,
             "active_calories": HealthTools._number(activity.get("active_calories")) if activity else None,
             "total_calories": HealthTools._number(activity.get("total_calories")) if activity else None,
-            "high_activity_seconds": (
-                HealthTools._number(activity.get("high_activity_time")) if activity else None
-            ),
+            "high_activity_seconds": (HealthTools._number(activity.get("high_activity_time")) if activity else None),
             "medium_activity_seconds": (
                 HealthTools._number(activity.get("medium_activity_time")) if activity else None
             ),
