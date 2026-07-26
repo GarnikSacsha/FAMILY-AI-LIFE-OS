@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.orchestration.router import IntentRouter
 from app.tools.finance_tools import FinanceTools
-from app.tools.health_tools import HealthTools
+from app.tools.health_tools import HealthIntegrationError, HealthTools
 from app.tools.planner_tools import PlannerTools
 
 
@@ -169,6 +169,54 @@ class MainOrchestrator:
             has_document=has_doc,
         )
         intent = routing["intent"]
+
+        if intent == "HEALTH_BIOMETRICS_QUERY":
+            normalized = message_text.lower()
+            status_terms = (
+                "подключ",
+                "работает ли",
+                "статус",
+                "connected",
+                "connect",
+            )
+            if any(term in normalized for term in status_terms):
+                status = await HealthTools.get_oura_connection_status(
+                    session,
+                    user_id=user_id,
+                )
+                if status["connected"]:
+                    return "💍 Oura Ring подключена к вашему личному аккаунту и готова передавать данные."
+                return "💍 Oura Ring пока не подключена. Используйте команду /oura в личном чате."
+
+            try:
+                summary = await HealthTools.get_oura_daily_summary(
+                    session,
+                    user_id=user_id,
+                    timezone_name=timezone_name,
+                )
+            except HealthIntegrationError:
+                return (
+                    "💍 Не удалось получить данные Oura. Если кольцо ещё не подключено "
+                    "или доступ был отозван, используйте /oura reconnect в личном чате."
+                )
+
+            def score_text(value: object) -> str:
+                return str(value) if value is not None else "нет данных"
+
+            sleep = score_text(summary["sleep_score"])
+            readiness = score_text(summary["readiness_score"])
+            activity = score_text(summary["activity_score"])
+            if all(value == "нет данных" for value in (sleep, readiness, activity)):
+                return (
+                    f"💍 Oura подключена, но за {summary['date']} данных пока нет. "
+                    "Откройте приложение Oura и синхронизируйте кольцо."
+                )
+            return (
+                f"💍 Сводка Oura за {summary['date']}:\n"
+                f"• Сон: {sleep}\n"
+                f"• Готовность: {readiness}\n"
+                f"• Активность: {activity}"
+            )
 
         # Case 1: Food Photo Vision Analysis
         if intent == "FOOD_NUTRITION_ANALYSIS" and photo_bytes:

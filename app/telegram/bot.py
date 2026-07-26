@@ -27,6 +27,7 @@ from app.integrations.oura.client import OuraClient
 from app.orchestration.orchestrator import MainOrchestrator
 from app.security.oauth import OAuthStateManager
 from app.tools.google_tools import GoogleWorkspaceError, GoogleWorkspaceTools
+from app.tools.health_tools import HealthTools
 
 logger = logging.getLogger(__name__)
 
@@ -219,22 +220,42 @@ async def cmd_help(message: types.Message) -> None:
 
 @dp.message(Command("oura"))
 async def cmd_oura_setup(message: types.Message) -> None:
+    auth_url: str | None = None
+    command_parts = (message.text or "").strip().lower().split(maxsplit=1)
+    force_reconnect = len(command_parts) == 2 and command_parts[1] in {
+        "reconnect",
+        "переподключить",
+    }
     try:
         async with unit_of_work() as session:
             actor = await _resolve_actor(session, message)
             IdentityService.validate_domain_access(actor, "oauth")
-            raw_state, _ = await OAuthStateManager.create_state(
+            connection = await HealthTools.get_oura_connection_status(
                 session,
                 user_id=actor.user_id,
-                provider="oura",
             )
-            auth_url = OuraClient.get_authorization_url(state=raw_state)
+            if force_reconnect or not connection["connected"]:
+                raw_state, _ = await OAuthStateManager.create_state(
+                    session,
+                    user_id=actor.user_id,
+                    provider="oura",
+                )
+                auth_url = OuraClient.get_authorization_url(state=raw_state)
     except PermissionDeniedError:
         await _answer_access_denied(message)
         return
     except Exception:
         logger.error("Failed to initialize Oura authorization.")
         await message.answer("❌ Не удалось начать авторизацию Oura. Попробуйте ещё раз позже.")
+        return
+
+    if auth_url is None:
+        await message.answer(
+            "💍 Oura Ring уже подключена к вашему личному аккаунту.\n"
+            "Чтобы получить сегодняшнюю сводку, отправьте /health "
+            "или спросите: «Как я сегодня спал по Oura?»\n"
+            "Если доступ был отозван, используйте /oura reconnect."
+        )
         return
 
     # The transaction containing the one-time state has committed at this point.

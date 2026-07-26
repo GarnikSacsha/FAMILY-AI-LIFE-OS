@@ -85,6 +85,10 @@ async def test_oura_command_creates_random_state_for_internal_user():
             new=AsyncMock(return_value=("random-state", object())),
         ) as create_state,
         patch(
+            "app.telegram.bot.HealthTools.get_oura_connection_status",
+            new=AsyncMock(return_value={"connected": False, "expires_at": None}),
+        ),
+        patch(
             "app.telegram.bot.OuraClient.get_authorization_url",
             return_value="https://oura.example/authorize?state=random-state",
         ),
