@@ -40,12 +40,15 @@ async def test_health_fails_when_telegram_polling_stops() -> None:
                 base_url="http://test",
             ) as client:
                 response = await client.get("/health")
+                live_response = await client.get("/live")
 
     assert response.status_code == 503
     assert response.json() == {
         "status": "error",
         "telegram_polling": "stopped",
     }
+    assert live_response.status_code == 200
+    assert live_response.json() == {"status": "ok"}
 
 
 @pytest.mark.asyncio

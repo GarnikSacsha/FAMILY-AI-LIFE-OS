@@ -75,6 +75,11 @@ def create_application(*, start_telegram: bool = True) -> FastAPI:
     )
     application.include_router(oauth_router)
 
+    @application.get("/live", tags=["System"])
+    async def live() -> dict[str, str]:
+        """Report HTTP process readiness without blocking singleton handover."""
+        return {"status": "ok"}
+
     @application.get("/health", tags=["System"])
     async def health(response: Response) -> dict[str, str]:
         telegram_polling = polling_health.current_status()
