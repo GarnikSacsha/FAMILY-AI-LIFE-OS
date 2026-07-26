@@ -4,9 +4,11 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI, Response, status
+from sqlalchemy import select
 
 from app.api.oauth import router as oauth_router
 from app.config.settings import settings
+from app.domains.identity.models import User
 from app.infrastructure.database.session import engine
 from app.telegram.bot import bot, polling_health, start_bot
 
@@ -14,6 +16,19 @@ logger = logging.getLogger(__name__)
 
 TELEGRAM_RETRY_INITIAL_SECONDS = 1.0
 TELEGRAM_RETRY_MAX_SECONDS = 30.0
+
+
+async def _database_is_ready() -> bool:
+    try:
+        async with engine.connect() as connection:
+            await connection.execute(select(User.id).limit(1))
+    except Exception as error:
+        logger.error(
+            "Database readiness failed (%s).",
+            type(error).__name__,
+        )
+        return False
+    return True
 
 
 async def _supervise_telegram_polling(application: FastAPI) -> None:
@@ -88,6 +103,12 @@ def create_application(*, start_telegram: bool = True) -> FastAPI:
             return {
                 "status": "error",
                 "telegram_polling": telegram_polling,
+            }
+        if not await _database_is_ready():
+            response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+            return {
+                "status": "error",
+                "database": "unavailable",
             }
         return {"status": "ok"}
 

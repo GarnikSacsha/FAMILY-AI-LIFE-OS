@@ -144,6 +144,10 @@ async def _answer_access_denied(message: types.Message) -> None:
     )
 
 
+async def _answer_service_unavailable(message: types.Message) -> None:
+    await message.answer("⚠️ Семейный сервис временно недоступен. Попробуйте ещё раз через несколько минут.")
+
+
 async def setup_bot_commands(bot_instance: Bot) -> None:
     """Register the public Telegram command menu."""
     commands = [
@@ -167,6 +171,10 @@ async def cmd_start(message: types.Message) -> None:
     except PermissionDeniedError:
         await _answer_access_denied(message)
         return
+    except Exception as error:
+        logger.error("Telegram /start failed (%s).", type(error).__name__)
+        await _answer_service_unavailable(message)
+        return
 
     await message.answer(
         "🌿 **Добро пожаловать в Family AI Life OS!**\n\n"
@@ -183,6 +191,10 @@ async def cmd_help(message: types.Message) -> None:
             await _resolve_actor(session, message)
     except PermissionDeniedError:
         await _answer_access_denied(message)
+        return
+    except Exception as error:
+        logger.error("Telegram /help failed (%s).", type(error).__name__)
+        await _answer_service_unavailable(message)
         return
 
     await message.answer(

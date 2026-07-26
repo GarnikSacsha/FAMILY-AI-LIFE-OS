@@ -6,7 +6,7 @@ from unittest.mock import ANY, AsyncMock, patch
 import pytest
 
 from app.domains.identity.service import ActorContext
-from app.telegram.bot import cmd_oura_setup, handle_user_message
+from app.telegram.bot import cmd_help, cmd_oura_setup, cmd_start, handle_user_message
 
 
 class Message:
@@ -97,3 +97,24 @@ async def test_oura_command_creates_random_state_for_internal_user():
         provider="oura",
     )
     assert "Копировать callback URL" in message.answers[-1][0]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("handler", [cmd_start, cmd_help])
+async def test_commands_answer_when_database_is_unavailable(handler):
+    message = Message(
+        f"/{handler.__name__}",
+        chat_id=123456789,
+        chat_type="private",
+    )
+
+    @asynccontextmanager
+    async def failing_uow():
+        raise RuntimeError("simulated database failure")
+        yield
+
+    with patch("app.telegram.bot.unit_of_work", new=failing_uow):
+        await handler(message)
+
+    assert message.answers
+    assert "временно недоступен" in message.answers[-1][0]

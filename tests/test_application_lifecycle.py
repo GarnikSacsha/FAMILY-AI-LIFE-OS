@@ -69,6 +69,10 @@ async def test_telegram_polling_restarts_after_a_terminal_failure() -> None:
     with (
         patch("app.api.application.start_bot", new=flaky_bot),
         patch("app.api.application.TELEGRAM_RETRY_INITIAL_SECONDS", new=0),
+        patch(
+            "app.api.application._database_is_ready",
+            new=AsyncMock(return_value=True),
+        ),
     ):
         application = create_application()
 
@@ -144,3 +148,25 @@ async def test_successful_get_updates_marks_polling_healthy() -> None:
 
     assert result == []
     assert polling_health.current_status() == "running"
+
+
+@pytest.mark.asyncio
+async def test_health_fails_when_database_schema_is_unavailable() -> None:
+    application = create_application(start_telegram=False)
+
+    with patch(
+        "app.api.application._database_is_ready",
+        new=AsyncMock(return_value=False),
+    ):
+        transport = httpx.ASGITransport(app=application)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://test",
+        ) as client:
+            response = await client.get("/health")
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "status": "error",
+        "database": "unavailable",
+    }

@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import AliasChoices, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine import make_url
+from sqlalchemy.exc import ArgumentError
 
 
 class Settings(BaseSettings):
@@ -28,12 +30,23 @@ class Settings(BaseSettings):
     def assemble_db_connection(cls, v: str | None) -> str:
         if not v:
             return "postgresql+asyncpg://postgres:postgres@localhost:5432/family_life_os"
+        value = v.strip()
         # Convert postgres:// or postgresql:// to postgresql+asyncpg:// for async SQLAlchemy
-        if v.startswith("postgres://"):
-            return v.replace("postgres://", "postgresql+asyncpg://", 1)
-        if v.startswith("postgresql://") and not v.startswith("postgresql+asyncpg://"):
-            return v.replace("postgresql://", "postgresql+asyncpg://", 1)
-        return v
+        if value.startswith("postgres://"):
+            value = value.replace("postgres://", "postgresql+asyncpg://", 1)
+        elif value.startswith("postgresql://") and not value.startswith("postgresql+asyncpg://"):
+            value = value.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+        try:
+            parsed = make_url(value)
+        except ArgumentError as exc:
+            raise ValueError("DATABASE_URL must be a valid database URL.") from exc
+
+        if value.count("://") != 1 or (parsed.database and "://" in parsed.database):
+            raise ValueError("DATABASE_URL contains concatenated connection strings.")
+        if parsed.drivername.startswith("postgresql") and (not parsed.host or not parsed.database):
+            raise ValueError("DATABASE_URL must include a PostgreSQL host and database name.")
+        return value
 
     # Telegram Bot
     TELEGRAM_BOT_TOKEN: str = "1234567890:ABCdefGHIjklMNOpqrsTUVwxyz"  # noqa: S105 - rejected in production
@@ -133,6 +146,14 @@ class Settings(BaseSettings):
             raise ValueError("Authorized Telegram IDs must be positive.")
         if self.DENYS_TELEGRAM_ID == self.OLEKSANDRA_TELEGRAM_ID:
             raise ValueError("Authorized Telegram IDs must be distinct.")
+
+        database_url = make_url(self.DATABASE_URL)
+        if database_url.drivername.startswith("postgresql") and database_url.host in {
+            "localhost",
+            "127.0.0.1",
+            "::1",
+        }:
+            raise ValueError("DATABASE_URL cannot target localhost in production.")
 
         redirect_uri = self.OURA_REDIRECT_URI.strip().lower()
         if not redirect_uri.startswith("https://"):

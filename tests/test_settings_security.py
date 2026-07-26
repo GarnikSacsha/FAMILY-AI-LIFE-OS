@@ -15,6 +15,7 @@ def production_settings(**overrides):
         "TELEGRAM_BOT_TOKEN": "987654321:production-token-value",
         "DENYS_TELEGRAM_ID": 1001,
         "OLEKSANDRA_TELEGRAM_ID": 1002,
+        "DATABASE_URL": ("postgresql+asyncpg://family:password@postgres.railway.internal:5432/railway"),
         "OURA_CLIENT_ID": "oura-client",
         "OURA_CLIENT_SECRET": "oura-client-secret",
         "OURA_REDIRECT_URI": "https://family.example.com/oauth/oura/callback",
@@ -85,3 +86,22 @@ def test_unsupported_oura_scope_is_rejected():
             OURA_SCOPES="daily stress",
             _env_file=None,
         )
+
+
+def test_database_url_rejects_concatenated_connection_strings():
+    malformed_url = (
+        "postgresql+asyncpg://family:password@postgres.railway.internal:5432/"
+        "railwaypostgresql+asyncpg://postgres:postgres@localhost:5432/family"
+    )
+
+    with pytest.raises(ValidationError, match="concatenated connection strings"):
+        Settings(
+            ENVIRONMENT="test",
+            DATABASE_URL=malformed_url,
+            _env_file=None,
+        )
+
+
+def test_production_database_cannot_target_localhost():
+    with pytest.raises(ValidationError, match="cannot target localhost"):
+        production_settings(DATABASE_URL=("postgresql+asyncpg://postgres:postgres@localhost:5432/family_life_os"))
