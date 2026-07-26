@@ -202,4 +202,8 @@ async def handle_user_message(message: types.Message) -> None:
 async def start_bot() -> None:
     logger.info("Starting Telegram polling.")
     await setup_bot_commands(bot)
-    await dp.start_polling(bot)
+    await dp.start_polling(
+        bot,
+        handle_signals=False,
+        close_bot_session=False,
+    )

@@ -3,7 +3,7 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response, status
 
 from app.api.oauth import router as oauth_router
 from app.config.settings import settings
@@ -12,6 +12,38 @@ from app.telegram.bot import bot, start_bot
 
 logger = logging.getLogger(__name__)
 
+TELEGRAM_RETRY_INITIAL_SECONDS = 1.0
+TELEGRAM_RETRY_MAX_SECONDS = 30.0
+
+
+async def _supervise_telegram_polling(application: FastAPI) -> None:
+    """Keep Telegram polling alive and expose failures through application state."""
+    retry_delay = TELEGRAM_RETRY_INITIAL_SECONDS
+
+    while True:
+        application.state.telegram_polling = "running"
+        try:
+            await start_bot()
+        except asyncio.CancelledError:
+            application.state.telegram_polling = "stopped"
+            raise
+        except Exception as error:
+            application.state.telegram_polling = "stopped"
+            logger.error(
+                "Telegram polling failed (%s); retrying in %.1f seconds.",
+                type(error).__name__,
+                retry_delay,
+            )
+        else:
+            application.state.telegram_polling = "stopped"
+            logger.error(
+                "Telegram polling stopped unexpectedly; retrying in %.1f seconds.",
+                retry_delay,
+            )
+
+        await asyncio.sleep(retry_delay)
+        retry_delay = min(retry_delay * 2, TELEGRAM_RETRY_MAX_SECONDS)
+
 
 def create_application(*, start_telegram: bool = True) -> FastAPI:
     """Build the HTTP application and coordinate Telegram polling lifecycle."""
@@ -19,10 +51,12 @@ def create_application(*, start_telegram: bool = True) -> FastAPI:
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         telegram_task: asyncio.Task[None] | None = None
+        application.state.telegram_polling = "disabled"
         if start_telegram:
+            application.state.telegram_polling = "starting"
             telegram_task = asyncio.create_task(
-                start_bot(),
-                name="telegram-polling",
+                _supervise_telegram_polling(application),
+                name="telegram-polling-supervisor",
             )
             application.state.telegram_task = telegram_task
 
@@ -44,7 +78,14 @@ def create_application(*, start_telegram: bool = True) -> FastAPI:
     application.include_router(oauth_router)
 
     @application.get("/health", tags=["System"])
-    async def health() -> dict[str, str]:
+    async def health(response: Response) -> dict[str, str]:
+        telegram_polling = application.state.telegram_polling
+        if start_telegram and telegram_polling != "running":
+            response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+            return {
+                "status": "error",
+                "telegram_polling": telegram_polling,
+            }
         return {"status": "ok"}
 
     return application
