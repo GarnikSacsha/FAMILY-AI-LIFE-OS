@@ -1,6 +1,6 @@
 import uuid
-from typing import Optional
-from sqlalchemy import String, ForeignKey, Text
+
+from sqlalchemy import ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.infrastructure.database.base import Base, TimestampMixin
@@ -14,4 +14,4 @@ class MemoryItem(Base, TimestampMixin):
 
     category: Mapped[str] = mapped_column(String(50), nullable=False)  # 'preference', 'health_note', 'habit'
     fact_text: Mapped[str] = mapped_column(Text, nullable=False)
-    source_message: Mapped[Optional[str]] = mapped_column(Text)
+    source_message: Mapped[str | None] = mapped_column(Text)

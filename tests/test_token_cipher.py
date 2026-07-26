@@ -2,11 +2,11 @@ import base64
 import os
 import unittest
 import uuid
+
 from app.security.token_cipher import TokenCipher, TokenCipherError
 
 
 class TestTokenCipher(unittest.TestCase):
-
     def setUp(self):
         # Generate a valid 32-byte Base64 key
         self.raw_key = os.urandom(32)
@@ -39,12 +39,8 @@ class TestTokenCipher(unittest.TestCase):
 
     def test_unique_nonce_per_encryption(self):
         token_str = "secret-token"
-        enc1 = self.cipher.encrypt(
-            token_str, user_id=self.user_id, provider=self.provider, token_type=self.token_type
-        )
-        enc2 = self.cipher.encrypt(
-            token_str, user_id=self.user_id, provider=self.provider, token_type=self.token_type
-        )
+        enc1 = self.cipher.encrypt(token_str, user_id=self.user_id, provider=self.provider, token_type=self.token_type)
+        enc2 = self.cipher.encrypt(token_str, user_id=self.user_id, provider=self.provider, token_type=self.token_type)
         # Same plaintext should yield different ciphertexts (due to unique random nonce)
         self.assertNotEqual(enc1, enc2)
 
@@ -57,15 +53,11 @@ class TestTokenCipher(unittest.TestCase):
         # Attempt decryption with wrong user_id (AAD mismatch)
         other_user = uuid.uuid4()
         with self.assertRaises(TokenCipherError):
-            self.cipher.decrypt(
-                encrypted, user_id=other_user, provider=self.provider, token_type=self.token_type
-            )
+            self.cipher.decrypt(encrypted, user_id=other_user, provider=self.provider, token_type=self.token_type)
 
         # Attempt decryption with wrong token_type (AAD mismatch)
         with self.assertRaises(TokenCipherError):
-            self.cipher.decrypt(
-                encrypted, user_id=self.user_id, provider=self.provider, token_type="refresh_token"
-            )
+            self.cipher.decrypt(encrypted, user_id=self.user_id, provider=self.provider, token_type="refresh_token")
 
     def test_ciphertext_tamper_detection(self):
         token_str = "secret-token"
@@ -76,9 +68,7 @@ class TestTokenCipher(unittest.TestCase):
         tampered = encrypted[:-1] + ("A" if encrypted[-1] != "A" else "B")
 
         with self.assertRaises(TokenCipherError):
-            self.cipher.decrypt(
-                tampered, user_id=self.user_id, provider=self.provider, token_type=self.token_type
-            )
+            self.cipher.decrypt(tampered, user_id=self.user_id, provider=self.provider, token_type=self.token_type)
 
 
 if __name__ == "__main__":

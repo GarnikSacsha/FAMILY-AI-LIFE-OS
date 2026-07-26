@@ -1,10 +1,9 @@
 import unittest
+from datetime import datetime, timezone
 from decimal import Decimal
-from datetime import datetime, timezone, timedelta
 
 
 class TestFinancePrecision(unittest.TestCase):
-
     def test_decimal_addition_precision(self):
         val1 = Decimal("100.50")
         val2 = Decimal("200.75")

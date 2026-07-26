@@ -1,12 +1,14 @@
 .git
+.github
 .env
 .env.*
-!.env.example
-!.env.test.example
 google_credentials*.json
+credentials*.json
 *.pem
 *.key
 *.p12
+*.bak
+*.dump
 __pycache__
 *.pyc
 .pytest_cache
@@ -17,3 +19,4 @@ tests
 coverage*
 dist
 build
+*.tar

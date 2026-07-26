@@ -1,15 +1,17 @@
 import uuid
-from typing import Literal, Optional
+from typing import Literal
+
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import settings
-from app.domains.identity.models import User, Household
+from app.domains.identity.models import User
 
 
 class PermissionDeniedError(Exception):
     """Raised when an actor or chat fails authorization policy checks."""
+
     pass
 
 
@@ -35,7 +37,14 @@ class IdentityService:
     ) -> ActorContext:
         """Resolves internal UUID actor context from external Telegram ID and validates chat policies."""
         if chat_type not in ("private", "group", "supergroup"):
-            raise PermissionDeniedError(f"Unsupported chat type: {chat_type}")
+            raise PermissionDeniedError("Access denied.")
+
+        allowed_ids = {
+            settings.DENYS_TELEGRAM_ID,
+            settings.OLEKSANDRA_TELEGRAM_ID,
+        }
+        if telegram_user_id not in allowed_ids:
+            raise PermissionDeniedError("Access denied.")
 
         # Query user by Telegram ID
         stmt = select(User).where(User.telegram_id == telegram_user_id)
@@ -43,35 +52,17 @@ class IdentityService:
         user = result.scalar_one_or_none()
 
         if not user:
-            raise PermissionDeniedError(
-                f"Unauthorized Telegram ID: {telegram_user_id}. User is not registered in Family AI Life OS."
-            )
+            raise PermissionDeniedError("Access denied.")
 
-        # Ensure household exists or fallback
         household_id = user.household_id
         if not household_id:
-            # Query default household
-            h_stmt = select(Household).limit(1)
-            h_res = await session.execute(h_stmt)
-            household = h_res.scalar_one_or_none()
-            if household:
-                household_id = household.id
-            else:
-                household_id = user.id  # Fallback to user ID if no household created yet
+            raise PermissionDeniedError("Access denied.")
 
         # Enforce Chat Type Policies
-        if chat_type == "private":
-            # Private chat only allowed for authorized users
-            allowed_ids = {settings.DENYS_TELEGRAM_ID, settings.OLEKSANDRA_TELEGRAM_ID}
-            if telegram_user_id not in allowed_ids:
-                raise PermissionDeniedError("Private chat access denied.")
-
-        elif chat_type in ("group", "supergroup"):
+        if chat_type in ("group", "supergroup"):
             # Group chat only allowed if chat_id matches FAMILY_GROUP_CHAT_ID
-            if settings.FAMILY_GROUP_CHAT_ID and chat_id != settings.FAMILY_GROUP_CHAT_ID:
-                raise PermissionDeniedError(
-                    f"Group chat {chat_id} does not match authorized FAMILY_GROUP_CHAT_ID."
-                )
+            if settings.FAMILY_GROUP_CHAT_ID is None or chat_id != settings.FAMILY_GROUP_CHAT_ID:
+                raise PermissionDeniedError("Access denied.")
 
         return ActorContext(
             user_id=user.id,
@@ -87,6 +78,4 @@ class IdentityService:
         """Enforces private-only restrictions for sensitive domains."""
         sensitive_domains = {"health", "oauth", "medical_docs", "personal_memory"}
         if domain in sensitive_domains and actor.chat_type != "private":
-            raise PermissionDeniedError(
-                f"Domain '{domain}' contains sensitive personal data and is restricted to private chats."
-            )
+            raise PermissionDeniedError("Access denied.")

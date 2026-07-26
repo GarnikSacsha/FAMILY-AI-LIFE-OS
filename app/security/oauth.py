@@ -1,9 +1,8 @@
 import hashlib
-import os
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Tuple
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +11,7 @@ from app.domains.identity.models import OAuthAuthorizationState
 
 class OAuthStateError(Exception):
     """Base exception for OAuth state generation or verification failures."""
+
     pass
 
 
@@ -28,8 +28,13 @@ class OAuthStateManager:
     @classmethod
     async def create_state(
         cls, session: AsyncSession, user_id: uuid.UUID, provider: str = "oura"
-    ) -> Tuple[str, OAuthAuthorizationState]:
+    ) -> tuple[str, OAuthAuthorizationState]:
         """Generates 256-bit entropy random state string, saves state hash to DB, returns (raw_state, db_record)."""
+        if not isinstance(user_id, uuid.UUID):
+            raise OAuthStateError("OAuth state requires a valid internal user ID.")
+        if not provider or not provider.strip():
+            raise OAuthStateError("OAuth provider is required.")
+
         raw_state = secrets.token_urlsafe(32)  # 256 bits of entropy
         state_hash = cls._hash_state(raw_state)
         expires_at = datetime.now(timezone.utc) + timedelta(minutes=cls.STATE_TTL_MINUTES)
@@ -52,29 +57,35 @@ class OAuthStateManager:
         cls, session: AsyncSession, raw_state: str, provider: str = "oura"
     ) -> uuid.UUID:
         """Validates raw state hash, checks expiration and single-use, consumes state, returns user_id."""
-        if not raw_state or not raw_state.strip():
-            raise OAuthStateError("OAuth state parameter is missing or empty.")
+        if not raw_state or not raw_state.strip() or len(raw_state) > 256:
+            raise OAuthStateError("Invalid or expired OAuth state.")
+        if not provider or not provider.strip():
+            raise OAuthStateError("Invalid or expired OAuth state.")
 
         state_hash = cls._hash_state(raw_state)
-        stmt = select(OAuthAuthorizationState).where(
-            OAuthAuthorizationState.state_hash == state_hash,
-            OAuthAuthorizationState.provider == provider,
+        stmt = (
+            select(OAuthAuthorizationState)
+            .where(
+                OAuthAuthorizationState.state_hash == state_hash,
+                OAuthAuthorizationState.provider == provider,
+            )
+            .with_for_update()
         )
         result = await session.execute(stmt)
         db_state = result.scalar_one_or_none()
 
         if not db_state:
-            raise OAuthStateError("Invalid OAuth state. Potential CSRF or unauthorized callback.")
+            raise OAuthStateError("Invalid or expired OAuth state.")
 
         if db_state.consumed_at is not None:
-            raise OAuthStateError("OAuth state has already been consumed. Replay attack detected.")
+            raise OAuthStateError("Invalid or expired OAuth state.")
 
         now = datetime.now(timezone.utc)
         if db_state.expires_at.tzinfo is None:
             db_state.expires_at = db_state.expires_at.replace(tzinfo=timezone.utc)
 
-        if now > db_state.expires_at:
-            raise OAuthStateError("OAuth state has expired. Please initiate authorization again.")
+        if now >= db_state.expires_at:
+            raise OAuthStateError("Invalid or expired OAuth state.")
 
         # Mark consumed
         db_state.consumed_at = now

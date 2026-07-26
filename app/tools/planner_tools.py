@@ -1,10 +1,11 @@
 import uuid
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Any
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domains.planning.models import Task, ShoppingItem, Reminder
+from app.domains.planning.models import ShoppingItem, Task
 
 
 class PlannerTools:
@@ -17,9 +18,9 @@ class PlannerTools:
         owner_type: str,
         owner_id: uuid.UUID,
         title: str,
-        assignee_id: Optional[uuid.UUID] = None,
-        due_date: Optional[datetime] = None,
-    ) -> Dict[str, Any]:
+        assignee_id: uuid.UUID | None = None,
+        due_date: datetime | None = None,
+    ) -> dict[str, Any]:
         """Creates a new task in PostgreSQL."""
         task = Task(
             creator_id=creator_id,
@@ -44,8 +45,8 @@ class PlannerTools:
         household_id: uuid.UUID,
         added_by_id: uuid.UUID,
         item_name: str,
-        quantity: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        quantity: str | None = None,
+    ) -> dict[str, Any]:
         """Adds an item to the household shopping list."""
         item = ShoppingItem(
             household_id=household_id,
@@ -63,18 +64,13 @@ class PlannerTools:
         }
 
     @staticmethod
-    async def get_active_shopping_list(
-        session: AsyncSession, household_id: uuid.UUID
-    ) -> List[Dict[str, Any]]:
+    async def get_active_shopping_list(session: AsyncSession, household_id: uuid.UUID) -> list[dict[str, Any]]:
         """Retrieves non-purchased shopping items for a household."""
         stmt = select(ShoppingItem).where(
             ShoppingItem.household_id == household_id,
-            ShoppingItem.is_purchased == False,
+            ShoppingItem.is_purchased.is_(False),
         )
         result = await session.execute(stmt)
         items = result.scalars().all()
 
-        return [
-            {"id": str(i.id), "item_name": i.item_name, "quantity": i.quantity}
-            for i in items
-        ]
+        return [{"id": str(i.id), "item_name": i.item_name, "quantity": i.quantity} for i in items]

@@ -6,16 +6,10 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
-
 from app.config.settings import settings
-from app.infrastructure.database.base import Base
+
 # Import all ORM models to populate Base.metadata
-from app.domains.identity.models import Household, User, OAuthToken, OAuthAuthorizationState
-from app.domains.health.models import Meal, OuraDailyMetric
-from app.domains.finance.models import FinancialTransaction
-from app.domains.planning.models import Task, ShoppingItem, Reminder
-from app.domains.memory.models import MemoryItem
-from app.domains.documents.models import Document
+from app.infrastructure.database.base import Base
 
 config = context.config
 

@@ -1,10 +1,10 @@
 import unittest
 import uuid
+
 from app.domains.identity.service import ActorContext, IdentityService, PermissionDeniedError
 
 
 class TestIdentityService(unittest.TestCase):
-
     def setUp(self):
         self.user_id = uuid.uuid4()
         self.household_id = uuid.uuid4()

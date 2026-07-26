@@ -1,5 +1,6 @@
 import uuid
-from typing import Dict, Any, Optional
+from typing import Any
+
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,7 +10,7 @@ from app.tools.finance_tools import FinanceTools
 
 class CategorySchema(BaseModel):
     category: str = Field(description="Expense category e.g. Restaurants, Groceries, Transport, Health, Utilities")
-    subcategory: Optional[str] = Field(description="Specific subcategory")
+    subcategory: str | None = Field(description="Specific subcategory")
     confidence: float = Field(description="Confidence rating from 0.0 to 1.0")
 
 
@@ -27,7 +28,7 @@ class FinanceAgent:
         amount: float,
         merchant: str,
         description: str = "",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Uses Gemini to intelligently categorize an expense, then logs it via FinanceTools."""
         prompt = (
             f"Categorize this transaction:\n"
@@ -55,12 +56,10 @@ class FinanceAgent:
 
         return result
 
-    async def generate_financial_report(
-        self, session: AsyncSession, household_id: uuid.UUID
-    ) -> str:
+    async def generate_financial_report(self, session: AsyncSession, household_id: uuid.UUID) -> str:
         """Uses Gemini to generate an empathetic, structured financial report for the household."""
         summary = await FinanceTools.get_spending_summary(session, owner_id=household_id)
-        
+
         prompt = (
             f"You are the Finance Agent for Denys & Oleksandra.\n"
             f"Here is the household spending data for this month: {summary}\n\n"

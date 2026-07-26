@@ -1,155 +1,205 @@
-import asyncio
+import io
 import logging
+from typing import Any
+
 from aiogram import Bot, Dispatcher, types
-from aiogram.filters import CommandStart, Command
 from aiogram.enums import ParseMode
+from aiogram.filters import Command, CommandStart
 from aiogram.types import BotCommand
 
 from app.config.settings import settings
-from app.infrastructure.database.session import AsyncSessionLocal
+from app.domains.identity.service import (
+    ActorContext,
+    IdentityService,
+    PermissionDeniedError,
+)
+from app.infrastructure.database.session import unit_of_work
 from app.integrations.oura.client import OuraClient
-from app.tools.health_tools import HealthTools
 from app.orchestration.orchestrator import MainOrchestrator
+from app.security.oauth import OAuthStateManager
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
+
+def _secret_value(value: Any) -> str:
+    """Accept plain strings and Pydantic SecretStr without leaking either."""
+    get_secret_value = getattr(value, "get_secret_value", None)
+    return get_secret_value() if callable(get_secret_value) else str(value)
+
+
+bot = Bot(token=_secret_value(settings.TELEGRAM_BOT_TOKEN))
 dp = Dispatcher()
 
 
 def is_authorized_user(telegram_id: int) -> bool:
-    """Strict security check: only Denys and Oleksandra are permitted."""
+    """Cheap pre-filter; database identity resolution remains authoritative."""
     allowed = {settings.DENYS_TELEGRAM_ID, settings.OLEKSANDRA_TELEGRAM_ID}
     return telegram_id in allowed
 
 
-async def setup_bot_commands(bot_instance: Bot):
-    """Registers official Telegram slash commands menu."""
+def _message_coordinates(message: types.Message) -> tuple[int, int, str]:
+    if message.from_user is None:
+        raise PermissionDeniedError("Telegram update has no authenticated sender.")
+
+    telegram_id = message.from_user.id
+    chat = message.chat
+    chat_id = chat.id
+    chat_type = getattr(chat.type, "value", chat.type)
+    return telegram_id, chat_id, str(chat_type)
+
+
+async def _resolve_actor(session: Any, message: types.Message) -> ActorContext:
+    telegram_id, chat_id, chat_type = _message_coordinates(message)
+    return await IdentityService.resolve_actor(
+        session,
+        telegram_user_id=telegram_id,
+        chat_id=chat_id,
+        chat_type=chat_type,
+    )
+
+
+async def _answer_access_denied(message: types.Message) -> None:
+    await message.answer(
+        "🔒 Доступ запрещён. Используйте зарегистрированный личный чат или разрешённую семейную группу."
+    )
+
+
+async def setup_bot_commands(bot_instance: Bot) -> None:
+    """Register the public Telegram command menu."""
     commands = [
         BotCommand(command="start", description="🌿 Запустить семейного ассистента"),
-        BotCommand(command="help", description="📖 Справка и список возможностей"),
-        BotCommand(command="oura", description="💍 Подключить или проверить Oura Ring"),
-        BotCommand(command="tasks", description="📋 Посмотреть текущие задачи"),
+        BotCommand(command="help", description="📖 Справка и возможности"),
+        BotCommand(command="oura", description="💍 Подключить Oura Ring"),
+        BotCommand(command="tasks", description="📋 Текущие задачи"),
         BotCommand(command="shopping", description="🛒 Семейный список покупок"),
-        BotCommand(command="budget", description="💳 Расходы и бюджет месяца"),
+        BotCommand(command="budget", description="💳 Расходы за месяц"),
         BotCommand(command="health", description="🥗 Сводка здоровья и питания"),
     ]
     await bot_instance.set_my_commands(commands)
-    logger.info("Telegram Bot slash commands registered successfully.")
+    logger.info("Telegram bot commands registered.")
 
 
 @dp.message(CommandStart())
-async def cmd_start(message: types.Message):
-    if not is_authorized_user(message.from_user.id):
-        await message.answer("🔒 Доступ ограничен. Этот бот является персональной семейной системой.")
+async def cmd_start(message: types.Message) -> None:
+    try:
+        async with unit_of_work() as session:
+            await _resolve_actor(session, message)
+    except PermissionDeniedError:
+        await _answer_access_denied(message)
         return
 
     await message.answer(
         "🌿 **Добро пожаловать в Family AI Life OS!**\n\n"
-        "Я — ваш семейный ассистент. Я помогаю следить за здоровьем, сном (Oura), "
-        "питанием по фото, семейным бюджетом, расходами и задачами.\n\n"
-        "🔗 Для подключения Oura Ring введите команду: **/oura**\n"
-        "🥗 Или просто отправьте мне фото еды / чека!"
+        "Я помогаю с семейными задачами, бюджетом, питанием и Oura Ring.\n"
+        "Для безопасного подключения Oura используйте **/oura**.",
+        parse_mode=ParseMode.MARKDOWN,
     )
 
 
 @dp.message(Command("help"))
-async def cmd_help(message: types.Message):
-    if not is_authorized_user(message.from_user.id):
-        await message.answer("🔒 Доступ ограничен.")
+async def cmd_help(message: types.Message) -> None:
+    try:
+        async with unit_of_work() as session:
+            await _resolve_actor(session, message)
+    except PermissionDeniedError:
+        await _answer_access_denied(message)
         return
 
     await message.answer(
         "📖 **Доступные возможности:**\n"
-        "• **/oura** — подключение Oura Ring\n"
-        "• **/shopping** — посмотреть семейный список покупок\n"
-        "• **/tasks** — показать список задач\n"
-        "• **/budget** — сводка трат за месяц\n"
-        "• 🥗 **Фото еды**: отправьте фото, и я оценю калории и БЖУ.\n"
-        "• 💳 **Чеки**: отправьте фото чека для учёта в бюджете."
+        "• **/oura** — подключение Oura Ring только в личном чате\n"
+        "• **/shopping** — семейный список покупок\n"
+        "• **/tasks** — текущие задачи\n"
+        "• **/budget** — расходы текущего месяца\n"
+        "• **/health** — личная сводка здоровья\n"
+        "• отправьте фото еды для приблизительной оценки состава",
+        parse_mode=ParseMode.MARKDOWN,
     )
 
 
 @dp.message(Command("oura"))
-async def cmd_oura_setup(message: types.Message):
-    if not is_authorized_user(message.from_user.id):
-        await message.answer("🔒 Доступ ограничен.")
+async def cmd_oura_setup(message: types.Message) -> None:
+    try:
+        async with unit_of_work() as session:
+            actor = await _resolve_actor(session, message)
+            IdentityService.validate_domain_access(actor, "oauth")
+            raw_state, _ = await OAuthStateManager.create_state(
+                session,
+                user_id=actor.user_id,
+                provider="oura",
+            )
+            auth_url = OuraClient.get_authorization_url(state=raw_state)
+    except PermissionDeniedError:
+        await _answer_access_denied(message)
+        return
+    except Exception:
+        logger.error("Failed to initialize Oura authorization.")
+        await message.answer("❌ Не удалось начать авторизацию Oura. Попробуйте ещё раз позже.")
         return
 
-    user_id = message.from_user.id
-    auth_url = OuraClient.get_authorization_url(state=str(user_id))
-    
+    # The transaction containing the one-time state has committed at this point.
     await message.answer(
         "💍 **Подключение Oura Ring:**\n\n"
-        "1. Перейдите по ссылке ниже и войдите под вашим аккаунтом Oura:\n"
-        f"🔗 [Нажмите здесь для входа в Oura]({auth_url})\n\n"
-        "2. Нажмите кнопку **Approve / Разрешить**.\n"
-        "3. Перейдите по открывшейся странице. Скопируйте ссылку из адресной строки и **отправьте её мне ответом в этот чат**!",
+        f"[Открыть защищённую страницу авторизации Oura]({auth_url})\n\n"
+        "После подтверждения вернитесь в Telegram. "
+        "Копировать callback URL или код авторизации в чат не нужно.",
         parse_mode=ParseMode.MARKDOWN,
-        disable_web_page_preview=True
+        disable_web_page_preview=True,
     )
 
 
 @dp.message()
-async def handle_user_message(message: types.Message):
-    user_id = message.from_user.id
-    
-    # 🛡 Security Guard: reject unauthorized Telegram users instantly
-    if not is_authorized_user(user_id):
-        await message.answer("🔒 У вас нет доступа к этой семейной системе.")
+async def handle_user_message(message: types.Message) -> None:
+    if message.from_user is None:
+        await _answer_access_denied(message)
         return
 
     user_name = message.from_user.first_name or "Пользователь"
     text = message.text or message.caption or ""
+    response_text: str
 
-    # OAuth Code Capturing from User input
-    if "code=" in text or (len(text.strip()) > 20 and not text.startswith("/") and not message.photo):
-        code = text.split("code=")[-1].split("&")[0].strip()
-        try:
-            tokens = await OuraClient.exchange_code_for_tokens(code)
-            async with AsyncSessionLocal() as session:
-                await HealthTools.save_oura_tokens(session, telegram_id=user_id, tokens=tokens)
-            
-            await message.answer(
-                "✅ **Oura Ring успешно подключено и авторизовано!**\n\n"
-                "Ваши данные защищены и привязаны исключительно к вашему профилю.",
-                parse_mode=ParseMode.MARKDOWN
+    try:
+        async with unit_of_work() as session:
+            actor = await _resolve_actor(session, message)
+            domain = MainOrchestrator.domain_for_message(
+                text,
+                has_photo=bool(message.photo),
+                has_document=bool(message.document),
             )
-            return
-        except Exception as e:
-            logger.warning(f"Oura OAuth exchange error: {e}")
-            await message.answer("❌ Ошибка авторизации Oura. Попробуйте сгенерировать новую ссылку через /oura")
-            return
+            IdentityService.validate_domain_access(actor, domain)
 
-    photo_bytes = None
-    if message.photo:
-        photo = message.photo[-1]
-        file_info = await bot.get_file(photo.file_id)
-        downloaded_file = await bot.download_file(file_info.file_path)
-        photo_bytes = downloaded_file.read()
+            photo_bytes = None
+            if message.photo:
+                photo = message.photo[-1]
+                file_info = await bot.get_file(photo.file_id)
+                if not file_info.file_path:
+                    raise ValueError("Telegram returned an empty photo path.")
+                photo_buffer = io.BytesIO()
+                await bot.download_file(file_info.file_path, destination=photo_buffer)
+                photo_bytes = photo_buffer.getvalue()
 
-    async with AsyncSessionLocal() as session:
-        user_uuid = settings.DENYS_TELEGRAM_ID if user_id == settings.DENYS_TELEGRAM_ID else settings.OLEKSANDRA_TELEGRAM_ID
-        household_uuid = user_uuid
+            response_text = await MainOrchestrator.process_user_message(
+                session=session,
+                user_id=actor.user_id,
+                household_id=actor.household_id,
+                user_name=user_name,
+                message_text=text,
+                photo_bytes=photo_bytes,
+            )
+    except PermissionDeniedError:
+        await _answer_access_denied(message)
+        return
+    except Exception:
+        # Never echo provider payloads, authorization codes, or traceback text.
+        logger.error("Telegram update failed before commit.")
+        await message.answer("❌ Не удалось выполнить запрос. Изменения не были сохранены.")
+        return
 
-        response_text = await MainOrchestrator.process_user_message(
-            session=session,
-            user_id=user_uuid,
-            household_id=household_uuid,
-            user_name=user_name,
-            message_text=text,
-            photo_bytes=photo_bytes,
-        )
-
+    # A success response is sent only after the Unit of Work has committed.
     await message.answer(response_text, parse_mode=ParseMode.MARKDOWN)
 
 
-async def start_bot():
-    logger.info("Starting Family AI Life OS Telegram Bot with Identity Security Guard...")
+async def start_bot() -> None:
+    logger.info("Starting Telegram polling.")
     await setup_bot_commands(bot)
     await dp.start_polling(bot)
-
-
-if __name__ == "__main__":
-    asyncio.run(start_bot())

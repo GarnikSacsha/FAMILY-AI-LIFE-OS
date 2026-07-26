@@ -1,11 +1,9 @@
 import unittest
-import uuid
-from datetime import datetime, timedelta, timezone
-from app.security.oauth import OAuthStateManager, OAuthStateError
+
+from app.security.oauth import OAuthStateManager
 
 
 class TestOAuthState(unittest.TestCase):
-
     def test_state_hash(self):
         raw_state = "test_raw_state_12345"
         hash1 = OAuthStateManager._hash_state(raw_state)

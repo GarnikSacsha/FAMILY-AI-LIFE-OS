@@ -1,42 +1,85 @@
-version: '3.8'
-
 services:
-  app:
-    build: .
-    container_name: family_life_os_app
-    restart: always
-    env_file:
-      - .env
+  migrate:
+    build:
+      context: .
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-family_os}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-family_life_os}
+      REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379/0
+    command: ["alembic", "upgrade", "head"]
     depends_on:
       postgres:
         condition: service_healthy
+    networks: [data]
+    read_only: true
+    tmpfs: ["/tmp"]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    restart: "no"
+
+  app:
+    build:
+      context: .
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-family_os}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-family_life_os}
+      REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379/0
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
       redis:
-        condition: service_started
+        condition: service_healthy
+    networks: [edge, data]
+    init: true
+    read_only: true
+    tmpfs: ["/tmp"]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    restart: unless-stopped
+    stop_grace_period: 30s
+    mem_limit: 512m
+    cpus: "1.0"
 
   postgres:
-    image: pgvector/pgvector:pg16
-    container_name: family_life_os_postgres
-    restart: always
+    image: pgvector/pgvector:0.8.0-pg16
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: family_life_os
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER:-family_os}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-family_life_os}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+    networks: [data]
+    restart: unless-stopped
+    mem_limit: 1g
+    cpus: "1.0"
 
   redis:
-    image: redis:7-alpine
-    container_name: family_life_os_redis
-    restart: always
-    ports:
-      - "6390:6379"
+    image: redis:7.4.2-alpine
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    command: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$$REDIS_PASSWORD\""]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [data]
+    restart: unless-stopped
+    mem_limit: 256m
+    cpus: "0.5"
+
+networks:
+  edge: {}
+  data:
+    internal: true
 
 volumes:
   pgdata:
+  redisdata:

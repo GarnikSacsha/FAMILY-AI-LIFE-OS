@@ -1,9 +1,9 @@
 import unittest
+
 from app.orchestration.router import IntentRouter
 
 
 class TestFamilyLifeOS(unittest.TestCase):
-
     def test_intent_router_food_vision(self):
         res = IntentRouter.classify_intent("Вот мой сегодняшний обед", has_photo=True)
         self.assertEqual(res["intent"], "FOOD_NUTRITION_ANALYSIS")

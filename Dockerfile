@@ -1,33 +1,35 @@
-# Multi-stage Docker build for Family AI Life OS
-FROM python:3.12-slim AS builder
+FROM python:3.12.11-slim-bookworm AS builder
 
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1
 WORKDIR /build
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
+COPY pyproject.toml README.md ./
+COPY app ./app
+RUN python -m pip wheel --wheel-dir /wheels .
 
-COPY pyproject.toml .
-RUN pip install --no-cache-dir --user .
+FROM python:3.12.11-slim-bookworm AS runner
 
-# Production runtime stage
-FROM python:3.12-slim AS runner
-
+ENV PATH=/home/appuser/.local/bin:$PATH \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 WORKDIR /app
 
-# Create non-root user
-RUN useradd -m -u 1000 appuser
+RUN groupadd --gid 10001 appuser \
+    && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin appuser
 
-# Copy installed site-packages from builder
-COPY --from=builder /root/.local /home/appuser/.local
-COPY . .
+COPY --from=builder /wheels /wheels
+RUN python -m pip install --no-index --find-links=/wheels family-ai-life-os \
+    && rm -rf /wheels
 
-ENV PATH=/home/appuser/.local/bin:$PATH
-ENV PYTHONUNBUFFERED=1
+COPY --chown=appuser:appuser alembic.ini main.py ./
+COPY --chown=appuser:appuser alembic ./alembic
 
 USER appuser
 
-HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()" || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import os; os.kill(1, 0)"
 
+STOPSIGNAL SIGTERM
 CMD ["python", "main.py"]
