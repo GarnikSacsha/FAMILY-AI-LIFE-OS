@@ -24,7 +24,8 @@ def production_settings(**overrides):
     return Settings(_env_file=None, **values)
 
 
-def test_development_settings_are_usable_without_production_secrets():
+def test_development_settings_are_usable_without_production_secrets(monkeypatch):
+    monkeypatch.delenv("TOKEN_ENCRYPTION_KEY", raising=False)
     configured = Settings(ENVIRONMENT="development", _env_file=None)
 
     assert configured.TOKEN_ENCRYPTION_KEY is None
