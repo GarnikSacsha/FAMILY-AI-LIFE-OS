@@ -90,7 +90,6 @@ def create_application(*, start_telegram: bool = True) -> FastAPI:
                 name="google-sheets-sync",
             )
             application.state.google_sheets_task = sheets_task
-
         try:
             yield
         finally:

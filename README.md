@@ -23,6 +23,10 @@ Users simply write messages, upload photos of food or receipts, forward PDF lab 
 5. **Enforces privacy rules** (personal data isolation vs. shared household space).
 6. **Returns clear, actionable answers** in Telegram.
 
+Voice notes and supported audio attachments are transcribed in memory with OpenAI,
+then passed through the same identity, privacy, routing, and deterministic tool
+checks as typed messages. Raw audio is not written to disk or stored by the app.
+
 ---
 
 ## 🏗 System Architecture
@@ -100,6 +104,7 @@ cp .env.example .env
 Fill in your credentials:
 - `TELEGRAM_BOT_TOKEN`: From [@BotFather](https://t.me/BotFather)
 - `GEMINI_API_KEY`: From Google AI Studio
+- `OPENAI_API_KEY`: Used for natural responses and voice-note transcription
 - `DATABASE_URL`: PostgreSQL connection string (`postgresql+asyncpg://...`)
 - `OURA_CLIENT_ID` & `OURA_CLIENT_SECRET`: From Oura Developer Portal
 

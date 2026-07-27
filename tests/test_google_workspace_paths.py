@@ -469,22 +469,28 @@ async def test_google_workspace_json_mail_and_calendar_paths(monkeypatch):
         assert messages[0]["from"] == "Family"
 
         no_events = AsyncMock(return_value={})
-        with patch.object(GoogleWorkspaceTools, "_get_json", new=no_events):
+        with (
+            patch.object(GoogleWorkspaceTools, "_require_calendar_scope", new=AsyncMock()),
+            patch.object(GoogleWorkspaceTools, "_get_json", new=no_events),
+        ):
             assert await GoogleWorkspaceTools.list_upcoming_events(object(), user_id=uuid.uuid4()) == []
 
-        with patch.object(
-            GoogleWorkspaceTools,
-            "_get_json",
-            new=AsyncMock(
-                return_value={
-                    "items": [
-                        {
-                            "id": "e1",
-                            "summary": "Dinner",
-                            "start": {"dateTime": "2026-07-27T18:00:00+03:00"},
-                        }
-                    ]
-                }
+        with (
+            patch.object(GoogleWorkspaceTools, "_require_calendar_scope", new=AsyncMock()),
+            patch.object(
+                GoogleWorkspaceTools,
+                "_get_json",
+                new=AsyncMock(
+                    return_value={
+                        "items": [
+                            {
+                                "id": "e1",
+                                "summary": "Dinner",
+                                "start": {"dateTime": "2026-07-27T18:00:00+03:00"},
+                            }
+                        ]
+                    }
+                ),
             ),
         ):
             events = await GoogleWorkspaceTools.list_upcoming_events(object(), user_id=uuid.uuid4())

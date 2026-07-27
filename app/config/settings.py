@@ -57,6 +57,10 @@ class Settings(BaseSettings):
     # AI & LLM Providers
     OPENAI_API_KEY: str | None = None
     GEMINI_API_KEY: str | None = None
+    AUDIO_TRANSCRIPTION_MODEL: str = "gpt-4o-mini-transcribe"
+    AUDIO_TRANSCRIPTION_TIMEOUT_SECONDS: float = 60.0
+    AUDIO_MAX_DURATION_SECONDS: int = 300
+    AUDIO_MAX_BYTES: int = 20 * 1024 * 1024
 
     # Model Assignments
     OPENAI_FAST_MODEL: str = "gpt-5.6-terra"

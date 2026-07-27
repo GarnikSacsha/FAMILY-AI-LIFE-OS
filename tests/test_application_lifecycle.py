@@ -52,6 +52,36 @@ async def test_health_fails_when_telegram_polling_stops() -> None:
 
 
 @pytest.mark.asyncio
+async def test_application_starts_one_durable_reminder_worker_with_shared_bot() -> None:
+    keep_polling = asyncio.Event()
+
+    async def supervised_polling(_application: object) -> None:
+        await keep_polling.wait()
+
+    reminder_worker = AsyncMock()
+    with (
+        patch(
+            "app.api.application._supervise_telegram_polling",
+            new=supervised_polling,
+        ),
+        patch(
+            "app.api.application.run_reminder_worker",
+            new=reminder_worker,
+        ),
+        patch(
+            "app.api.application.GoogleSheetsClient.is_configured",
+            return_value=False,
+        ),
+        patch.object(bot.session, "close", new=AsyncMock()),
+    ):
+        application = create_application()
+        async with application.router.lifespan_context(application):
+            await asyncio.sleep(0)
+
+    reminder_worker.assert_awaited_once_with(bot)
+
+
+@pytest.mark.asyncio
 async def test_telegram_polling_restarts_after_a_terminal_failure() -> None:
     attempts = 0
     polling_restarted = asyncio.Event()

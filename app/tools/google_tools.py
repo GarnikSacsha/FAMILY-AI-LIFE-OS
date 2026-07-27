@@ -19,6 +19,10 @@ logger = logging.getLogger(__name__)
 class GoogleWorkspaceError(Exception):
     """Safe integration failure suitable for user-facing fallback handling."""
 
+    def __init__(self, message: str, *, error_code: str = "GOOGLE_WORKSPACE_ERROR") -> None:
+        super().__init__(message)
+        self.error_code = error_code
+
 
 class GoogleWorkspaceTools:
     @staticmethod
@@ -160,7 +164,14 @@ class GoogleWorkspaceTools:
             async with aiohttp.ClientSession(timeout=timeout) as client:
                 async with client.get(url, headers=headers, params=params) as response:
                     if response.status != 200:
-                        raise GoogleWorkspaceError("Google Workspace request failed.")
+                        error_code = {
+                            401: "GOOGLE_TOKEN_INVALID",
+                            403: "GOOGLE_PERMISSION_OR_API_DISABLED",
+                        }.get(response.status, f"GOOGLE_HTTP_{response.status}")
+                        raise GoogleWorkspaceError(
+                            "Google Workspace request failed.",
+                            error_code=error_code,
+                        )
                     payload = await response.json()
         except GoogleWorkspaceError:
             raise
@@ -170,6 +181,36 @@ class GoogleWorkspaceTools:
         if not isinstance(payload, dict):
             raise GoogleWorkspaceError("Google Workspace returned an invalid response.")
         return payload
+
+    @staticmethod
+    async def _require_calendar_scope(
+        session: AsyncSession,
+        *,
+        user_id: uuid.UUID,
+    ) -> None:
+        result = await session.execute(
+            select(OAuthToken.scope).where(
+                OAuthToken.user_id == user_id,
+                OAuthToken.provider == "google",
+            )
+        )
+        scope_value = result.scalar_one_or_none()
+        if scope_value is None:
+            raise GoogleWorkspaceError(
+                "Google account is not connected.",
+                error_code="GOOGLE_NOT_CONNECTED",
+            )
+        scopes = set(scope_value.split())
+        calendar_scopes = {
+            "https://www.googleapis.com/auth/calendar",
+            "https://www.googleapis.com/auth/calendar.events",
+            "https://www.googleapis.com/auth/calendar.readonly",
+        }
+        if scopes.isdisjoint(calendar_scopes):
+            raise GoogleWorkspaceError(
+                "Google Calendar permission is missing.",
+                error_code="GOOGLE_CALENDAR_SCOPE_MISSING",
+            )
 
     @staticmethod
     async def list_recent_mail(
@@ -221,6 +262,10 @@ class GoogleWorkspaceTools:
         user_id: uuid.UUID,
         limit: int = 5,
     ) -> list[dict[str, str]]:
+        await GoogleWorkspaceTools._require_calendar_scope(
+            session,
+            user_id=user_id,
+        )
         access_token = await GoogleWorkspaceTools.get_valid_access_token(
             session,
             user_id=user_id,
@@ -247,3 +292,91 @@ class GoogleWorkspaceTools:
             for item in items
             if isinstance(item, dict)
         ]
+
+    @staticmethod
+    async def _calendar_request(
+        method: str,
+        url: str,
+        *,
+        access_token: str,
+        json_body: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        timeout = aiohttp.ClientTimeout(total=15)
+        headers = {"Authorization": f"Bearer {access_token}"}
+        try:
+            async with aiohttp.ClientSession(timeout=timeout) as client:
+                async with client.request(
+                    method,
+                    url,
+                    headers=headers,
+                    json=json_body,
+                ) as response:
+                    if response.status not in {200, 204}:
+                        error_code = {
+                            401: "GOOGLE_TOKEN_INVALID",
+                            403: "GOOGLE_PERMISSION_OR_API_DISABLED",
+                            404: "GOOGLE_CALENDAR_EVENT_NOT_FOUND",
+                        }.get(response.status, f"GOOGLE_HTTP_{response.status}")
+                        raise GoogleWorkspaceError(
+                            "Google Calendar request failed.",
+                            error_code=error_code,
+                        )
+                    if response.status == 204:
+                        return {}
+                    payload = await response.json()
+        except GoogleWorkspaceError:
+            raise
+        except (TimeoutError, aiohttp.ClientError, ValueError) as exc:
+            raise GoogleWorkspaceError(
+                "Google Calendar request failed.",
+                error_code="GOOGLE_CALENDAR_UNAVAILABLE",
+            ) from exc
+        if not isinstance(payload, dict):
+            raise GoogleWorkspaceError(
+                "Google Calendar returned an invalid response.",
+                error_code="GOOGLE_CALENDAR_INVALID_RESPONSE",
+            )
+        return payload
+
+    @staticmethod
+    async def create_calendar_event(
+        session: AsyncSession,
+        *,
+        user_id: uuid.UUID,
+        summary: str,
+        start_at: datetime,
+        end_at: datetime,
+        timezone_name: str,
+    ) -> dict[str, str]:
+        await GoogleWorkspaceTools._require_calendar_scope(session, user_id=user_id)
+        access_token = await GoogleWorkspaceTools.get_valid_access_token(session, user_id=user_id)
+        payload = await GoogleWorkspaceTools._calendar_request(
+            "POST",
+            "https://www.googleapis.com/calendar/v3/calendars/primary/events",
+            access_token=access_token,
+            json_body={
+                "summary": summary,
+                "start": {"dateTime": start_at.isoformat(), "timeZone": timezone_name},
+                "end": {"dateTime": end_at.isoformat(), "timeZone": timezone_name},
+            },
+        )
+        return {
+            "id": str(payload.get("id", "")),
+            "summary": str(payload.get("summary", summary)),
+            "start": str(payload.get("start", {}).get("dateTime", start_at.isoformat())),
+        }
+
+    @staticmethod
+    async def delete_calendar_event(
+        session: AsyncSession,
+        *,
+        user_id: uuid.UUID,
+        event_id: str,
+    ) -> None:
+        await GoogleWorkspaceTools._require_calendar_scope(session, user_id=user_id)
+        access_token = await GoogleWorkspaceTools.get_valid_access_token(session, user_id=user_id)
+        await GoogleWorkspaceTools._calendar_request(
+            "DELETE",
+            f"https://www.googleapis.com/calendar/v3/calendars/primary/events/{event_id}",
+            access_token=access_token,
+        )

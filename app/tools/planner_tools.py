@@ -40,6 +40,37 @@ class PlannerTools:
         }
 
     @staticmethod
+    async def create_reminder(
+        session: AsyncSession,
+        *,
+        recipient_id: uuid.UUID,
+        title: str,
+        trigger_at: datetime,
+        telegram_chat_id: int | None = None,
+    ) -> dict[str, Any]:
+        normalized_title = " ".join(title.strip().split())
+        if not normalized_title:
+            raise ValueError("Reminder title cannot be empty.")
+        if len(normalized_title) > 255:
+            raise ValueError("Reminder title exceeds 255 characters.")
+        if trigger_at.tzinfo is None or trigger_at.utcoffset() is None:
+            raise ValueError("Reminder time must be timezone-aware.")
+        reminder = Reminder(
+            recipient_id=recipient_id,
+            telegram_chat_id=telegram_chat_id,
+            title=normalized_title,
+            trigger_at=trigger_at,
+        )
+        session.add(reminder)
+        await session.flush()
+        return {
+            "reminder_id": str(reminder.id),
+            "title": reminder.title,
+            "trigger_at": reminder.trigger_at.isoformat(),
+            "status": "CREATED",
+        }
+
+    @staticmethod
     async def add_shopping_item(
         session: AsyncSession,
         household_id: uuid.UUID,

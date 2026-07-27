@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -165,3 +165,58 @@ async def test_worker_retries_after_temporary_telegram_failure() -> None:
         assert reminder.last_error == "RuntimeError"
 
     await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_family_message_creates_deliverable_tomorrow_reminder_for_named_member() -> None:
+    denys_id = uuid.uuid4()
+    oleksandra_id = uuid.uuid4()
+    household_id = uuid.uuid4()
+    users = [
+        SimpleNamespace(id=denys_id, first_name="Denys"),
+        SimpleNamespace(id=oleksandra_id, first_name="Oleksandra"),
+    ]
+    result = Mock()
+    result.scalars.return_value.all.return_value = users
+    session = Mock()
+    session.execute = AsyncMock(return_value=result)
+
+    with (
+        patch(
+            "app.orchestration.orchestrator.datetime",
+            wraps=datetime,
+        ) as clock,
+        patch(
+            "app.orchestration.orchestrator.PlannerTools.create_reminder",
+            new=AsyncMock(
+                return_value={
+                    "title": "сделать страховку",
+                    "status": "CREATED",
+                }
+            ),
+        ) as create_reminder,
+    ):
+        clock.now.return_value = datetime(2026, 7, 27, 12, tzinfo=timezone.utc)
+        response = await MainOrchestrator.process_user_message(
+            session=session,
+            user_id=oleksandra_id,
+            household_id=household_id,
+            user_name="Oleksandra",
+            message_text="Деня, нужно завтра сделать страховку",
+            telegram_chat_id=-100123456,
+        )
+
+    assert "Напомню" in response
+    assert create_reminder.await_args.kwargs["recipient_id"] == denys_id
+    assert create_reminder.await_args.kwargs["telegram_chat_id"] == -100123456
+    assert create_reminder.await_args.kwargs["trigger_at"] == datetime(
+        2026,
+        7,
+        28,
+        6,
+        tzinfo=timezone.utc,
+    )
+
+
+def test_general_response_domain_knows_calendar_is_private() -> None:
+    assert MainOrchestrator.domain_for_message("Добавь в календарь завтра в 15:00 встречу") == "calendar"
