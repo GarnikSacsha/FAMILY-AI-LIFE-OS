@@ -5,7 +5,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domains.planning.models import ShoppingItem, Task
+from app.domains.planning.models import Reminder, ShoppingItem, Task
 
 
 class PlannerTools:
@@ -36,6 +36,35 @@ class PlannerTools:
         return {
             "task_id": str(task.id),
             "title": task.title,
+            "status": "CREATED",
+        }
+
+    @staticmethod
+    async def create_reminder(
+        session: AsyncSession,
+        *,
+        recipient_id: uuid.UUID,
+        title: str,
+        trigger_at: datetime,
+    ) -> dict[str, Any]:
+        normalized_title = " ".join(title.strip().split())
+        if not normalized_title:
+            raise ValueError("Reminder title cannot be empty.")
+        if len(normalized_title) > 255:
+            raise ValueError("Reminder title exceeds 255 characters.")
+        if trigger_at.tzinfo is None or trigger_at.utcoffset() is None:
+            raise ValueError("Reminder time must be timezone-aware.")
+        reminder = Reminder(
+            recipient_id=recipient_id,
+            title=normalized_title,
+            trigger_at=trigger_at,
+        )
+        session.add(reminder)
+        await session.flush()
+        return {
+            "reminder_id": str(reminder.id),
+            "title": reminder.title,
+            "trigger_at": reminder.trigger_at.isoformat(),
             "status": "CREATED",
         }
 

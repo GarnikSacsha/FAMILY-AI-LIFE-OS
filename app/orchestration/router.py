@@ -40,7 +40,10 @@ class IntentRouter:
             }
 
         # Finance Domain Patterns
-        if any(
+        relative_spending_question = "сколько" in text and any(
+            day in text for day in ("сегодня", "вчера", "позавчера", "недел")
+        )
+        if relative_spending_question or any(
             w in text
             for w in [
                 "потратили",
@@ -66,7 +69,19 @@ class IntentRouter:
         # Planning Domain Patterns
         if any(
             w in text
-            for w in ["напомни", "задача", "список покупок", "купить", "план", "встреча", "стоматолог", "календарь"]
+            for w in [
+                "напомни",
+                "не забыть",
+                "нужно завтра",
+                "надо завтра",
+                "задача",
+                "список покупок",
+                "купить",
+                "план",
+                "встреча",
+                "стоматолог",
+                "календарь",
+            ]
         ):
             return {
                 "intent": "PLANNING_OR_REMINDER",

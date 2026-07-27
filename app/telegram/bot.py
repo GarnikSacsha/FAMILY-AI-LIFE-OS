@@ -1,6 +1,8 @@
+import asyncio
 import io
 import logging
 import time
+from datetime import datetime, timezone
 from typing import Any, cast
 
 from aiogram import Bot, Dispatcher, types
@@ -14,15 +16,22 @@ from aiogram.filters import Command, CommandStart
 from aiogram.methods import GetUpdates, Response, TelegramMethod
 from aiogram.methods.base import TelegramType
 from aiogram.types import BotCommand
+from sqlalchemy import select
 
 from app.config.settings import settings
+from app.domains.identity.models import User
 from app.domains.identity.service import (
     ActorContext,
     IdentityService,
     PermissionDeniedError,
 )
+from app.domains.planning.models import Reminder
 from app.infrastructure.database.session import unit_of_work
 from app.integrations.google.oauth import GoogleOAuthClient
+from app.integrations.openai.transcription import (
+    AudioTranscriptionError,
+    OpenAITranscriptionClient,
+)
 from app.integrations.oura.client import OuraClient
 from app.orchestration.orchestrator import MainOrchestrator
 from app.security.oauth import OAuthStateManager
@@ -149,6 +158,26 @@ async def _answer_access_denied(message: types.Message) -> None:
 
 async def _answer_service_unavailable(message: types.Message) -> None:
     await message.answer("⚠️ Семейный сервис временно недоступен. Попробуйте ещё раз через несколько минут.")
+
+
+def _escape_markdown_text(value: str) -> str:
+    for character in ("\\", "*", "_", "[", "]", "`"):
+        value = value.replace(character, f"\\{character}")
+    return value
+
+
+def _message_audio(message: types.Message) -> tuple[Any, str, str] | None:
+    voice = getattr(message, "voice", None)
+    audio = getattr(message, "audio", None)
+    if voice is not None:
+        return voice, "voice.ogg", voice.mime_type or "audio/ogg"
+    if audio is not None:
+        return (
+            audio,
+            audio.file_name or "audio.mp3",
+            audio.mime_type or "audio/mpeg",
+        )
+    return None
 
 
 async def setup_bot_commands(bot_instance: Bot) -> None:
@@ -340,8 +369,20 @@ async def cmd_calendar(message: types.Message) -> None:
     except PermissionDeniedError:
         await _answer_access_denied(message)
         return
-    except GoogleWorkspaceError:
-        await message.answer("📅 Сначала подключите личный Google-аккаунт командой /google.")
+    except GoogleWorkspaceError as error:
+        if error.error_code == "GOOGLE_CALENDAR_SCOPE_MISSING":
+            await message.answer(
+                "📅 Почта подключена, но разрешения на Calendar в текущем токене нет. "
+                "Переподключите Google командой /google и подтвердите доступ к календарю."
+            )
+        elif error.error_code == "GOOGLE_PERMISSION_OR_API_DISABLED":
+            await message.answer(
+                "📅 Google-аккаунт подключён, но Calendar API отклонил запрос. "
+                "Проверьте, что Google Calendar API включён в Google Cloud Console, "
+                "затем выполните /google ещё раз."
+            )
+        else:
+            await message.answer("📅 Сначала подключите личный Google-аккаунт командой /google.")
         return
     except Exception as error:
         logger.error("Calendar listing failed (%s).", type(error).__name__)
@@ -364,16 +405,39 @@ async def handle_user_message(message: types.Message) -> None:
     user_name = message.from_user.first_name or "Пользователь"
     text = message.text or message.caption or ""
     response_text: str
+    transcript: str | None = None
 
     try:
         async with unit_of_work() as session:
             actor = await _resolve_actor(session, message)
-            domain = MainOrchestrator.domain_for_message(
-                text,
-                has_photo=bool(message.photo),
-                has_document=bool(message.document),
-            )
-            IdentityService.validate_domain_access(actor, domain)
+
+            audio_attachment = _message_audio(message)
+            if audio_attachment is not None:
+                audio, filename, mime_type = audio_attachment
+                if audio.duration > settings.AUDIO_MAX_DURATION_SECONDS:
+                    raise AudioTranscriptionError(
+                        "The audio message is too long.",
+                        error_code="AUDIO_TOO_LONG",
+                    )
+                if audio.file_size is not None and audio.file_size > settings.AUDIO_MAX_BYTES:
+                    raise AudioTranscriptionError(
+                        "The audio message is too large.",
+                        error_code="AUDIO_TOO_LARGE",
+                    )
+                file_info = await bot.get_file(audio.file_id)
+                if not file_info.file_path:
+                    raise AudioTranscriptionError(
+                        "Telegram returned an empty audio path.",
+                        error_code="TELEGRAM_AUDIO_UNAVAILABLE",
+                    )
+                audio_buffer = io.BytesIO()
+                await bot.download_file(file_info.file_path, destination=audio_buffer)
+                transcript = await OpenAITranscriptionClient.transcribe(
+                    audio_buffer.getvalue(),
+                    filename=filename,
+                    mime_type=mime_type,
+                )
+                text = transcript
 
             photo_bytes = None
             if message.photo:
@@ -384,6 +448,13 @@ async def handle_user_message(message: types.Message) -> None:
                 photo_buffer = io.BytesIO()
                 await bot.download_file(file_info.file_path, destination=photo_buffer)
                 photo_bytes = photo_buffer.getvalue()
+
+            domain = MainOrchestrator.domain_for_message(
+                text,
+                has_photo=bool(message.photo),
+                has_document=bool(message.document),
+            )
+            IdentityService.validate_domain_access(actor, domain)
 
             response_text = await MainOrchestrator.process_user_message(
                 session=session,
@@ -396,6 +467,16 @@ async def handle_user_message(message: types.Message) -> None:
     except PermissionDeniedError:
         await _answer_access_denied(message)
         return
+    except AudioTranscriptionError as error:
+        if error.error_code in {"AUDIO_TOO_LONG", "AUDIO_TOO_LARGE"}:
+            await message.answer("🎙 Голосовое слишком длинное или большое. Отправьте запись короче 5 минут.")
+        elif error.error_code == "OPENAI_NOT_CONFIGURED":
+            await message.answer("🎙 Распознавание голоса пока не настроено: отсутствует OPENAI_API_KEY.")
+        elif error.error_code == "AUDIO_NO_SPEECH":
+            await message.answer("🎙 Не смог разобрать речь. Попробуйте записать голосовое ещё раз.")
+        else:
+            await message.answer("🎙 Сейчас не удалось распознать голосовое. Попробуйте немного позже.")
+        return
     except Exception:
         # Never echo provider payloads, authorization codes, or traceback text.
         logger.error("Telegram update failed before commit.")
@@ -403,6 +484,8 @@ async def handle_user_message(message: types.Message) -> None:
         return
 
     # A success response is sent only after the Unit of Work has committed.
+    if transcript is not None:
+        response_text = f"🎙 Распознал: «{_escape_markdown_text(transcript)}»\n\n{response_text}"
     await message.answer(response_text, parse_mode=ParseMode.MARKDOWN)
 
 
@@ -422,3 +505,33 @@ async def start_bot() -> None:
         handle_signals=False,
         close_bot_session=False,
     )
+
+
+async def run_reminder_worker(*, interval_seconds: float = 15.0) -> None:
+    """Deliver due personal reminders created from private or family chats."""
+    while True:
+        try:
+            async with unit_of_work() as session:
+                result = await session.execute(
+                    select(Reminder, User.telegram_id)
+                    .join(User, User.id == Reminder.recipient_id)
+                    .where(
+                        Reminder.is_triggered.is_(False),
+                        Reminder.trigger_at <= datetime.now(timezone.utc),
+                    )
+                    .order_by(Reminder.trigger_at, Reminder.id)
+                    .with_for_update(skip_locked=True)
+                    .limit(20)
+                )
+                due_reminders = result.all()
+                for reminder, telegram_id in due_reminders:
+                    await bot.send_message(
+                        chat_id=telegram_id,
+                        text=f"⏰ Напоминаю: {reminder.title}",
+                    )
+                    reminder.is_triggered = True
+        except asyncio.CancelledError:
+            raise
+        except Exception as error:
+            logger.error("Reminder delivery failed (%s).", type(error).__name__)
+        await asyncio.sleep(interval_seconds)

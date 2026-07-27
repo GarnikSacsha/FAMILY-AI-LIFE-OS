@@ -14,7 +14,7 @@ from app.infrastructure.integrations.google_sheets_worker import (
     run_google_sheets_worker,
 )
 from app.integrations.google.sheets import GoogleSheetsClient
-from app.telegram.bot import bot, polling_health, start_bot
+from app.telegram.bot import bot, polling_health, run_reminder_worker, start_bot
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +70,7 @@ def create_application(*, start_telegram: bool = True) -> FastAPI:
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         telegram_task: asyncio.Task[None] | None = None
         sheets_task: asyncio.Task[None] | None = None
+        reminder_task: asyncio.Task[None] | None = None
         polling_health.reset(enabled=start_telegram)
         if start_telegram:
             telegram_task = asyncio.create_task(
@@ -83,10 +84,19 @@ def create_application(*, start_telegram: bool = True) -> FastAPI:
                 name="google-sheets-sync",
             )
             application.state.google_sheets_task = sheets_task
+        reminder_task = asyncio.create_task(
+            run_reminder_worker(),
+            name="reminder-delivery",
+        )
+        application.state.reminder_task = reminder_task
 
         try:
             yield
         finally:
+            if reminder_task is not None:
+                reminder_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await reminder_task
             if sheets_task is not None:
                 sheets_task.cancel()
                 with suppress(asyncio.CancelledError):
