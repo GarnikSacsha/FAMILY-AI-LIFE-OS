@@ -6,6 +6,10 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domains.planning.reminder_parser import (
+    is_reminder_request,
+    parse_reminder_request,
+)
 from app.orchestration.router import IntentRouter
 from app.tools.finance_tools import FinanceTools
 from app.tools.health_tools import HealthIntegrationError, HealthTools
@@ -24,6 +28,10 @@ class MainOrchestrator:
         r"мои|наши|траты|расходы|сегодняшние|сегодня|за)\b",
         re.IGNORECASE,
     )
+
+    @staticmethod
+    def _escape_markdown(value: str) -> str:
+        return re.sub(r"([\\_*`\[])", r"\\\1", value)
 
     @staticmethod
     def _routing_text(message_text: str) -> str:
@@ -285,6 +293,7 @@ class MainOrchestrator:
         photo_bytes: bytes | None = None,
         document_bytes: bytes | None = None,
         timezone_name: str = "Europe/Kyiv",
+        telegram_chat_id: int | None = None,
     ) -> str:
         """Processes incoming user input, delegates to deterministic tools, and returns response."""
         has_photo = photo_bytes is not None
@@ -405,6 +414,35 @@ class MainOrchestrator:
 
         # Case 3: Shopping List & Planning
         if intent == "PLANNING_OR_REMINDER":
+            if is_reminder_request(message_text):
+                parsed = parse_reminder_request(
+                    message_text,
+                    timezone_name=timezone_name,
+                )
+                if parsed is None:
+                    return (
+                        "🔔 Уточните, когда напомнить. Например: "
+                        "«напомни завтра в 10:00 позвонить врачу» или "
+                        "«напоминай в течение недели решить вопрос с отпуском»."
+                    )
+                if telegram_chat_id is None:
+                    return "🔔 Не удалось определить чат для напоминания. Отправьте просьбу ещё раз в Telegram."
+
+                reminders = await PlannerTools.create_reminders(
+                    session,
+                    recipient_id=user_id,
+                    telegram_chat_id=telegram_chat_id,
+                    title=parsed.title,
+                    trigger_times=parsed.trigger_times,
+                )
+                zone = ZoneInfo(timezone_name)
+                formatted_times = ", ".join(
+                    reminder["trigger_at"].astimezone(zone).strftime("%d.%m.%Y в %H:%M") for reminder in reminders
+                )
+                reminder_word = "Напоминание создано" if len(reminders) == 1 else "Напоминания созданы"
+                safe_title = cls._escape_markdown(parsed.title)
+                return f"🔔 **{reminder_word}:** {safe_title}\nПришлю прямо в этот чат: {formatted_times}."
+
             if (
                 "купить" in message_text.lower()
                 or "список" in message_text.lower()

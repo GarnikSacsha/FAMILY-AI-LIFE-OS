@@ -213,6 +213,7 @@ async def cmd_help(message: types.Message) -> None:
         "• **/tasks** — текущие задачи\n"
         "• **/budget** — расходы текущего месяца\n"
         "• **/health** — личная сводка здоровья\n"
+        "• напишите «напомни завтра в 10:00…» — пришлю напоминание прямо в этот чат\n"
         "• отправьте фото еды для приблизительной оценки состава",
         parse_mode=ParseMode.MARKDOWN,
     )
@@ -392,6 +393,8 @@ async def handle_user_message(message: types.Message) -> None:
                 user_name=user_name,
                 message_text=text,
                 photo_bytes=photo_bytes,
+                timezone_name=actor.timezone,
+                telegram_chat_id=actor.chat_id,
             )
     except PermissionDeniedError:
         await _answer_access_denied(message)
