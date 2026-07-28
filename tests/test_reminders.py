@@ -59,6 +59,21 @@ def test_parses_common_short_relative_phrase() -> None:
     assert parsed.trigger_times == (now + timedelta(minutes=30),)
 
 
+def test_conversational_prefix_does_not_replace_reminder_subject() -> None:
+    parsed = parse_reminder_request(
+        (
+            "Давай чисто ради проверки, сделаем вот как, напомни мне сегодня в 19, "
+            "чтоб я уточнил у Сани, что они с Машей решили по поводу брони"
+        ),
+        timezone_name="Europe/Kyiv",
+        now=datetime(2026, 7, 27, 12, tzinfo=timezone.utc),
+    )
+
+    assert parsed is not None
+    assert parsed.title == "чтоб я уточнил у Сани, что они с Машей решили по поводу брони"
+    assert parsed.trigger_times == (datetime(2026, 7, 27, 16, tzinfo=timezone.utc),)
+
+
 @pytest.mark.asyncio
 async def test_orchestrator_persists_reminder_for_source_chat() -> None:
     captured: list[Reminder] = []

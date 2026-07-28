@@ -40,6 +40,33 @@ class PlannerTools:
         }
 
     @staticmethod
+    async def get_active_tasks(
+        session: AsyncSession,
+        *,
+        owner_id: uuid.UUID,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Return unfinished tasks from PostgreSQL in due-date order."""
+        stmt = (
+            select(Task)
+            .where(
+                Task.owner_id == owner_id,
+                Task.is_completed.is_(False),
+            )
+            .order_by(Task.due_date.asc().nullslast(), Task.created_at, Task.id)
+            .limit(limit)
+        )
+        result = await session.execute(stmt)
+        return [
+            {
+                "task_id": str(task.id),
+                "title": task.title,
+                "due_date": task.due_date.isoformat() if task.due_date else None,
+            }
+            for task in result.scalars().all()
+        ]
+
+    @staticmethod
     async def create_reminder(
         session: AsyncSession,
         *,

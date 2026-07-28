@@ -72,3 +72,4 @@ class FinancialTransaction(Base, TimestampMixin):
     sheets_sync_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     sheets_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     sheets_sync_error: Mapped[str | None] = mapped_column(String(100))
+    sheets_updated_range: Mapped[str | None] = mapped_column(String(255))

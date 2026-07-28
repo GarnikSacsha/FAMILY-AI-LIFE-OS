@@ -1,6 +1,7 @@
 import io
 import logging
 import time
+import uuid
 from typing import Any, cast
 
 from aiogram import Bot, Dispatcher, types
@@ -32,6 +33,7 @@ from app.orchestration.orchestrator import MainOrchestrator
 from app.security.oauth import OAuthStateManager
 from app.tools.google_tools import GoogleWorkspaceError, GoogleWorkspaceTools
 from app.tools.health_tools import HealthTools
+from app.tools.memory_tools import SharedMemoryTools
 
 logger = logging.getLogger(__name__)
 
@@ -402,6 +404,7 @@ async def handle_user_message(message: types.Message) -> None:
     text = message.text or message.caption or ""
     response_text: str
     transcript: str | None = None
+    shared_response_coordinates: tuple[uuid.UUID, int] | None = None
 
     try:
         async with unit_of_work() as session:
@@ -445,12 +448,46 @@ async def handle_user_message(message: types.Message) -> None:
                 await bot.download_file(file_info.file_path, destination=photo_buffer)
                 photo_bytes = photo_buffer.getvalue()
 
+            shared_context_enabled = (
+                settings.SHARED_CHAT_MEMORY_ENABLED
+                and actor.chat_type in {"group", "supergroup"}
+            )
+
             domain = MainOrchestrator.domain_for_message(
                 text,
                 has_photo=bool(message.photo),
                 has_document=bool(message.document),
             )
+            if (
+                shared_context_enabled
+                and message.photo
+                and domain == "health"
+            ):
+                # A food photo intentionally posted in the authorized family
+                # group may be analyzed, but it is not added to personal health
+                # history or used as private context.
+                domain = "general"
             IdentityService.validate_domain_access(actor, domain)
+            if shared_context_enabled:
+                if transcript is not None:
+                    message_type = "voice"
+                elif message.photo:
+                    message_type = "photo"
+                elif message.document:
+                    message_type = "document"
+                else:
+                    message_type = "text"
+                await SharedMemoryTools.record_message(
+                    session,
+                    household_id=actor.household_id,
+                    author_user_id=actor.user_id,
+                    telegram_chat_id=actor.chat_id,
+                    telegram_message_id=getattr(message, "message_id", None),
+                    role="user",
+                    author_name=user_name,
+                    message_type=message_type,
+                    content=text or f"[{message_type}]",
+                )
 
             response_text = await MainOrchestrator.process_user_message(
                 session=session,
@@ -461,7 +498,13 @@ async def handle_user_message(message: types.Message) -> None:
                 photo_bytes=photo_bytes,
                 timezone_name=actor.timezone,
                 telegram_chat_id=actor.chat_id,
+                shared_context_enabled=shared_context_enabled,
             )
+            if shared_context_enabled:
+                shared_response_coordinates = (
+                    actor.household_id,
+                    actor.chat_id,
+                )
     except PermissionDeniedError:
         await _answer_access_denied(message)
         return
@@ -484,7 +527,27 @@ async def handle_user_message(message: types.Message) -> None:
     # A success response is sent only after the Unit of Work has committed.
     if transcript is not None:
         response_text = f"🎙 Распознал: «{_escape_markdown_text(transcript)}»\n\n{response_text}"
-    await message.answer(response_text, parse_mode=ParseMode.MARKDOWN)
+    sent_message = await message.answer(response_text, parse_mode=ParseMode.MARKDOWN)
+    if shared_response_coordinates is not None:
+        household_id, chat_id = shared_response_coordinates
+        try:
+            async with unit_of_work() as session:
+                await SharedMemoryTools.record_message(
+                    session,
+                    household_id=household_id,
+                    author_user_id=None,
+                    telegram_chat_id=chat_id,
+                    telegram_message_id=getattr(sent_message, "message_id", None),
+                    role="assistant",
+                    author_name="Family",
+                    message_type="text",
+                    content=response_text,
+                )
+        except Exception as error:
+            logger.warning(
+                "Telegram response was delivered but shared context persistence failed (%s).",
+                type(error).__name__,
+            )
 
 
 async def start_bot() -> None:

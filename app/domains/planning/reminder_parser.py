@@ -76,16 +76,8 @@ def _future_local_datetime(
     return candidate
 
 
-def _clean_title(message_text: str) -> str:
-    verb = _REMINDER_VERB.search(message_text)
-    if verb is not None and verb.start() > 0:
-        prefix = message_text[: verb.start()]
-        prefix = re.sub(r"(?i)\b(?:так\s+(?:шо|что)|и)\s*$", "", prefix)
-        prefix = re.sub(r"(?i)^\s*(?:во[- ]вторых|во[- ]первых)[,.:\s]*", "", prefix)
-        if len(prefix.strip(" \t\n,.;:—-")) >= 4:
-            return prefix.strip(" \t\n,.;:—-")[:255]
-
-    title = _REMINDER_VERB.sub("", message_text, count=1)
+def _clean_title_fragment(value: str) -> str:
+    title = value
     title = re.sub(r"(?i)^\s*(?:мне|нам|пожалуйста)\b", "", title)
     title = re.sub(r"(?i)\b(?:мне|нам|тоже)\b", "", title)
     title = re.sub(r"(?i)\b(?:в\s+течени[еи]\s+недели|каждый\s+день\s+(?:в\s+течение\s+)?недели)\b", "", title)
@@ -98,7 +90,35 @@ def _clean_title(message_text: str) -> str:
     title = _MONTH_DATE.sub("", title)
     title = re.sub(r"(?i)^\s*(?:о\s+том,\s*что|что|чтобы|об)\s+", "", title)
     title = re.sub(r"\s+", " ", title).strip(" \t\n,.;:—-")
+    return title
+
+
+def _clean_title(message_text: str) -> str:
+    verb = _REMINDER_VERB.search(message_text)
+    if verb is None:
+        title = _clean_title_fragment(message_text)
+        return (title or "Семейное напоминание")[:255]
+
+    suffix = _clean_title_fragment(message_text[verb.end() :])
+    deictic_suffix = re.sub(
+        r"(?i)^(?:(?:об|про)\s+)?(?:этом|это)$",
+        "",
+        suffix,
+    ).strip(" \t\n,.;:—-")
+    if deictic_suffix:
+        return suffix[:255]
+
+    prefix = message_text[: verb.start()]
+    prefix = re.sub(r"(?i)\b(?:так\s+(?:шо|что)|и)\s*$", "", prefix)
+    prefix = re.sub(r"(?i)^\s*(?:во[- ]вторых|во[- ]первых)[,.:\s]*", "", prefix)
+    prefix = re.sub(r"\s+", " ", prefix).strip(" \t\n,.;:—-")
+    title = prefix or suffix
     return (title or "Семейное напоминание")[:255]
+
+
+def reminder_title(message_text: str) -> str:
+    """Return the task portion without treating conversational filler as the title."""
+    return _clean_title(message_text)
 
 
 def _as_utc(values: list[datetime]) -> tuple[datetime, ...]:

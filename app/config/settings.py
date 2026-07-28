@@ -83,6 +83,13 @@ class Settings(BaseSettings):
     GOOGLE_CREDENTIALS_JSON: SecretStr | None = None
     GOOGLE_SHEETS_RANGE: str = "A:I"
 
+    # Shared family-chat memory and proactive summaries
+    SHARED_CHAT_MEMORY_ENABLED: bool = True
+    CHAT_SUMMARY_IDLE_MINUTES: int = 30
+    CHAT_SUMMARY_POLL_SECONDS: float = 30.0
+    CHAT_SUMMARY_DAILY_HOUR: int = 21
+    CHAT_SUMMARY_MAX_MESSAGES: int = 100
+
     # Google user OAuth (personal Gmail and Calendar accounts)
     GOOGLE_OAUTH_CLIENT_ID: str | None = None
     GOOGLE_OAUTH_CLIENT_SECRET: SecretStr | None = None
@@ -130,6 +137,34 @@ class Settings(BaseSettings):
         if unsupported:
             raise ValueError("OURA_SCOPES contains unsupported scopes.")
         return " ".join(scopes)
+
+    @field_validator("CHAT_SUMMARY_IDLE_MINUTES")
+    @classmethod
+    def validate_summary_idle_minutes(cls, value: int) -> int:
+        if value < 5 or value > 24 * 60:
+            raise ValueError("CHAT_SUMMARY_IDLE_MINUTES must be between 5 and 1440.")
+        return value
+
+    @field_validator("CHAT_SUMMARY_POLL_SECONDS")
+    @classmethod
+    def validate_summary_poll_seconds(cls, value: float) -> float:
+        if value < 5 or value > 3600:
+            raise ValueError("CHAT_SUMMARY_POLL_SECONDS must be between 5 and 3600.")
+        return value
+
+    @field_validator("CHAT_SUMMARY_DAILY_HOUR")
+    @classmethod
+    def validate_summary_daily_hour(cls, value: int) -> int:
+        if value < 0 or value > 23:
+            raise ValueError("CHAT_SUMMARY_DAILY_HOUR must be between 0 and 23.")
+        return value
+
+    @field_validator("CHAT_SUMMARY_MAX_MESSAGES")
+    @classmethod
+    def validate_summary_max_messages(cls, value: int) -> int:
+        if value < 10 or value > 500:
+            raise ValueError("CHAT_SUMMARY_MAX_MESSAGES must be between 10 and 500.")
+        return value
 
     @model_validator(mode="after")
     def validate_production_configuration(self) -> "Settings":

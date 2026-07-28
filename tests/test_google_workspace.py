@@ -140,15 +140,22 @@ async def test_sheets_append_adds_new_transaction(monkeypatch):
     monkeypatch.setattr(settings, "GOOGLE_SHEETS_SPREADSHEET_ID", "spreadsheet")
     monkeypatch.setattr(settings, "GOOGLE_SHEETS_RANGE", "A:I")
     row = ["2026-07-26", "базар", "Groceries", "1900.00", "UAH", "expense", "manual", "household", "tx"]
-    request = AsyncMock(side_effect=[{"values": []}, {"updates": {}}])
+    request = AsyncMock(
+        side_effect=[
+            {"values": []},
+            {"updates": {"updatedRows": 1, "updatedRange": "Расходы!A27:I27"}},
+            {"values": [row]},
+        ]
+    )
 
     with (
         patch.object(GoogleSheetsClient, "_access_token", new=AsyncMock(return_value="token")),
         patch.object(GoogleSheetsClient, "_request", new=request),
     ):
-        await GoogleSheetsClient.append_transaction(row)
+        updated_range = await GoogleSheetsClient.append_transaction(row)
 
-    assert request.await_count == 2
+    assert updated_range == "Расходы!A27:I27"
+    assert request.await_count == 3
     assert request.await_args_list[1].args[0] == "POST"
     assert request.await_args_list[1].kwargs["json_body"]["values"] == [row]
 

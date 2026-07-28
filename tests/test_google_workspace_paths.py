@@ -527,7 +527,7 @@ async def test_worker_claim_mark_and_loop_paths(monkeypatch):
     assert transaction.sheets_sync_status == "syncing"
     assert transaction.sheets_sync_attempts == 1
 
-    await worker_module._mark_synced(transaction.id)
+    await worker_module._mark_synced(transaction.id, "Расходы!A2:I2")
     await worker_module._mark_failed(transaction.id, RuntimeError("secret text"))
     assert session.execute.await_count == 3
 
@@ -537,14 +537,14 @@ async def test_worker_claim_mark_and_loop_paths(monkeypatch):
         "_claim_next_transaction",
         AsyncMock(side_effect=[item, asyncio.CancelledError()]),
     )
-    append = AsyncMock()
+    append = AsyncMock(return_value="Расходы!A2:I2")
     mark_synced = AsyncMock()
     monkeypatch.setattr(GoogleSheetsClient, "append_transaction", append)
     monkeypatch.setattr(worker_module, "_mark_synced", mark_synced)
     with pytest.raises(asyncio.CancelledError):
         await worker_module.run_google_sheets_worker()
     append.assert_awaited_once()
-    mark_synced.assert_awaited_once_with(item.id)
+    mark_synced.assert_awaited_once_with(item.id, "Расходы!A2:I2")
 
     monkeypatch.setattr(
         worker_module,

@@ -247,4 +247,6 @@ class FinanceTools:
             "amount": str(transaction.amount),
             "currency": transaction.currency,
             "status": transaction.sheets_sync_status,
+            "updated_range": transaction.sheets_updated_range or "",
+            "error_code": transaction.sheets_sync_error or "",
         }

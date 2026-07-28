@@ -99,7 +99,7 @@ class GoogleSheetsClient:
         return payload
 
     @classmethod
-    async def append_transaction(cls, values: list[str]) -> None:
+    async def append_transaction(cls, values: list[str]) -> str:
         if len(values) != 9:
             raise ValueError("Google Sheets transaction rows require exactly 9 values.")
         spreadsheet_id = (settings.GOOGLE_SHEETS_SPREADSHEET_ID or "").strip()
@@ -118,12 +118,29 @@ class GoogleSheetsClient:
         if isinstance(rows, list) and any(
             isinstance(row, list) and len(row) >= 9 and str(row[8]) == transaction_id for row in rows
         ):
-            return
+            verified_range = existing.get("range")
+            return str(verified_range) if verified_range else range_name
 
         append_url = f"{values_url}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS"
-        await cls._request(
+        appended = await cls._request(
             "POST",
             append_url,
             access_token=access_token,
             json_body={"majorDimension": "ROWS", "values": [values]},
         )
+        updates = appended.get("updates")
+        if (
+            not isinstance(updates, dict)
+            or int(updates.get("updatedRows", 0)) < 1
+            or not isinstance(updates.get("updatedRange"), str)
+        ):
+            raise GoogleSheetsError("Google Sheets did not confirm an inserted row.")
+
+        verified = await cls._request("GET", values_url, access_token=access_token)
+        verified_rows = verified.get("values", [])
+        if not isinstance(verified_rows, list) or not any(
+            isinstance(row, list) and len(row) >= 9 and str(row[8]) == transaction_id
+            for row in verified_rows
+        ):
+            raise GoogleSheetsError("Google Sheets row verification failed.")
+        return str(updates["updatedRange"])

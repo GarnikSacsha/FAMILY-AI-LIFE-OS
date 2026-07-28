@@ -59,6 +59,7 @@ async def test_application_starts_one_durable_reminder_worker_with_shared_bot() 
         await keep_polling.wait()
 
     reminder_worker = AsyncMock()
+    summary_worker = AsyncMock()
     with (
         patch(
             "app.api.application._supervise_telegram_polling",
@@ -67,6 +68,10 @@ async def test_application_starts_one_durable_reminder_worker_with_shared_bot() 
         patch(
             "app.api.application.run_reminder_worker",
             new=reminder_worker,
+        ),
+        patch(
+            "app.api.application.run_conversation_summary_worker",
+            new=summary_worker,
         ),
         patch(
             "app.api.application.GoogleSheetsClient.is_configured",
@@ -79,6 +84,7 @@ async def test_application_starts_one_durable_reminder_worker_with_shared_bot() 
             await asyncio.sleep(0)
 
     reminder_worker.assert_awaited_once_with(bot)
+    summary_worker.assert_awaited_once_with(bot)
 
 
 @pytest.mark.asyncio

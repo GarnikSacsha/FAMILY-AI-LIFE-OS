@@ -1,0 +1,251 @@
+import asyncio
+import logging
+from datetime import datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
+
+from aiogram import Bot
+
+from app.agents.memory.agent import SharedMemoryAgent, format_summary
+from app.config.settings import settings
+from app.domains.memory.models import SharedConversationSummary
+from app.infrastructure.database.session import AsyncSessionLocal
+from app.tools.memory_tools import SharedMemoryTools
+
+logger = logging.getLogger(__name__)
+
+
+async def _deliver_summary(bot_instance: Bot, summary: SharedConversationSummary) -> bool:
+    try:
+        await bot_instance.send_message(
+            chat_id=summary.telegram_chat_id,
+            text=summary.summary_text,
+        )
+    except asyncio.CancelledError:
+        raise
+    except Exception as error:
+        logger.warning(
+            "Shared-chat summary delivery failed (%s).",
+            type(error).__name__,
+        )
+        async with AsyncSessionLocal.begin() as session:
+            await SharedMemoryTools.mark_summary_delivery(
+                session,
+                summary_id=summary.id,
+                error_code=type(error).__name__,
+            )
+        return False
+
+    async with AsyncSessionLocal.begin() as session:
+        await SharedMemoryTools.mark_summary_delivery(
+            session,
+            summary_id=summary.id,
+            delivered_at=datetime.now(timezone.utc),
+        )
+    return True
+
+
+async def _remember_summary_items(
+    session,
+    *,
+    household_id,
+    source_message_id,
+    structured_data: dict[str, list[str]],
+) -> None:
+    memory_kind = {
+        "decisions": "decision",
+        "actions": "action",
+        "money": "money",
+        "open_questions": "open_question",
+        "facts": "fact",
+        "suggestions": "suggestion",
+    }
+    for section, kind in memory_kind.items():
+        for content in structured_data.get(section, []):
+            await SharedMemoryTools.remember(
+                session,
+                household_id=household_id,
+                source_message_id=source_message_id,
+                kind=kind,
+                content=content,
+                confidence=0.8 if kind == "suggestion" else 1.0,
+            )
+
+
+async def create_idle_conversation_summaries(
+    *,
+    now: datetime | None = None,
+    agent: SharedMemoryAgent | None = None,
+) -> list[SharedConversationSummary]:
+    current = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    memory_agent = agent or SharedMemoryAgent()
+    async with AsyncSessionLocal() as session:
+        batches = await SharedMemoryTools.idle_conversation_batches(
+            session,
+            now=current,
+            idle_minutes=settings.CHAT_SUMMARY_IDLE_MINUTES,
+            message_limit=settings.CHAT_SUMMARY_MAX_MESSAGES,
+        )
+
+    summaries: list[SharedConversationSummary] = []
+    for batch in batches:
+        messages = batch["messages"]
+        structured_data = await memory_agent.summarize_messages(
+            [
+                {
+                    "author": message.author_name,
+                    "content": message.content,
+                }
+                for message in messages
+            ]
+        )
+        summary_text = format_summary(structured_data)
+        is_meaningful = any(structured_data.values())
+        period_key = str(messages[-1].id)
+        async with AsyncSessionLocal.begin() as session:
+            if await SharedMemoryTools.summary_exists(
+                session,
+                household_id=batch["household_id"],
+                summary_kind="conversation",
+                period_key=period_key,
+            ):
+                continue
+            summary = await SharedMemoryTools.save_summary(
+                session,
+                household_id=batch["household_id"],
+                telegram_chat_id=batch["telegram_chat_id"],
+                summary_kind="conversation",
+                period_key=period_key,
+                summary_text=summary_text,
+                structured_data=structured_data,
+                window_started_at=messages[0].created_at,
+                window_ended_at=messages[-1].created_at,
+                source_messages=messages,
+            )
+            await _remember_summary_items(
+                session,
+                household_id=batch["household_id"],
+                source_message_id=messages[-1].id,
+                structured_data=structured_data,
+            )
+            if not is_meaningful:
+                summary.delivery_status = "delivered"
+                summary.delivered_at = current
+        if is_meaningful:
+            summaries.append(summary)
+    return summaries
+
+
+def _merge_summary_data(summaries: list[SharedConversationSummary]) -> dict[str, list[str]]:
+    keys = ("decisions", "actions", "money", "open_questions", "facts", "suggestions")
+    merged: dict[str, list[str]] = {key: [] for key in keys}
+    for summary in summaries:
+        for key in keys:
+            raw_items = summary.structured_data.get(key, [])
+            if not isinstance(raw_items, list):
+                continue
+            for item in raw_items:
+                if isinstance(item, str) and item not in merged[key]:
+                    merged[key].append(item)
+    return merged
+
+
+async def create_daily_summaries(
+    *,
+    now: datetime | None = None,
+) -> list[SharedConversationSummary]:
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is None or current.utcoffset() is None:
+        raise ValueError("now must be timezone-aware.")
+    if settings.FAMILY_GROUP_CHAT_ID is None:
+        return []
+
+    async with AsyncSessionLocal() as session:
+        households = await SharedMemoryTools.shared_households(session)
+
+    created: list[SharedConversationSummary] = []
+    for household in households:
+        zone = ZoneInfo(household.timezone or "Europe/Kyiv")
+        local_now = current.astimezone(zone)
+        if local_now.hour < settings.CHAT_SUMMARY_DAILY_HOUR:
+            continue
+        period_key = local_now.date().isoformat()
+        local_start = datetime.combine(local_now.date(), time.min, tzinfo=zone)
+        local_end = local_start + timedelta(days=1)
+        async with AsyncSessionLocal() as session:
+            if await SharedMemoryTools.summary_exists(
+                session,
+                household_id=household.id,
+                summary_kind="daily",
+                period_key=period_key,
+            ):
+                continue
+            conversation_summaries = await SharedMemoryTools.summaries_in_window(
+                session,
+                household_id=household.id,
+                telegram_chat_id=settings.FAMILY_GROUP_CHAT_ID,
+                start_at=local_start,
+                end_at=local_end,
+            )
+        if not conversation_summaries:
+            continue
+
+        structured_data = _merge_summary_data(conversation_summaries)
+        async with AsyncSessionLocal.begin() as session:
+            if await SharedMemoryTools.summary_exists(
+                session,
+                household_id=household.id,
+                summary_kind="daily",
+                period_key=period_key,
+            ):
+                continue
+            summary = await SharedMemoryTools.save_summary(
+                session,
+                household_id=household.id,
+                telegram_chat_id=settings.FAMILY_GROUP_CHAT_ID,
+                summary_kind="daily",
+                period_key=period_key,
+                summary_text=format_summary(structured_data, daily=True),
+                structured_data=structured_data,
+                window_started_at=local_start,
+                window_ended_at=min(local_end, local_now),
+            )
+        created.append(summary)
+    return created
+
+
+async def deliver_due_shared_summaries(
+    bot_instance: Bot,
+    *,
+    now: datetime | None = None,
+    agent: SharedMemoryAgent | None = None,
+) -> int:
+    if not settings.SHARED_CHAT_MEMORY_ENABLED:
+        return 0
+    async with AsyncSessionLocal() as session:
+        existing = await SharedMemoryTools.undelivered_summaries(session)
+    summaries = await create_idle_conversation_summaries(now=now, agent=agent)
+    summaries.extend(await create_daily_summaries(now=now))
+    seen_ids = {summary.id for summary in existing}
+    summaries = existing + [
+        summary for summary in summaries if summary.id not in seen_ids
+    ]
+    delivered = 0
+    for summary in summaries:
+        if await _deliver_summary(bot_instance, summary):
+            delivered += 1
+    return delivered
+
+
+async def run_conversation_summary_worker(bot_instance: Bot) -> None:
+    """Generate recaps after inactivity and one shared evening digest."""
+    while True:
+        try:
+            await deliver_due_shared_summaries(bot_instance)
+        except asyncio.CancelledError:
+            raise
+        except Exception as error:
+            logger.warning(
+                "Shared-chat summary worker iteration failed (%s).",
+                type(error).__name__,
+            )
+        await asyncio.sleep(settings.CHAT_SUMMARY_POLL_SECONDS)

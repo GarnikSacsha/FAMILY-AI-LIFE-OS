@@ -20,6 +20,23 @@ class FinanceAgent:
     def __init__(self):
         self.provider = GeminiFinanceProvider()
 
+    @staticmethod
+    def _fallback_category(description: str, merchant: str) -> str:
+        normalized = f"{merchant} {description}".lower()
+        rules = (
+            ("Pets", ("корм", "ветеринар", "зоомагаз", "кот", "собак")),
+            ("Entertainment", ("отдых", "кино", "игр", "развлеч", "концерт")),
+            ("Groceries", ("продукт", "супермаркет", "рынок", "базар", "еда")),
+            ("Restaurants", ("кафе", "ресторан", "доставка", "кофе", "пицц")),
+            ("Transport", ("такси", "бензин", "топливо", "проезд", "парков")),
+            ("Health", ("аптек", "врач", "лекар", "анализ")),
+            ("Utilities", ("коммун", "свет", "газ", "вода", "интернет")),
+        )
+        for category, terms in rules:
+            if any(term in normalized for term in terms):
+                return category
+        return "Uncategorized"
+
     async def categorize_and_log_transaction(
         self,
         session: AsyncSession,
@@ -38,11 +55,23 @@ class FinanceAgent:
             f"Return the exact category and subcategory."
         )
 
+        fallback_category = self._fallback_category(description, merchant)
+        allowed_categories = {
+            "Entertainment",
+            "Groceries",
+            "Health",
+            "Pets",
+            "Restaurants",
+            "Shopping",
+            "Transport",
+            "Utilities",
+        }
         try:
             categorization = await self.provider.generate_structured_json(prompt, CategorySchema)
-            category = categorization.get("category", "Uncategorized")
+            proposed_category = str(categorization.get("category", "")).strip()
+            category = proposed_category if proposed_category in allowed_categories else fallback_category
         except Exception:
-            category = "Uncategorized"
+            category = fallback_category
 
         result = await FinanceTools.log_transaction(
             session=session,

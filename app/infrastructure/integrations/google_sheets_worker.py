@@ -73,7 +73,7 @@ async def _claim_next_transaction() -> TransactionSyncItem | None:
         )
 
 
-async def _mark_synced(transaction_id: uuid.UUID) -> None:
+async def _mark_synced(transaction_id: uuid.UUID, updated_range: str) -> None:
     async with AsyncSessionLocal.begin() as session:
         await session.execute(
             update(FinancialTransaction)
@@ -82,6 +82,7 @@ async def _mark_synced(transaction_id: uuid.UUID) -> None:
                 sheets_sync_status="synced",
                 sheets_synced_at=datetime.now(timezone.utc),
                 sheets_sync_error=None,
+                sheets_updated_range=updated_range[:255],
             )
         )
 
@@ -109,7 +110,7 @@ async def run_google_sheets_worker() -> None:
             await asyncio.sleep(GOOGLE_SHEETS_POLL_SECONDS)
             continue
         try:
-            await GoogleSheetsClient.append_transaction(item.as_sheet_row())
+            updated_range = await GoogleSheetsClient.append_transaction(item.as_sheet_row())
         except asyncio.CancelledError:
             raise
         except Exception as error:
@@ -119,4 +120,4 @@ async def run_google_sheets_worker() -> None:
             )
             await _mark_failed(item.id, error)
         else:
-            await _mark_synced(item.id)
+            await _mark_synced(item.id, updated_range)

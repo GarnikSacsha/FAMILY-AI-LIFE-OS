@@ -27,6 +27,25 @@ Voice notes and supported audio attachments are transcribed in memory with OpenA
 then passed through the same identity, privacy, routing, and deterministic tool
 checks as typed messages. Raw audio is not written to disk or stored by the app.
 
+### Shared family-chat memory
+
+The authorized family group is the assistant's shared source of conversational
+context. Messages and voice transcripts from that group are persisted in
+PostgreSQL; private-chat context is never copied into shared memory. The bot:
+
+- reads recent shared context before natural-language replies;
+- stores explicit shared facts from phrases such as `Запомни: ...`;
+- keeps partially specified reminders across follow-up messages;
+- produces a recap after the configured inactivity window;
+- sends one consolidated evening digest when the group had meaningful activity;
+- stores extracted decisions, actions, money notes, open questions, and
+  suggestions without silently executing ambiguous suggestions.
+
+Google Sheets remains a projection of PostgreSQL finance data. A transaction is
+marked `synced` only after Google reports an inserted row and a follow-up read
+finds its stable transaction ID. Set `GOOGLE_SHEETS_RANGE` to a named worksheet
+range such as `Расходы!A:I` when the spreadsheet has multiple tabs.
+
 ---
 
 ## 🏗 System Architecture

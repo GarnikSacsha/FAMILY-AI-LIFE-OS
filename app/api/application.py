@@ -10,6 +10,9 @@ from app.api.oauth import router as oauth_router
 from app.config.settings import settings
 from app.domains.identity.models import User
 from app.infrastructure.database.session import engine
+from app.infrastructure.integrations.conversation_summary_worker import (
+    run_conversation_summary_worker,
+)
 from app.infrastructure.integrations.google_sheets_worker import (
     run_google_sheets_worker,
 )
@@ -72,6 +75,7 @@ def create_application(*, start_telegram: bool = True) -> FastAPI:
         telegram_task: asyncio.Task[None] | None = None
         sheets_task: asyncio.Task[None] | None = None
         reminder_task: asyncio.Task[None] | None = None
+        summary_task: asyncio.Task[None] | None = None
         polling_health.reset(enabled=start_telegram)
         if start_telegram:
             telegram_task = asyncio.create_task(
@@ -84,6 +88,12 @@ def create_application(*, start_telegram: bool = True) -> FastAPI:
                 name="telegram-reminder-delivery",
             )
             application.state.reminder_task = reminder_task
+            if settings.SHARED_CHAT_MEMORY_ENABLED:
+                summary_task = asyncio.create_task(
+                    run_conversation_summary_worker(bot),
+                    name="shared-conversation-summaries",
+                )
+                application.state.summary_task = summary_task
         if GoogleSheetsClient.is_configured():
             sheets_task = asyncio.create_task(
                 run_google_sheets_worker(),
@@ -93,6 +103,10 @@ def create_application(*, start_telegram: bool = True) -> FastAPI:
         try:
             yield
         finally:
+            if summary_task is not None:
+                summary_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await summary_task
             if reminder_task is not None:
                 reminder_task.cancel()
                 with suppress(asyncio.CancelledError):

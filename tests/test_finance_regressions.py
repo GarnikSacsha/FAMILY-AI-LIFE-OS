@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from app.agents.finance.agent import FinanceAgent
 from app.orchestration.orchestrator import MainOrchestrator
 
 
@@ -93,3 +94,8 @@ async def test_today_spending_query_is_friendly_and_uses_daily_bounds():
     assert "сегодня" in response
     assert "Развлечения" in response
     assert get_summary.await_args.kwargs["date_to"] - get_summary.await_args.kwargs["date_from"] == timedelta(days=1)
+
+
+def test_clear_family_expenses_have_deterministic_fallback_categories() -> None:
+    assert FinanceAgent._fallback_category("367 грн отдых", "отдых") == "Entertainment"
+    assert FinanceAgent._fallback_category("140 грн булка корм", "булка корм") == "Pets"
