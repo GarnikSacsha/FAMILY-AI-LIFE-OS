@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -219,6 +219,101 @@ class FinanceTools:
             currency_summary["total_expense"] = str(currency_summary["total_expense"].quantize(MONEY_QUANTUM))
 
         return {"currencies": summary_by_currency}
+
+    @staticmethod
+    async def find_expenses(
+        session: AsyncSession,
+        *,
+        owner_id: uuid.UUID,
+        query: str,
+        date_from: datetime,
+        date_to: datetime,
+        limit: int = 10,
+    ) -> list[dict[str, str]]:
+        """Find confirmed PostgreSQL expense rows for a named follow-up."""
+        if not isinstance(owner_id, uuid.UUID):
+            raise ValueError("owner_id must be an internal UUID.")
+        if date_from.tzinfo is None or date_from.utcoffset() is None:
+            raise ValueError("date_from must be timezone-aware.")
+        if date_to.tzinfo is None or date_to.utcoffset() is None:
+            raise ValueError("date_to must be timezone-aware.")
+        normalized_query = " ".join(query.strip().split())
+        if not normalized_query:
+            raise ValueError("Expense query cannot be empty.")
+        pattern = f"%{normalized_query}%"
+        result = await session.execute(
+            select(FinancialTransaction)
+            .where(
+                FinancialTransaction.owner_id == owner_id,
+                FinancialTransaction.direction == "expense",
+                FinancialTransaction.occurred_at >= date_from.astimezone(timezone.utc),
+                FinancialTransaction.occurred_at < date_to.astimezone(timezone.utc),
+                or_(
+                    FinancialTransaction.merchant.ilike(pattern),
+                    FinancialTransaction.description.ilike(pattern),
+                ),
+            )
+            .order_by(
+                FinancialTransaction.occurred_at.desc(),
+                FinancialTransaction.created_at.desc(),
+                FinancialTransaction.id.desc(),
+            )
+            .limit(limit)
+        )
+        return [
+            {
+                "transaction_id": str(transaction.id),
+                "amount": str(transaction.amount),
+                "currency": transaction.currency,
+                "merchant": transaction.merchant,
+                "category": transaction.category,
+                "occurred_at": transaction.occurred_at.isoformat(),
+                "sheets_status": transaction.sheets_sync_status,
+                "sheets_updated_range": transaction.sheets_updated_range or "",
+            }
+            for transaction in result.scalars().all()
+        ]
+
+    @staticmethod
+    async def get_expenses_in_window(
+        session: AsyncSession,
+        *,
+        owner_id: uuid.UUID,
+        date_from: datetime,
+        date_to: datetime,
+        limit: int = 50,
+    ) -> list[dict[str, str]]:
+        """Return confirmed expenses used as the money section of shared recaps."""
+        if date_from.tzinfo is None:
+            date_from = date_from.replace(tzinfo=timezone.utc)
+        if date_to.tzinfo is None:
+            date_to = date_to.replace(tzinfo=timezone.utc)
+        result = await session.execute(
+            select(FinancialTransaction)
+            .where(
+                FinancialTransaction.owner_id == owner_id,
+                FinancialTransaction.direction == "expense",
+                FinancialTransaction.occurred_at >= date_from.astimezone(timezone.utc),
+                FinancialTransaction.occurred_at <= date_to.astimezone(timezone.utc),
+            )
+            .order_by(
+                FinancialTransaction.occurred_at,
+                FinancialTransaction.created_at,
+                FinancialTransaction.id,
+            )
+            .limit(limit)
+        )
+        return [
+            {
+                "amount": str(transaction.amount),
+                "currency": transaction.currency,
+                "merchant": transaction.merchant,
+                "category": transaction.category,
+                "sheets_status": transaction.sheets_sync_status,
+                "sheets_updated_range": transaction.sheets_updated_range or "",
+            }
+            for transaction in result.scalars().all()
+        ]
 
     @staticmethod
     async def get_latest_sheet_sync_status(

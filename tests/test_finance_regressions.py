@@ -6,6 +6,7 @@ import pytest
 
 from app.agents.finance.agent import FinanceAgent
 from app.orchestration.orchestrator import MainOrchestrator
+from app.tools.finance_tools import FinanceTools
 
 
 @pytest.mark.asyncio
@@ -99,3 +100,71 @@ async def test_today_spending_query_is_friendly_and_uses_daily_bounds():
 def test_clear_family_expenses_have_deterministic_fallback_categories() -> None:
     assert FinanceAgent._fallback_category("367 грн отдых", "отдых") == "Entertainment"
     assert FinanceAgent._fallback_category("140 грн булка корм", "булка корм") == "Pets"
+
+
+@pytest.mark.asyncio
+async def test_explicit_coffee_expense_reaches_transaction_log() -> None:
+    household_id = uuid.uuid4()
+    transaction = {
+        "transaction_id": str(uuid.uuid4()),
+        "amount": "95.00",
+        "currency": "UAH",
+        "merchant": "Кофе",
+        "category": "Restaurants",
+        "status": "SUCCESS",
+    }
+    with patch.object(
+        FinanceAgent,
+        "categorize_and_log_transaction",
+        new=AsyncMock(return_value=transaction),
+    ) as log_transaction:
+        response = await MainOrchestrator.process_user_message(
+            session=object(),
+            user_id=uuid.uuid4(),
+            household_id=household_id,
+            user_name="Саша",
+            message_text="Кофе 95 грн",
+        )
+
+    assert log_transaction.await_args.kwargs["owner_id"] == household_id
+    assert log_transaction.await_args.kwargs["amount"] == 95
+    assert log_transaction.await_args.kwargs["merchant"].casefold() == "кофе"
+    assert "95.00" in response
+
+
+@pytest.mark.asyncio
+async def test_today_coffee_followup_reads_postgres_not_general_llm() -> None:
+    household_id = uuid.uuid4()
+    find_transactions = AsyncMock(
+        return_value=[
+            {
+                "amount": "95.00",
+                "currency": "UAH",
+                "merchant": "Кофе",
+                "category": "Restaurants",
+            }
+        ]
+    )
+    with (
+        patch.object(
+            FinanceTools,
+            "find_expenses",
+            new=find_transactions,
+        ),
+        patch(
+            "app.integrations.llm.provider.TerraReasoningProvider.generate_text",
+            new=AsyncMock(return_value="Если появится доступ к учёту, внесём кофе."),
+        ) as general_llm,
+    ):
+        response = await MainOrchestrator.process_user_message(
+            session=object(),
+            user_id=uuid.uuid4(),
+            household_id=household_id,
+            user_name="Саша",
+            message_text="А сегодняшний кофе?",
+        )
+
+    find_transactions.assert_awaited_once()
+    general_llm.assert_not_awaited()
+    assert "95.00 UAH" in response
+    assert "Кофе" in response

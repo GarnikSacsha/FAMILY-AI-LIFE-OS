@@ -11,9 +11,17 @@ SUMMARY_KEYS = (
     "facts",
     "suggestions",
 )
+SUMMARY_LIMITS = {
+    "decisions": 3,
+    "actions": 5,
+    "money": 4,
+    "open_questions": 3,
+    "facts": 3,
+    "suggestions": 2,
+}
 
 
-def _clean_items(value: Any) -> list[str]:
+def _clean_items(value: Any, *, limit: int) -> list[str]:
     if not isinstance(value, list):
         return []
     result: list[str] = []
@@ -22,12 +30,23 @@ def _clean_items(value: Any) -> list[str]:
             continue
         normalized = " ".join(item.strip().split())
         if normalized and normalized not in result:
-            result.append(normalized[:500])
-    return result[:12]
+            result.append(normalized[:220])
+    return result[:limit]
 
 
 def normalize_summary_data(value: dict[str, Any]) -> dict[str, list[str]]:
-    return {key: _clean_items(value.get(key)) for key in SUMMARY_KEYS}
+    result: dict[str, list[str]] = {}
+    seen: set[str] = set()
+    for key in SUMMARY_KEYS:
+        items: list[str] = []
+        for item in _clean_items(value.get(key), limit=SUMMARY_LIMITS[key]):
+            fingerprint = " ".join(item.casefold().replace("ё", "е").split())
+            if fingerprint in seen:
+                continue
+            seen.add(fingerprint)
+            items.append(item)
+        result[key] = items
+    return result
 
 
 def format_summary(data: dict[str, list[str]], *, daily: bool = False) -> str:
@@ -66,14 +85,19 @@ class SharedMemoryAgent:
         )
         result = await self.provider.generate_structured_json(
             prompt=(
-                "Extract a factual recap from this authorized shared family-chat transcript.\n"
+                "Extract a compact factual recap from messages written by people "
+                "in this authorized shared family chat.\n"
                 "Return one strict JSON object with exactly these array-of-string keys: "
                 "decisions, actions, money, open_questions, facts, suggestions.\n"
                 "Use only information explicitly supported by the transcript. Respect negation and completed actions. "
                 "Do not turn jokes, hypotheticals, or vague wishes into facts. "
+                "Always return an empty money array: verified PostgreSQL transactions are added separately. "
                 "Explicit reminders belong in actions; unresolved plans belong in open_questions. "
                 "Suggestions must be optional and must never claim an action was executed. "
-                "Keep each item concise, preserve names, amounts, dates, and times.\n\n"
+                "Do not repeat the same point in multiple sections and do not reproduce long reports. "
+                "Write concise natural Russian, preserve names, amounts, dates, and times. "
+                "Return at most 3 decisions, 5 actions, 4 money items, "
+                "3 open questions, 3 facts, and 2 suggestions.\n\n"
                 f"<shared_chat>\n{transcript}\n</shared_chat>"
             ),
             schema={

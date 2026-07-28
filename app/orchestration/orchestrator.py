@@ -33,6 +33,17 @@ class MainOrchestrator:
         r"мои|наши|траты|расходы|сегодняшние|сегодня|за)\b",
         re.IGNORECASE,
     )
+    _CATEGORY_NAMES = {
+        "Entertainment": "Развлечения",
+        "Groceries": "Продукты",
+        "Transport": "Транспорт",
+        "Restaurants": "Кафе и рестораны",
+        "Shopping": "Покупки",
+        "Health": "Здоровье",
+        "Pets": "Питомцы",
+        "Utilities": "Коммунальные услуги",
+        "Uncategorized": "Без категории",
+    }
 
     @staticmethod
     def _escape_markdown(value: str) -> str:
@@ -157,22 +168,12 @@ class MainOrchestrator:
             return f"💳 {greeting}за {period_label} у семьи пока нет записанных расходов."
 
         sections: list[str] = []
-        category_names = {
-            "Entertainment": "Развлечения",
-            "Groceries": "Продукты",
-            "Transport": "Транспорт",
-            "Restaurants": "Кафе и рестораны",
-            "Shopping": "Покупки",
-            "Health": "Здоровье",
-            "Pets": "Питомцы",
-            "Utilities": "Коммунальные услуги",
-            "Uncategorized": "Без категории",
-        }
         for currency, currency_summary in sorted(currencies.items()):
             total = Decimal(str(currency_summary.get("total_expense", "0")))
             categories = currency_summary.get("categories", {})
             category_lines = "\n".join(
-                f"• {category_names.get(category, category)}: {Decimal(str(amount)):.2f} {currency}"
+                f"• {MainOrchestrator._CATEGORY_NAMES.get(category, category)}: "
+                f"{Decimal(str(amount)):.2f} {currency}"
                 for category, amount in sorted(categories.items())
             )
             if not category_lines:
@@ -194,6 +195,33 @@ class MainOrchestrator:
         merchant = cls._EXPENSE_PREFIX.sub(" ", merchant)
         merchant = " ".join(merchant.split()).strip(" \t\n,;:—-")
         return amount, merchant or "Расход"
+
+    @staticmethod
+    def _named_expense_query(message_text: str) -> str | None:
+        normalized = message_text.lower().replace("ё", "е")
+        if not any(
+            marker in normalized
+            for marker in (
+                "сегодняшн",
+                "вчерашн",
+                "записан",
+                "записал",
+                "учтен",
+                "учете",
+            )
+        ):
+            return None
+        subjects = (
+            "кофе",
+            "корм",
+            "отдых",
+            "продукты",
+            "такси",
+            "бензин",
+            "кафе",
+            "ресторан",
+        )
+        return next((subject for subject in subjects if subject in normalized), None)
 
     @staticmethod
     async def _generate_general_response(
@@ -607,6 +635,50 @@ class MainOrchestrator:
 
         # Case 2: Financial Query or Transaction Log
         if intent == "FINANCIAL_QUERY_OR_LOG":
+            named_expense = cls._named_expense_query(message_text)
+            if named_expense is not None:
+                date_from, date_to, period_label = cls.spending_period(
+                    message_text,
+                    timezone_name=timezone_name,
+                )
+                transactions = await FinanceTools.find_expenses(
+                    session,
+                    owner_id=household_id,
+                    query=named_expense,
+                    date_from=date_from,
+                    date_to=date_to,
+                )
+                if not transactions:
+                    return (
+                        f"💳 В PostgreSQL за {period_label} расход «{named_expense}» не найден. "
+                        f"Чтобы записать его, напишите, например: «{named_expense.capitalize()} 95 грн»."
+                    )
+                lines: list[str] = []
+                for transaction in transactions:
+                    category = cls._CATEGORY_NAMES.get(
+                        transaction["category"],
+                        transaction["category"],
+                    )
+                    sheet_status = {
+                        "synced": (
+                            "Sheets подтверждён"
+                            + (
+                                f" ({transaction['sheets_updated_range']})"
+                                if transaction.get("sheets_updated_range")
+                                else ""
+                            )
+                        ),
+                        "pending": "Sheets ожидает синхронизации",
+                        "syncing": "Sheets синхронизируется",
+                        "failed": "Sheets: ошибка синхронизации",
+                        "disabled": "Sheets не применялся",
+                    }.get(transaction.get("sheets_status", ""), "статус Sheets неизвестен")
+                    lines.append(
+                        f"• {transaction['amount']} {transaction['currency']} — "
+                        f"{transaction['merchant']} · {category} · {sheet_status}"
+                    )
+                return f"💳 Нашёл в PostgreSQL за {period_label}:\n" + "\n".join(lines)
+
             # Quick check if asking for spending summary
             if (
                 "сколько" in message_text.lower()

@@ -353,6 +353,9 @@ class SharedMemoryTools:
         if summary_kind not in {"conversation", "daily"}:
             raise ValueError("Unsupported summary kind.")
         source_messages = source_messages or []
+        preserved_summary_text = summary_text.strip()[:10_000]
+        if not preserved_summary_text:
+            raise ValueError("Summary text cannot be empty.")
         summary = SharedConversationSummary(
             household_id=household_id,
             telegram_chat_id=telegram_chat_id,
@@ -361,7 +364,7 @@ class SharedMemoryTools:
             window_started_at=_stored_utc(window_started_at),
             window_ended_at=_stored_utc(window_ended_at),
             source_last_message_id=source_messages[-1].id if source_messages else None,
-            summary_text=_normalized_text(summary_text, max_length=10_000),
+            summary_text=preserved_summary_text,
             structured_data=structured_data,
         )
         session.add(summary)

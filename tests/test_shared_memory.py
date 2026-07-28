@@ -6,8 +6,9 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.agents.memory.agent import SharedMemoryAgent
+from app.agents.memory.agent import SharedMemoryAgent, format_summary
 from app.config.settings import settings
+from app.domains.finance.models import FinancialTransaction
 from app.domains.identity.models import Household, User
 from app.domains.memory.models import (
     PendingSharedAction,
@@ -32,6 +33,7 @@ MEMORY_TABLES = [
     PendingSharedAction.__table__,
     Reminder.__table__,
     Task.__table__,
+    FinancialTransaction.__table__,
 ]
 
 
@@ -336,4 +338,104 @@ async def test_idle_chat_creates_and_delivers_persisted_summary(monkeypatch) -> 
         memories = (await session.execute(select(SharedMemoryItem))).scalars().all()
     assert summary.delivery_status == "delivered"
     assert {item.kind for item in memories} == {"action", "open_question", "suggestion"}
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_persisted_summary_preserves_visual_sections() -> None:
+    engine, factory = await _memory_database()
+    household_id, _ = await _seed_family(factory)
+    structured_data = {
+        "decisions": ["Кофе относится к кафе"],
+        "actions": ["Проверить расход 95 грн"],
+        "money": ["95 грн — кофе"],
+        "open_questions": [],
+        "facts": [],
+        "suggestions": [],
+    }
+    expected = format_summary(structured_data)
+
+    async with factory.begin() as session:
+        await SharedMemoryTools.save_summary(
+            session,
+            household_id=household_id,
+            telegram_chat_id=-100123,
+            summary_kind="conversation",
+            period_key="pretty-summary",
+            summary_text=expected,
+            structured_data=structured_data,
+            window_started_at=datetime.now(timezone.utc) - timedelta(minutes=5),
+            window_ended_at=datetime.now(timezone.utc),
+        )
+
+    async with factory() as session:
+        summary = (await session.execute(select(SharedConversationSummary))).scalar_one()
+    assert summary.summary_text == expected
+    assert "\n\n✅ Решили\n• Кофе относится к кафе" in summary.summary_text
+    assert "\n\n💳 Деньги\n• 95 грн — кофе" in summary.summary_text
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_summary_extraction_does_not_reprocess_bot_reports(monkeypatch) -> None:
+    engine, factory = await _memory_database()
+    household_id, user_id = await _seed_family(factory)
+    old = datetime.now(timezone.utc) - timedelta(hours=1)
+    async with factory.begin() as session:
+        user_message = await SharedMemoryTools.record_message(
+            session,
+            household_id=household_id,
+            author_user_id=user_id,
+            telegram_chat_id=-100123,
+            telegram_message_id=10,
+            role="user",
+            author_name="Саша",
+            message_type="text",
+            content="Кофе 95 грн.",
+        )
+        bot_report = await SharedMemoryTools.record_message(
+            session,
+            household_id=household_id,
+            author_user_id=None,
+            telegram_chat_id=-100123,
+            telegram_message_id=11,
+            role="assistant",
+            author_name="Family",
+            message_type="text",
+            content="Длинный отчёт за месяц со всеми категориями и прошлыми операциями.",
+        )
+        user_message.created_at = old
+        bot_report.created_at = old + timedelta(minutes=1)
+
+    agent = SharedMemoryAgent()
+    agent.summarize_messages = AsyncMock(
+        return_value={
+            "decisions": [],
+            "actions": [],
+            "money": ["95 грн — кофе"],
+            "open_questions": [],
+            "facts": [],
+            "suggestions": [],
+        }
+    )
+    monkeypatch.setattr(
+        "app.infrastructure.integrations.conversation_summary_worker.AsyncSessionLocal",
+        factory,
+    )
+
+    from app.infrastructure.integrations.conversation_summary_worker import (
+        create_idle_conversation_summaries,
+    )
+
+    await create_idle_conversation_summaries(
+        now=old + timedelta(hours=2),
+        agent=agent,
+    )
+
+    assert agent.summarize_messages.await_args.args[0] == [
+        {
+            "author": "Саша",
+            "content": "Кофе 95 грн.",
+        }
+    ]
     await engine.dispose()

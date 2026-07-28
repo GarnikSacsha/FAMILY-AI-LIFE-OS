@@ -43,7 +43,33 @@ class IntentRouter:
         relative_spending_question = "сколько" in text and any(
             day in text for day in ("сегодня", "вчера", "позавчера", "недел")
         )
-        if relative_spending_question or any(
+        named_expense_question = any(
+            marker in text
+            for marker in (
+                "сегодняшн",
+                "вчерашн",
+                "записан",
+                "записал",
+                "учтен",
+                "учтён",
+                "учете",
+                "учёте",
+            )
+        ) and any(
+            subject in text
+            for subject in (
+                "кофе",
+                "корм",
+                "отдых",
+                "покупк",
+                "продукт",
+                "такси",
+                "бензин",
+                "кафе",
+                "ресторан",
+            )
+        )
+        if relative_spending_question or named_expense_question or any(
             w in text
             for w in [
                 "потратили",

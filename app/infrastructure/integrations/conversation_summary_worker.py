@@ -9,9 +9,22 @@ from app.agents.memory.agent import SharedMemoryAgent, format_summary
 from app.config.settings import settings
 from app.domains.memory.models import SharedConversationSummary
 from app.infrastructure.database.session import AsyncSessionLocal
+from app.tools.finance_tools import FinanceTools
 from app.tools.memory_tools import SharedMemoryTools
 
 logger = logging.getLogger(__name__)
+
+_CATEGORY_LABELS = {
+    "Groceries": "Продукты",
+    "Restaurants": "Кафе и рестораны",
+    "Transport": "Транспорт",
+    "Entertainment": "Развлечения",
+    "Health": "Здоровье",
+    "Utilities": "Коммунальные услуги",
+    "Subscriptions": "Подписки",
+    "Shopping": "Покупки",
+    "Other": "Другое",
+}
 
 
 async def _deliver_summary(bot_instance: Bot, summary: SharedConversationSummary) -> bool:
@@ -89,15 +102,47 @@ async def create_idle_conversation_summaries(
     summaries: list[SharedConversationSummary] = []
     for batch in batches:
         messages = batch["messages"]
+        user_messages = [message for message in messages if message.role == "user"]
+        if not user_messages:
+            continue
         structured_data = await memory_agent.summarize_messages(
             [
                 {
                     "author": message.author_name,
                     "content": message.content,
                 }
-                for message in messages
+                for message in user_messages
             ]
         )
+        async with AsyncSessionLocal() as session:
+            transactions = await FinanceTools.get_expenses_in_window(
+                session,
+                owner_id=batch["household_id"],
+                date_from=messages[0].created_at - timedelta(minutes=1),
+                date_to=messages[-1].created_at + timedelta(minutes=5),
+            )
+        structured_data["money"] = [
+            (
+                f"{transaction['amount']} {transaction['currency']} — "
+                f"{transaction['merchant']} · "
+                f"{_CATEGORY_LABELS.get(transaction['category'], transaction['category'])} · "
+                + {
+                    "synced": (
+                        "Google Sheets подтверждён"
+                        + (
+                            f" ({transaction['sheets_updated_range']})"
+                            if transaction.get("sheets_updated_range")
+                            else ""
+                        )
+                    ),
+                    "pending": "Google Sheets ожидает синхронизации",
+                    "syncing": "Google Sheets синхронизируется",
+                    "failed": "Google Sheets: ошибка",
+                    "disabled": "Google Sheets не применялся",
+                }.get(transaction.get("sheets_status", ""), "статус Google Sheets неизвестен")
+            )
+            for transaction in transactions
+        ]
         summary_text = format_summary(structured_data)
         is_meaningful = any(structured_data.values())
         period_key = str(messages[-1].id)
