@@ -314,22 +314,51 @@ class MainOrchestrator:
         if current.tzinfo is None:
             current = current.replace(tzinfo=timezone.utc)
         local_now = current.astimezone(zone)
+        numeric_date = re.search(
+            r"(?<![\d./-])(0?[1-9]|[12]\d|3[01])[./-](0?[1-9]|1[0-2])"
+            r"(?:[./-](\d{2}|\d{4}))?(?![\d./-])",
+            normalized,
+        )
+        explicit_year: int | None = None
         if "послезавтра" in normalized:
             target_date = local_now.date() + timedelta(days=2)
         elif "завтра" in normalized:
             target_date = local_now.date() + timedelta(days=1)
         elif "сегодня" in normalized:
             target_date = local_now.date()
+        elif numeric_date is not None:
+            year_text = numeric_date.group(3)
+            explicit_year = int(year_text) if year_text else None
+            if explicit_year is not None and explicit_year < 100:
+                explicit_year += 2000
+            try:
+                target_date = datetime(
+                    explicit_year or local_now.year,
+                    int(numeric_date.group(2)),
+                    int(numeric_date.group(1)),
+                ).date()
+            except ValueError:
+                return None
         else:
             return None
-        match = re.search(r"(?:в|на)\s*(\d{1,2})(?:[:.](\d{2}))?", normalized)
+
+        time_source = normalized
+        if numeric_date is not None:
+            time_source = normalized[: numeric_date.start()] + normalized[numeric_date.end() :]
+        match = re.search(
+            r"(?<!\d)([01]?\d|2[0-3])(?:[:.]([0-5]\d)|-([0-5]\d))?(?!\d)",
+            time_source,
+        )
         if match is None:
             return None
         hour = int(match.group(1))
-        minute = int(match.group(2) or 0)
+        minute = int(match.group(2) or match.group(3) or 0)
         if hour > 23 or minute > 59:
             return None
-        return datetime.combine(target_date, time(hour, minute), tzinfo=zone)
+        result = datetime.combine(target_date, time(hour, minute), tzinfo=zone)
+        if numeric_date is not None and explicit_year is None and result <= local_now:
+            result = result.replace(year=result.year + 1)
+        return result
 
     @staticmethod
     def _calendar_title(message_text: str) -> str:
@@ -340,7 +369,12 @@ class MainOrchestrator:
             message_text,
             flags=re.IGNORECASE,
         )
-        title = re.sub(r"\d{1,2}(?:[:.]\d{2})?", " ", title)
+        title = re.sub(
+            r"(?<!\d)\d{1,2}[./-]\d{1,2}(?:[./-]\d{2,4})?(?!\d)",
+            " ",
+            title,
+        )
+        title = re.sub(r"(?<!\d)\d{1,2}(?:[:.-]\d{2})?(?!\d)", " ", title)
         return " ".join(title.strip(" ,.!—-").split()) or "Событие"
 
     @staticmethod

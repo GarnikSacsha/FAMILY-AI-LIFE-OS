@@ -566,7 +566,7 @@ async def test_worker_claim_mark_and_loop_paths(monkeypatch):
 @pytest.mark.asyncio
 async def test_google_telegram_commands_success_empty_and_access_errors():
     actor = _actor()
-    google_message = _Message()
+    google_message = _Message("/google reconnect")
     with (
         patch("app.telegram.bot.unit_of_work", new=_fake_uow),
         patch("app.telegram.bot._resolve_actor", new=AsyncMock(return_value=actor)),
@@ -640,3 +640,36 @@ async def test_google_telegram_commands_success_empty_and_access_errors():
     ):
         await telegram_module.cmd_calendar(disconnected)
     assert "/google" in disconnected.answers[0][0]
+
+
+@pytest.mark.asyncio
+async def test_google_command_reports_existing_connection_instead_of_restarting_oauth():
+    actor = _actor()
+    connected_token = SimpleNamespace(
+        provider="google",
+        access_token_encrypted="encrypted-access",
+        refresh_token_encrypted="encrypted-refresh",
+    )
+    session = _session_returning(connected_token)
+
+    @asynccontextmanager
+    async def connected_uow():
+        yield session
+
+    message = _Message("/google")
+    with (
+        patch("app.telegram.bot.unit_of_work", new=connected_uow),
+        patch("app.telegram.bot._resolve_actor", new=AsyncMock(return_value=actor)),
+        patch(
+            "app.telegram.bot.OAuthStateManager.create_state",
+            new=AsyncMock(return_value=("s" * 48, object())),
+        ) as create_state,
+        patch(
+            "app.telegram.bot.GoogleOAuthClient.get_authorization_url",
+            return_value="https://accounts.google.example/auth",
+        ),
+    ):
+        await telegram_module.cmd_google_setup(message)
+
+    assert "уже подключён" in message.answers[0][0]
+    create_state.assert_not_awaited()

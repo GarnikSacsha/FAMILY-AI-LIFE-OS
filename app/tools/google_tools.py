@@ -26,6 +26,20 @@ class GoogleWorkspaceError(Exception):
 
 class GoogleWorkspaceTools:
     @staticmethod
+    async def is_google_connected(
+        session: AsyncSession,
+        *,
+        user_id: uuid.UUID,
+    ) -> bool:
+        result = await session.execute(
+            select(OAuthToken.id).where(
+                OAuthToken.user_id == user_id,
+                OAuthToken.provider == "google",
+            )
+        )
+        return result.scalar_one_or_none() is not None
+
+    @staticmethod
     async def save_google_tokens(
         session: AsyncSession,
         *,

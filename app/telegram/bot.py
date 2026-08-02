@@ -298,10 +298,24 @@ async def cmd_oura_setup(message: types.Message) -> None:
 
 @dp.message(Command("google"))
 async def cmd_google_setup(message: types.Message) -> None:
+    command_parts = (message.text or "").strip().lower().split(maxsplit=1)
+    force_reconnect = len(command_parts) == 2 and command_parts[1] in {
+        "reconnect",
+        "переподключить",
+    }
     try:
         async with unit_of_work() as session:
             actor = await _resolve_actor(session, message)
             IdentityService.validate_domain_access(actor, "oauth")
+            if not force_reconnect and await GoogleWorkspaceTools.is_google_connected(
+                session,
+                user_id=actor.user_id,
+            ):
+                await message.answer(
+                    "🔗 Google уже подключён к вашему личному аккаунту.\n"
+                    "Для повторного подключения используйте /google reconnect."
+                )
+                return
             raw_state, _ = await OAuthStateManager.create_state(
                 session,
                 user_id=actor.user_id,
