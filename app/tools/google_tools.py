@@ -288,7 +288,7 @@ class GoogleWorkspaceTools:
             "https://www.googleapis.com/calendar/v3/calendars/primary/events",
             access_token=access_token,
             params={
-                "maxResults": str(max(1, min(limit, 10))),
+                "maxResults": str(max(1, min(limit * 5, 50))),
                 "singleEvents": "true",
                 "orderBy": "startTime",
                 "timeMin": datetime.now(timezone.utc).isoformat(),
@@ -297,15 +297,31 @@ class GoogleWorkspaceTools:
         items = payload.get("items")
         if not isinstance(items, list):
             return []
-        return [
-            {
-                "id": str(item.get("id", "")),
-                "summary": str(item.get("summary", "(без названия)")),
-                "start": str(item.get("start", {}).get("dateTime") or item.get("start", {}).get("date") or ""),
-            }
-            for item in items
-            if isinstance(item, dict)
-        ]
+        events: list[dict[str, str]] = []
+        seen_recurring_series: set[str] = set()
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            event_id = str(item.get("id", ""))
+            recurring_event_id = str(item.get("recurringEventId", "")).strip()
+            if recurring_event_id:
+                if recurring_event_id in seen_recurring_series:
+                    continue
+                seen_recurring_series.add(recurring_event_id)
+            events.append(
+                {
+                    "id": recurring_event_id or event_id,
+                    "summary": str(item.get("summary", "(без названия)")),
+                    "start": str(
+                        item.get("start", {}).get("dateTime")
+                        or item.get("start", {}).get("date")
+                        or ""
+                    ),
+                }
+            )
+            if len(events) >= limit:
+                break
+        return events
 
     @staticmethod
     async def _calendar_request(

@@ -498,6 +498,43 @@ async def test_google_workspace_json_mail_and_calendar_paths(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_list_upcoming_events_deduplicates_recurring_series_occurrences():
+    recurring_payload = {
+        "items": [
+            {
+                "id": "arcade-20260807",
+                "recurringEventId": "arcade-series",
+                "summary": "Arcade Daily Trading",
+                "start": {"dateTime": "2026-08-07T14:00:00+03:00"},
+            },
+            {
+                "id": "arcade-20260814",
+                "recurringEventId": "arcade-series",
+                "summary": "Arcade Daily Trading",
+                "start": {"dateTime": "2026-08-14T14:00:00+03:00"},
+            },
+            {
+                "id": "arcade-20260821",
+                "recurringEventId": "arcade-series",
+                "summary": "Arcade Daily Trading",
+                "start": {"dateTime": "2026-08-21T14:00:00+03:00"},
+            },
+        ]
+    }
+    with (
+        patch.object(GoogleWorkspaceTools, "_require_calendar_scope", new=AsyncMock()),
+        patch.object(GoogleWorkspaceTools, "get_valid_access_token", new=AsyncMock(return_value="token")),
+        patch.object(GoogleWorkspaceTools, "_get_json", new=AsyncMock(return_value=recurring_payload)),
+    ):
+        events = await GoogleWorkspaceTools.list_upcoming_events(object(), user_id=uuid.uuid4(), limit=10)
+
+    assert len(events) == 1
+    assert events[0]["id"] == "arcade-series"
+    assert events[0]["summary"] == "Arcade Daily Trading"
+    assert events[0]["start"] == "2026-08-07T14:00:00+03:00"
+
+
+@pytest.mark.asyncio
 async def test_worker_claim_mark_and_loop_paths(monkeypatch):
     transaction = SimpleNamespace(
         id=uuid.uuid4(),
