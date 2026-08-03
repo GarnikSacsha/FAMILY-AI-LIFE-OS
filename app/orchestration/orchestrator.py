@@ -2,7 +2,7 @@ import re
 import uuid
 from datetime import datetime, time, timedelta, timezone
 from decimal import Decimal
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -74,7 +74,12 @@ class MainOrchestrator:
     ) -> str:
         """Return the authorization domain before any tool is executed."""
         normalized = (message_text or "").lower()
-        if "календар" in normalized or normalized.startswith("/calendar"):
+        if (
+            "календар" in normalized
+            or normalized.startswith("/calendar")
+            or MainOrchestrator._is_calendar_event_request(message_text)
+            or MainOrchestrator._is_recurring_calendar_request(message_text)
+        ):
             return "calendar"
         routing = IntentRouter.classify_intent(
             MainOrchestrator._routing_text(message_text),
@@ -362,11 +367,22 @@ class MainOrchestrator:
 
     @staticmethod
     def _calendar_title(message_text: str) -> str:
+        explicit_title = MainOrchestrator._explicit_title(message_text)
+        if explicit_title is not None:
+            return explicit_title
         title = re.sub(
-            r"\b(?:добавь|добавить|создай|создать|поставь|в|на|календарь|календаре|"
-            r"сегодня|завтра|послезавтра)\b",
+            r"(?i)^\s*(?:так\s*,?\s*)?(?:можешь\s+)?(?:запиши|записать|добавь|добавить|"
+            r"создай|создать|поставь|поставить)\b[\s,:—-]*(?:меня|мне|нас)?"
+            r"[\s,:—-]*(?:пожалуйста)?[\s,:—-]*(?:в\s+календар\w*)?"
+            r"[\s,:—-]*(?:на\s+)?",
             " ",
             message_text,
+        )
+        title = re.sub(
+            r"\b(?:добавь|добавить|создай|создать|поставь|поставить|запиши|записать|"
+            r"меня|мне|пожалуйста|календар\w*|напомин\w*|сегодня|завтра|послезавтра)\b",
+            " ",
+            title,
             flags=re.IGNORECASE,
         )
         title = re.sub(
@@ -375,7 +391,27 @@ class MainOrchestrator:
             title,
         )
         title = re.sub(r"(?<!\d)\d{1,2}(?:[:.-]\d{2})?(?!\d)", " ", title)
+        title = re.sub(r"(?i)\b(?:на|в)\s*$", " ", title)
+        title = re.sub(r"(?i)\bстрижку\b", "стрижка", title)
         return " ".join(title.strip(" ,.!—-").split()) or "Событие"
+
+    @staticmethod
+    def _explicit_title(message_text: str) -> str | None:
+        patterns = (
+            r"(?is)\b(?:название(?:\s+(?:напоминания|события))?|"
+            r"пускай\s+это\s+будет|пусть\s+это\s+будет|это\s+будет|только)"
+            r"\s*[:—,-]?\s*(?:пускай\s+это\s+будет\s+)?(.+?)"
+            r"(?=\.?\s*(?:вот\s+так|вот\s+такое|без\s+(?:всего|лишнего)|$|[.!?]))",
+            r"(?is)\bтолько\s+(.+?)(?=\.?\s*(?:вот\s+такое|без\s+(?:всего|лишнего)|$|[.!?]))",
+        )
+        for pattern in patterns:
+            match = re.search(pattern, message_text)
+            if match is None:
+                continue
+            candidate = re.sub(r"\s+", " ", match.group(1)).strip(" \t\n,.;:—-\"'«»")
+            if candidate:
+                return candidate[:255]
+        return None
 
     @staticmethod
     def _is_recurring_calendar_request(message_text: str) -> bool:
@@ -389,10 +425,65 @@ class MainOrchestrator:
         return has_daily_schedule and has_action
 
     @staticmethod
+    def _is_calendar_event_request(message_text: str) -> bool:
+        normalized = (message_text or "").lower().replace("ё", "е")
+        if MainOrchestrator._is_recurring_calendar_request(message_text):
+            return False
+        has_action = any(
+            marker in normalized for marker in ("добав", "созда", "постав", "запиш", "записать")
+        )
+        has_date_or_calendar = any(
+            marker in normalized
+            for marker in (
+                "календар",
+                "сегодня",
+                "завтра",
+                "послезавтра",
+                "понедельник",
+                "вторник",
+                "среду",
+                "четверг",
+                "пятниц",
+                "суббот",
+                "воскресень",
+            )
+        ) or re.search(r"(?<!\d)(?:0?[1-9]|[12]\d|3[01])[./-](?:0?[1-9]|1[0-2])", normalized)
+        return has_action and bool(has_date_or_calendar) and "список покупок" not in normalized
+
+    @staticmethod
+    def _calendar_has_date(message_text: str) -> bool:
+        normalized = (message_text or "").lower().replace("ё", "е")
+        return any(
+            marker in normalized
+            for marker in (
+                "сегодня",
+                "завтра",
+                "послезавтра",
+                "понедельник",
+                "вторник",
+                "среду",
+                "четверг",
+                "пятниц",
+                "суббот",
+                "воскресень",
+            )
+        ) or re.search(r"(?<!\d)(?:0?[1-9]|[12]\d|3[01])[./-](?:0?[1-9]|1[0-2])", normalized) is not None
+
+    @staticmethod
+    def _calendar_clock(message_text: str) -> time | None:
+        match = re.search(r"(?<!\d)([01]?\d|2[0-3])(?:[:.]([0-5]\d))(?!\d)", message_text.lower())
+        if match is None:
+            return None
+        return time(int(match.group(1)), int(match.group(2)))
+
+    @staticmethod
     def _recurring_calendar_title(message_text: str) -> str:
+        explicit_title = MainOrchestrator._explicit_title(message_text)
+        if explicit_title is not None:
+            return explicit_title
         title = re.split(r"(?i)\b(?:вот так|запиши|чтобы я)\b", message_text, maxsplit=1)[0]
         title = re.sub(
-            r"(?i)^\s*(?:а\s+)?можешь\s+мне(?:\s*,?\s*пожалуйста)?\s*",
+            r"(?i)^\s*(?:так\s*,?\s*)?(?:а\s+)?можешь\s+мне(?:\s*,?\s*пожалуйста)?\s*",
             " ",
             title,
         )
@@ -409,6 +500,7 @@ class MainOrchestrator:
             " ",
             title,
         )
+        title = re.sub(r"(?i)\b(?:напомин\w*|календар\w*|то\s+есть|название)\b", " ", title)
         title = re.sub(r"(?i)\b(?:на\s+)?курсер(?:е|а)?\b", " ", title)
         title = re.sub(r"(?<!\d)(?:[01]?\d|2[0-3])(?:[:.]\d{2})?(?!\d)", " ", title)
         title = re.sub(r"(?i)\b(?:в|на)\b", " ", title)
@@ -625,10 +717,69 @@ class MainOrchestrator:
                     )
                     action_name = (
                         "незавершённую календарную задачу"
-                        if pending_action.action_type == "calendar_recurring"
+                        if pending_action.action_type in {"calendar_recurring", "calendar_event"}
                         else "незавершённое напоминание"
                     )
                     return f"Хорошо, отменил {action_name}."
+
+                explicit_title = cls._explicit_title(message_text)
+                if explicit_title is not None:
+                    pending_action.payload = {
+                        **pending_action.payload,
+                        "title": explicit_title,
+                    }
+                    await session.flush()
+                    if pending_action.action_type in {"calendar_recurring", "calendar_event"}:
+                        return (
+                            f"📌 Название обновил: **{cls._escape_markdown(explicit_title)}**. "
+                            + (
+                                "Теперь укажи срок: бессрочно или до определённой даты?"
+                                if pending_action.action_type == "calendar_recurring"
+                                else "Теперь укажи время."
+                            )
+                        )
+                    return (
+                        f"🔔 Название напоминания обновил: **{cls._escape_markdown(explicit_title)}**. "
+                        "Укажи дату и время."
+                    )
+
+                if pending_action.action_type == "calendar_event":
+                    pending_title = str(pending_action.payload.get("title", "")).strip()
+                    try:
+                        base_start = datetime.fromisoformat(str(pending_action.payload["start_at"]))
+                        event_timezone = str(pending_action.payload.get("timezone_name", timezone_name))
+                        event_zone = ZoneInfo(event_timezone)
+                        clock = cls._calendar_clock(message_text)
+                        if clock is None:
+                            return (
+                                f"📅 На какое время поставить «{cls._escape_markdown(pending_title)}»? "
+                                "Например: «в 15:00»."
+                            )
+                        start_at = datetime.combine(base_start.astimezone(event_zone).date(), clock, tzinfo=event_zone)
+                        event = await GoogleWorkspaceTools.create_calendar_event(
+                            session,
+                            user_id=user_id,
+                            summary=pending_title,
+                            start_at=start_at,
+                            end_at=start_at + timedelta(hours=1),
+                            timezone_name=event_timezone,
+                        )
+                    except (KeyError, TypeError, ValueError, ZoneInfoNotFoundError):
+                        return "Не смог восстановить параметры календарной задачи. Создай её ещё раз."
+                    except GoogleWorkspaceError as error:
+                        if error.error_code == "GOOGLE_CALENDAR_SCOPE_MISSING":
+                            return "📅 Для календаря нужен новый доступ. Выполните /google в личном чате."
+                        if error.error_code == "GOOGLE_PERMISSION_OR_API_DISABLED":
+                            return (
+                                "📅 Доступ выдан, но Google Calendar API отклоняет запрос. "
+                                "Включите Calendar API в Google Cloud Console и выполните /google ещё раз."
+                            )
+                        return "📅 Сейчас не удалось обратиться к Google Calendar. Попробуйте немного позже."
+                    await SharedMemoryTools.complete_pending_action(session, action=pending_action)
+                    return (
+                        f"📅 Добавил в календарь: **{cls._escape_markdown(event['summary'])}** — "
+                        f"{start_at:%d.%m в %H:%M}."
+                    )
 
                 if pending_action.action_type == "calendar_recurring":
                     recurrence = cls._daily_recurrence_from_reply(message_text)
@@ -915,6 +1066,83 @@ class MainOrchestrator:
                 )
                 return f"📋 Создал семейную задачу: **{cls._escape_markdown(result['title'])}**"
 
+            if cls._is_recurring_calendar_request(message_text):
+                start_at = cls._parse_calendar_datetime(
+                    message_text,
+                    timezone_name=timezone_name,
+                )
+                if start_at is None:
+                    return (
+                        "📅 Напишите время ежедневной задачи, например: "
+                        "«Добавь каждый день с сегодняшнего дня в 16:00 Learning Python»."
+                    )
+                if telegram_chat_id is None:
+                    return "📅 Не удалось определить чат для календарной задачи. Отправьте просьбу ещё раз в Telegram."
+                title = cls._recurring_calendar_title(message_text)
+                await SharedMemoryTools.create_pending_calendar_recurring(
+                    session,
+                    household_id=household_id,
+                    telegram_chat_id=telegram_chat_id,
+                    initiated_by_user_id=user_id,
+                    title=title,
+                    start_at=start_at,
+                    timezone_name=timezone_name,
+                )
+                return (
+                    f"📅 Запомнил ежедневную задачу: **{cls._escape_markdown(title)}** — "
+                    f"с {start_at:%d.%m в %H:%M}. Сделать бессрочно или до определённой даты?"
+                )
+
+            if cls._is_calendar_event_request(message_text):
+                start_at = cls._parse_calendar_datetime(
+                    message_text,
+                    timezone_name=timezone_name,
+                )
+                title = cls._calendar_title(message_text)
+                if start_at is None and cls._calendar_has_date(message_text):
+                    start_at = cls._parse_calendar_datetime(
+                        f"{message_text} в 00:00",
+                        timezone_name=timezone_name,
+                    )
+                    if start_at is not None and telegram_chat_id is not None:
+                        await SharedMemoryTools.create_pending_calendar_event(
+                            session,
+                            household_id=household_id,
+                            telegram_chat_id=telegram_chat_id,
+                            initiated_by_user_id=user_id,
+                            title=title,
+                            start_at=start_at,
+                            timezone_name=timezone_name,
+                        )
+                        return (
+                            f"📅 Запомнил: **{cls._escape_markdown(title)}** на {start_at:%d.%m}. "
+                            "На какое время поставить?"
+                        )
+                if start_at is None:
+                    return (
+                        "📅 Напишите дату и время, например: "
+                        "«Запиши меня на стрижку завтра в 15:00»."
+                    )
+                try:
+                    event = await GoogleWorkspaceTools.create_calendar_event(
+                        session,
+                        user_id=user_id,
+                        summary=title,
+                        start_at=start_at,
+                        end_at=start_at + timedelta(hours=1),
+                        timezone_name=timezone_name,
+                    )
+                except GoogleWorkspaceError as error:
+                    if error.error_code == "GOOGLE_CALENDAR_SCOPE_MISSING":
+                        return "📅 Для календаря нужен новый доступ. Выполните /google в личном чате."
+                    if error.error_code == "GOOGLE_PERMISSION_OR_API_DISABLED":
+                        return (
+                            "📅 Доступ выдан, но Google Calendar API отклоняет запрос. "
+                            "Включите Calendar API в Google Cloud Console и выполните /google ещё раз."
+                        )
+                    return "📅 Сейчас не удалось обратиться к Google Calendar. Попробуйте немного позже."
+                return f"📅 Добавил в календарь: **{event['summary']}** — {start_at:%d.%m в %H:%M}."
+
             if is_reminder_request(message_text):
                 parsed = parse_reminder_request(
                     message_text,
@@ -956,33 +1184,6 @@ class MainOrchestrator:
                 reminder_word = "Напоминание создано" if len(reminders) == 1 else "Напоминания созданы"
                 safe_title = cls._escape_markdown(parsed.title)
                 return f"🔔 **{reminder_word}:** {safe_title}\nПришлю прямо в этот чат: {formatted_times}."
-
-            if cls._is_recurring_calendar_request(message_text):
-                start_at = cls._parse_calendar_datetime(
-                    message_text,
-                    timezone_name=timezone_name,
-                )
-                if start_at is None:
-                    return (
-                        "📅 Напишите время ежедневной задачи, например: "
-                        "«Добавь каждый день с сегодняшнего дня в 16:00 Learning Python»."
-                    )
-                if telegram_chat_id is None:
-                    return "📅 Не удалось определить чат для календарной задачи. Отправьте просьбу ещё раз в Telegram."
-                title = cls._recurring_calendar_title(message_text)
-                await SharedMemoryTools.create_pending_calendar_recurring(
-                    session,
-                    household_id=household_id,
-                    telegram_chat_id=telegram_chat_id,
-                    initiated_by_user_id=user_id,
-                    title=title,
-                    start_at=start_at,
-                    timezone_name=timezone_name,
-                )
-                return (
-                    f"📅 Запомнил ежедневную задачу: **{cls._escape_markdown(title)}** — "
-                    f"с {start_at:%d.%m в %H:%M}. Сделать бессрочно или до определённой даты?"
-                )
 
             normalized = message_text.lower()
             if "календар" in normalized:

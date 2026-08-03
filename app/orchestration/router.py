@@ -113,6 +113,12 @@ class IntentRouter:
         ) or (
             any(marker in text for marker in ("каждый день", "ежедневно", "ежедневный"))
             and any(marker in text for marker in ("добав", "созда", "постав", "запиш", "не забыть"))
+        ) or (
+            any(marker in text for marker in ("запиш", "постав", "добав", "созда"))
+            and any(
+                marker in text
+                for marker in ("сегодня", "завтра", "послезавтра", "в понедельник", "вторник", "стрижк")
+            )
         ):
             return {
                 "intent": "PLANNING_OR_REMINDER",

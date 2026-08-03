@@ -10,7 +10,7 @@ class ParsedReminder:
     trigger_times: tuple[datetime, ...]
 
 
-_REMINDER_VERB = re.compile(r"\b(?:напом(?:ни|ните|нить)|напомин(?:ай|айте|ать))\b", re.IGNORECASE)
+_REMINDER_VERB = re.compile(r"\bнапом\w*\b", re.IGNORECASE)
 _CLOCK = re.compile(r"\bв\s+([01]?\d|2[0-3])(?::([0-5]\d))?\b", re.IGNORECASE)
 _RELATIVE = re.compile(
     r"\bчерез\s+(\d+)\s*"
@@ -99,7 +99,12 @@ def _clean_title(message_text: str) -> str:
         title = _clean_title_fragment(message_text)
         return (title or "Семейное напоминание")[:255]
 
+    marker = verb.group(0).lower().replace("ё", "е")
     suffix = _clean_title_fragment(message_text[verb.end() :])
+    if re.fullmatch(r"напомин(?:ание|ания|анию|ании|анием)", marker):
+        suffix = re.sub(r"(?i)^\s*(?:мне|нам|пожалуйста)\b[\s,:—-]*", "", suffix)
+        suffix = re.sub(r"(?i)^(?:о|об|про)\s+", "", suffix)
+        return (suffix or "Семейное напоминание")[:255]
     deictic_suffix = re.sub(
         r"(?i)^(?:(?:об|про)\s+)?(?:этом|это)$",
         "",
