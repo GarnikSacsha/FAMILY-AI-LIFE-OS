@@ -110,6 +110,9 @@ class IntentRouter:
                 "стоматолог",
                 "календарь",
             ]
+        ) or (
+            any(marker in text for marker in ("каждый день", "ежедневно", "ежедневный"))
+            and any(marker in text for marker in ("добав", "созда", "постав", "запиш", "не забыть"))
         ):
             return {
                 "intent": "PLANNING_OR_REMINDER",

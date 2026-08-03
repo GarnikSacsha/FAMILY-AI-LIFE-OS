@@ -181,7 +181,7 @@ class PendingSharedAction(Base, TimestampMixin):
     __tablename__ = "pending_shared_actions"
     __table_args__ = (
         CheckConstraint(
-            "action_type IN ('reminder')",
+            "action_type IN ('reminder', 'calendar_recurring')",
             name="ck_pending_shared_actions_type",
         ),
         CheckConstraint(

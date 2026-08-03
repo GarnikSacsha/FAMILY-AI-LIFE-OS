@@ -245,6 +245,45 @@ class SharedMemoryTools:
         return action
 
     @staticmethod
+    async def create_pending_calendar_recurring(
+        session: AsyncSession,
+        *,
+        household_id: uuid.UUID,
+        telegram_chat_id: int,
+        initiated_by_user_id: uuid.UUID,
+        title: str,
+        start_at: datetime,
+        timezone_name: str,
+        now: datetime | None = None,
+    ) -> PendingSharedAction:
+        current = _utc(now or datetime.now(timezone.utc))
+        existing = await SharedMemoryTools.get_pending_action(
+            session,
+            household_id=household_id,
+            telegram_chat_id=telegram_chat_id,
+            initiated_by_user_id=initiated_by_user_id,
+            now=current,
+        )
+        if existing is not None:
+            existing.status = "cancelled"
+        action = PendingSharedAction(
+            household_id=household_id,
+            telegram_chat_id=telegram_chat_id,
+            initiated_by_user_id=initiated_by_user_id,
+            action_type="calendar_recurring",
+            payload={
+                "title": _normalized_text(title, max_length=255),
+                "start_at": _utc(start_at).isoformat(),
+                "time": start_at.strftime("%H:%M"),
+                "timezone_name": timezone_name,
+            },
+            expires_at=current + timedelta(hours=24),
+        )
+        session.add(action)
+        await session.flush()
+        return action
+
+    @staticmethod
     async def get_pending_action(
         session: AsyncSession,
         *,

@@ -377,6 +377,7 @@ class GoogleWorkspaceTools:
         start_at: datetime,
         end_at: datetime,
         timezone_name: str,
+        recurrence: list[str] | None = None,
     ) -> dict[str, str]:
         await GoogleWorkspaceTools._require_calendar_scope(session, user_id=user_id)
         access_token = await GoogleWorkspaceTools.get_valid_access_token(session, user_id=user_id)
@@ -388,6 +389,7 @@ class GoogleWorkspaceTools:
                 "summary": summary,
                 "start": {"dateTime": start_at.isoformat(), "timeZone": timezone_name},
                 "end": {"dateTime": end_at.isoformat(), "timeZone": timezone_name},
+                **({"recurrence": recurrence} if recurrence else {}),
             },
         )
         return {

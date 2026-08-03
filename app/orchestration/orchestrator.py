@@ -378,6 +378,52 @@ class MainOrchestrator:
         return " ".join(title.strip(" ,.!—-").split()) or "Событие"
 
     @staticmethod
+    def _is_recurring_calendar_request(message_text: str) -> bool:
+        normalized = (message_text or "").lower().replace("ё", "е")
+        has_daily_schedule = any(
+            marker in normalized for marker in ("каждый день", "ежедневно", "ежедневный")
+        )
+        has_action = any(
+            marker in normalized for marker in ("добав", "созда", "постав", "запиш", "не забыть")
+        )
+        return has_daily_schedule and has_action
+
+    @staticmethod
+    def _recurring_calendar_title(message_text: str) -> str:
+        title = re.split(r"(?i)\b(?:вот так|запиши|чтобы я)\b", message_text, maxsplit=1)[0]
+        title = re.sub(
+            r"(?i)^\s*(?:а\s+)?можешь\s+мне(?:\s*,?\s*пожалуйста)?\s*",
+            " ",
+            title,
+        )
+        title = re.sub(r"(?i)\b(?:короче|давай|наверное)\b", " ", title)
+        title = re.sub(
+            r"(?i)\b(?:добавь|добавить|создай|создать|поставь|запиши|записать)\b",
+            " ",
+            title,
+        )
+        title = re.sub(r"(?i)\b(?:на\s+)?каждый\s+день\b|\bежедневн\w*\b", " ", title)
+        title = re.sub(
+            r"(?i)\bначиная\s+с\s+(?:сегодня(?:шнего)?\s+дня|сегодня)\b|"
+            r"\bс\s+сегодня(?:шнего)?\s+дня\b",
+            " ",
+            title,
+        )
+        title = re.sub(r"(?i)\b(?:на\s+)?курсер(?:е|а)?\b", " ", title)
+        title = re.sub(r"(?<!\d)(?:[01]?\d|2[0-3])(?:[:.]\d{2})?(?!\d)", " ", title)
+        title = re.sub(r"(?i)\b(?:в|на)\b", " ", title)
+        title = re.sub(r"\s*[,.;:—-]\s*", " ", title)
+        title = re.sub(r"\s+", " ", title).strip(" ,.!—-\t\n")
+        return title or "Ежедневное событие"
+
+    @staticmethod
+    def _daily_recurrence_from_reply(message_text: str) -> list[str] | None:
+        normalized = (message_text or "").lower().replace("ё", "е")
+        if any(marker in normalized for marker in ("бессроч", "без конца", "навсегда")):
+            return ["RRULE:FREQ=DAILY"]
+        return None
+
+    @staticmethod
     async def _reminder_recipient(
         session: AsyncSession,
         *,
@@ -577,7 +623,53 @@ class MainOrchestrator:
                         action=pending_action,
                         status="cancelled",
                     )
-                    return "Хорошо, отменил незавершённое напоминание."
+                    action_name = (
+                        "незавершённую календарную задачу"
+                        if pending_action.action_type == "calendar_recurring"
+                        else "незавершённое напоминание"
+                    )
+                    return f"Хорошо, отменил {action_name}."
+
+                if pending_action.action_type == "calendar_recurring":
+                    recurrence = cls._daily_recurrence_from_reply(message_text)
+                    pending_title = str(pending_action.payload.get("title", "")).strip()
+                    if recurrence is None:
+                        return (
+                            f"Уточни срок для ежедневной задачи «{cls._escape_markdown(pending_title)}»: "
+                            "бессрочно или до какой даты?"
+                        )
+                    try:
+                        start_at = datetime.fromisoformat(str(pending_action.payload["start_at"]))
+                        event = await GoogleWorkspaceTools.create_calendar_event(
+                            session,
+                            user_id=user_id,
+                            summary=pending_title,
+                            start_at=start_at,
+                            end_at=start_at + timedelta(hours=1),
+                            timezone_name=str(
+                                pending_action.payload.get("timezone_name", timezone_name)
+                            ),
+                            recurrence=recurrence,
+                        )
+                    except (KeyError, TypeError, ValueError):
+                        return "Не смог восстановить параметры календарной задачи. Создай её ещё раз."
+                    except GoogleWorkspaceError as error:
+                        if error.error_code == "GOOGLE_CALENDAR_SCOPE_MISSING":
+                            return "📅 Для календаря нужен новый доступ. Выполните /google в личном чате."
+                        if error.error_code == "GOOGLE_PERMISSION_OR_API_DISABLED":
+                            return (
+                                "📅 Доступ выдан, но Google Calendar API отклоняет запрос. "
+                                "Включите Calendar API в Google Cloud Console и выполните /google ещё раз."
+                            )
+                        return "📅 Сейчас не удалось обратиться к Google Calendar. Попробуйте немного позже."
+                    await SharedMemoryTools.complete_pending_action(
+                        session,
+                        action=pending_action,
+                    )
+                    return (
+                        f"📅 Добавил ежедневное событие: **{cls._escape_markdown(event['summary'])}** — "
+                        f"с {start_at:%d.%m в %H:%M}, бессрочно."
+                    )
 
                 pending_title = str(pending_action.payload.get("title", "")).strip()
                 combined_request = f"Напомни {message_text}: {pending_title}"
@@ -864,6 +956,33 @@ class MainOrchestrator:
                 reminder_word = "Напоминание создано" if len(reminders) == 1 else "Напоминания созданы"
                 safe_title = cls._escape_markdown(parsed.title)
                 return f"🔔 **{reminder_word}:** {safe_title}\nПришлю прямо в этот чат: {formatted_times}."
+
+            if cls._is_recurring_calendar_request(message_text):
+                start_at = cls._parse_calendar_datetime(
+                    message_text,
+                    timezone_name=timezone_name,
+                )
+                if start_at is None:
+                    return (
+                        "📅 Напишите время ежедневной задачи, например: "
+                        "«Добавь каждый день с сегодняшнего дня в 16:00 Learning Python»."
+                    )
+                if telegram_chat_id is None:
+                    return "📅 Не удалось определить чат для календарной задачи. Отправьте просьбу ещё раз в Telegram."
+                title = cls._recurring_calendar_title(message_text)
+                await SharedMemoryTools.create_pending_calendar_recurring(
+                    session,
+                    household_id=household_id,
+                    telegram_chat_id=telegram_chat_id,
+                    initiated_by_user_id=user_id,
+                    title=title,
+                    start_at=start_at,
+                    timezone_name=timezone_name,
+                )
+                return (
+                    f"📅 Запомнил ежедневную задачу: **{cls._escape_markdown(title)}** — "
+                    f"с {start_at:%d.%m в %H:%M}. Сделать бессрочно или до определённой даты?"
+                )
 
             normalized = message_text.lower()
             if "календар" in normalized:
