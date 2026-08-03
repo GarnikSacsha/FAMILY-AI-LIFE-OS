@@ -1,6 +1,6 @@
 """Allow pending recurring calendar actions.
 
-Revision ID: 008_recurring_calendar_pending_actions
+Revision ID: 008_recurring_calendar
 Revises: 007_clean_legacy_shared_memory
 """
 
@@ -8,7 +8,7 @@ from collections.abc import Sequence
 
 from alembic import op
 
-revision: str = "008_recurring_calendar_pending_actions"
+revision: str = "008_recurring_calendar"
 down_revision: str | None = "007_clean_legacy_shared_memory"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
