@@ -9,6 +9,7 @@ from app.domains.memory.models import PendingSharedAction
 from app.orchestration.orchestrator import MainOrchestrator
 from app.orchestration.router import IntentRouter
 from app.tools.google_tools import GoogleWorkspaceTools
+from app.tools.memory_tools import SharedMemoryTools
 from tests.test_shared_memory import _memory_database, _seed_family
 
 RECURRING_LEARNING_REQUEST = (
@@ -251,5 +252,59 @@ async def test_recurring_followup_accepts_time_and_end_date_together() -> None:
     assert create_event.await_args.kwargs["summary"] == "пойти к дедушке набрать воды"
     assert create_event.await_args.kwargs["recurrence"] == [
         "RRULE:FREQ=DAILY;UNTIL=20260809T130000Z"
+    ]
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_complete_quoted_calendar_request_supersedes_stale_pending_action() -> None:
+    engine, factory = await _memory_database()
+    household_id, user_id = await _seed_family(factory)
+    chat_id = 123456789
+
+    async with factory.begin() as session:
+        await SharedMemoryTools.create_pending_calendar_recurring(
+            session,
+            household_id=household_id,
+            telegram_chat_id=chat_id,
+            initiated_by_user_id=user_id,
+            title="Так общем напиши мне пожалуйста",
+            start_at=datetime(2026, 8, 3, 16, tzinfo=ZoneInfo("Europe/Kyiv")),
+            timezone_name="Europe/Kyiv",
+        )
+
+    with (
+        patch("app.orchestration.orchestrator.datetime", wraps=datetime) as clock,
+        patch.object(
+            GoogleWorkspaceTools,
+            "create_calendar_event",
+            new=AsyncMock(return_value={"id": "event-python", "summary": "изучение python"}),
+        ) as create_event,
+    ):
+        clock.now.return_value = datetime(2026, 8, 3, 8, tzinfo=timezone.utc)
+        async with factory.begin() as session:
+            await MainOrchestrator.process_user_message(
+                session=session,
+                user_id=user_id,
+                household_id=household_id,
+                user_name="Денис",
+                message_text=(
+                    'Добавь в календарь с сегодняшнего дня до четверга на 17:00 '
+                    '😊 "изучение python"'
+                ),
+                telegram_chat_id=chat_id,
+                pending_actions_enabled=True,
+            )
+
+    assert create_event.await_args.kwargs["summary"] == "изучение python"
+    assert create_event.await_args.kwargs["start_at"] == datetime(
+        2026,
+        8,
+        3,
+        17,
+        tzinfo=ZoneInfo("Europe/Kyiv"),
+    )
+    assert create_event.await_args.kwargs["recurrence"] == [
+        "RRULE:FREQ=DAILY;UNTIL=20260806T140000Z"
     ]
     await engine.dispose()

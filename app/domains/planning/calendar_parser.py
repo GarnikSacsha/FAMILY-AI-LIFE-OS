@@ -54,6 +54,9 @@ _WEEKDAY_END = re.compile(
     r"(?i)\b(?:по|до)\s+(" + "|".join(_WEEKDAYS) + r")\b"
 )
 _FOREVER = re.compile(r"(?i)\b(?:бессроч\w*|навсегда|без\s+конца)\b")
+_QUOTED_TITLE = re.compile(
+    r'"([^"\r\n]{1,255})"|«([^»\r\n]{1,255})»|“([^”\r\n]{1,255})”'
+)
 
 
 @dataclass(frozen=True)
@@ -189,7 +192,21 @@ def _clean_title_sentence(sentence: str) -> str:
     return title
 
 
+def extract_quoted_title(message_text: str) -> str | None:
+    matches = list(_QUOTED_TITLE.finditer(message_text or ""))
+    for match in reversed(matches):
+        raw_candidate = next((group for group in match.groups() if group is not None), "")
+        candidate = re.sub(r"\s+", " ", raw_candidate).strip(" \t\n,.;:—-'«»")
+        if candidate and re.search(r"[A-Za-zА-Яа-яЁёІіЇїЄє]", candidate):
+            return candidate[:255]
+    return None
+
+
 def extract_calendar_title(message_text: str) -> str:
+    quoted_title = extract_quoted_title(message_text)
+    if quoted_title is not None:
+        return quoted_title
+
     candidates: list[str] = []
     for sentence in re.split(r"[.!?]+", message_text or ""):
         candidate = _clean_title_sentence(sentence)

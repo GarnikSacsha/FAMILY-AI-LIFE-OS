@@ -2,16 +2,19 @@ import re
 import uuid
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
+from typing import cast
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domains.identity.models import User
+from app.domains.memory.models import PendingSharedAction
 from app.domains.planning.calendar_parser import (
     calendar_clock,
     daily_recurrence,
     extract_calendar_title,
+    extract_quoted_title,
     parse_calendar_request,
 )
 from app.domains.planning.reminder_parser import (
@@ -19,6 +22,7 @@ from app.domains.planning.reminder_parser import (
     parse_reminder_request,
     reminder_title,
 )
+from app.domains.planning.semantic_calendar import CalendarIntentInterpreter, SemanticCalendarPlan
 from app.orchestration.router import IntentRouter
 from app.tools.finance_tools import FinanceTools
 from app.tools.google_tools import GoogleWorkspaceError, GoogleWorkspaceTools
@@ -380,6 +384,10 @@ class MainOrchestrator:
 
     @staticmethod
     def _explicit_title(message_text: str) -> str | None:
+        quoted_title = extract_quoted_title(message_text)
+        if quoted_title is not None:
+            return quoted_title
+
         patterns = (
             r"(?is)\b(?:название(?:\s+(?:напоминания|события))?|"
             r"пускай\s+это\s+будет|пусть\s+это\s+будет|это\s+будет|только)"
@@ -408,11 +416,27 @@ class MainOrchestrator:
                 "включая сегодня",
                 "включая сегодняшний день",
             )
-        )
+        ) or re.search(
+            r"\bс\s+(?:сегодня|сегодняшн\w*(?:\s+дн\w*)?)\s+(?:по|до)\s+",
+            normalized,
+        ) is not None
         has_action = any(
             marker in normalized for marker in ("добав", "созда", "постав", "запиш", "не забыть")
         )
         return has_daily_schedule and has_action
+
+    @staticmethod
+    def _is_complete_calendar_command(message_text: str) -> bool:
+        normalized = (message_text or "").lower().replace("ё", "е")
+        has_action = any(
+            marker in normalized for marker in ("добав", "созда", "постав", "запиш", "записать")
+        )
+        return (
+            has_action
+            and "календар" in normalized
+            and MainOrchestrator._calendar_has_date(message_text)
+            and MainOrchestrator._calendar_clock(message_text) is not None
+        )
 
     @staticmethod
     def _is_calendar_event_request(message_text: str) -> bool:
@@ -485,6 +509,163 @@ class MainOrchestrator:
             start_at=start_at,
             timezone_name=timezone_name,
             stored_end_date=stored_end_date,
+        )
+
+    @staticmethod
+    def _semantic_pending_context(
+        pending_action: PendingSharedAction | None,
+        *,
+        timezone_name: str,
+    ) -> dict[str, object] | None:
+        if pending_action is None:
+            return None
+        payload = pending_action.payload
+        if pending_action.action_type not in {"calendar_event", "calendar_recurring"}:
+            return None
+        if payload.get("semantic_draft"):
+            return {
+                "action_type": pending_action.action_type,
+                "title": payload.get("title") or None,
+                "event_date": payload.get("event_date"),
+                "event_time": payload.get("time"),
+                "recurrence": payload.get("recurrence", "none"),
+                "recurrence_end_date": payload.get("recurrence_end_date"),
+                "recurring_forever": bool(payload.get("recurring_forever", False)),
+                "missing_fields": payload.get("missing_fields", []),
+            }
+
+        context: dict[str, object] = {
+            "action_type": pending_action.action_type,
+            "title": payload.get("title") or None,
+            "recurrence": "daily" if pending_action.action_type == "calendar_recurring" else "none",
+            "recurrence_end_date": payload.get("recurrence_end_date"),
+            "recurring_forever": False,
+        }
+        start_text = payload.get("start_at")
+        if start_text:
+            try:
+                event_timezone = str(payload.get("timezone_name", timezone_name))
+                local_start = datetime.fromisoformat(str(start_text)).astimezone(ZoneInfo(event_timezone))
+                context["event_date"] = local_start.date().isoformat()
+                context["event_time"] = (
+                    None if payload.get("needs_time") else local_start.strftime("%H:%M")
+                )
+            except (TypeError, ValueError, ZoneInfoNotFoundError):
+                pass
+        return context
+
+    @classmethod
+    def _semantic_calendar_question(cls, plan: SemanticCalendarPlan) -> str:
+        title_prefix = (
+            f"📅 Понял задачу: **{cls._escape_markdown(plan.title)}**. " if plan.title else "📅 "
+        )
+        missing = set(plan.missing_fields)
+        if {"title", "date", "time"}.issubset(missing):
+            return title_prefix + "Что именно сделать и на какую дату и время поставить?"
+        if "title" in missing:
+            return title_prefix + "Что именно нужно добавить в календарь?"
+        if {"date", "time"}.issubset(missing):
+            return title_prefix + "На какую дату и время поставить?"
+        if "date" in missing:
+            return title_prefix + "На какой день поставить?"
+        if "time" in missing:
+            return title_prefix + "На какое время поставить?"
+        if "recurrence_end" in missing:
+            return title_prefix + "Повторять бессрочно или до какой даты?"
+        return title_prefix + "Уточни, пожалуйста, дату и время."
+
+    @classmethod
+    async def _handle_semantic_calendar_plan(
+        cls,
+        session: AsyncSession,
+        *,
+        plan: SemanticCalendarPlan | None,
+        pending_action: PendingSharedAction | None,
+        user_id: uuid.UUID,
+        household_id: uuid.UUID,
+        telegram_chat_id: int | None,
+        timezone_name: str,
+    ) -> str | None:
+        if plan is None or plan.intent != "calendar":
+            return None
+        if telegram_chat_id is None:
+            return "📅 Не удалось определить чат для календарной задачи. Отправьте просьбу ещё раз в Telegram."
+
+        if plan.event_date is not None and plan.event_time is not None:
+            zone = ZoneInfo(timezone_name)
+            local_start = datetime.combine(plan.event_date, plan.event_time, tzinfo=zone)
+            local_now = datetime.now(timezone.utc).astimezone(zone)
+            if local_start < local_now:
+                plan = plan.model_copy(update={"event_date": None, "event_time": None})
+        if (
+            plan.recurrence == "daily"
+            and plan.event_date is not None
+            and plan.recurrence_end_date is not None
+            and plan.recurrence_end_date < plan.event_date
+        ):
+            plan = plan.model_copy(update={"recurrence_end_date": None})
+
+        if not plan.is_complete:
+            await SharedMemoryTools.create_pending_calendar_draft(
+                session,
+                household_id=household_id,
+                telegram_chat_id=telegram_chat_id,
+                initiated_by_user_id=user_id,
+                draft_payload=plan.as_pending_payload(timezone_name=timezone_name),
+            )
+            return cls._semantic_calendar_question(plan)
+
+        zone = ZoneInfo(timezone_name)
+        event_date = cast(date, plan.event_date)
+        event_time = cast(time, plan.event_time)
+        event_title = cast(str, plan.title)
+        start_at = datetime.combine(event_date, event_time, tzinfo=zone)
+        recurrence: list[str] | None = None
+        if plan.recurrence == "daily":
+            recurrence = (
+                ["RRULE:FREQ=DAILY"]
+                if plan.recurring_forever
+                else daily_recurrence(
+                    "",
+                    start_at=start_at,
+                    timezone_name=timezone_name,
+                    stored_end_date=plan.recurrence_end_date,
+                )
+            )
+        try:
+            event = await GoogleWorkspaceTools.create_calendar_event(
+                session,
+                user_id=user_id,
+                summary=event_title,
+                start_at=start_at,
+                end_at=start_at + timedelta(hours=1),
+                timezone_name=timezone_name,
+                recurrence=recurrence,
+            )
+        except GoogleWorkspaceError as error:
+            if error.error_code == "GOOGLE_CALENDAR_SCOPE_MISSING":
+                return "📅 Для календаря нужен новый доступ. Выполните /google в личном чате."
+            if error.error_code == "GOOGLE_PERMISSION_OR_API_DISABLED":
+                return (
+                    "📅 Доступ выдан, но Google Calendar API отклоняет запрос. "
+                    "Включите Calendar API в Google Cloud Console и выполните /google ещё раз."
+                )
+            return "📅 Сейчас не удалось обратиться к Google Calendar. Попробуйте немного позже."
+
+        if pending_action is not None:
+            await SharedMemoryTools.complete_pending_action(
+                session,
+                action=pending_action,
+                status="cancelled" if plan.is_new_request else "completed",
+            )
+        recurrence_text = ""
+        if recurrence == ["RRULE:FREQ=DAILY"]:
+            recurrence_text = ", ежедневно бессрочно"
+        elif recurrence is not None and plan.recurrence_end_date is not None:
+            recurrence_text = f", ежедневно до {plan.recurrence_end_date:%d.%m}"
+        return (
+            f"📅 Добавил в календарь: **{cls._escape_markdown(event['summary'])}** — "
+            f"{start_at:%d.%m в %H:%M}{recurrence_text}."
         )
 
     @staticmethod
@@ -679,24 +860,50 @@ class MainOrchestrator:
                 telegram_chat_id=telegram_chat_id,
                 initiated_by_user_id=user_id,
             )
+            normalized_pending_reply = message_text.lower()
+            if pending_action is not None and any(
+                term in normalized_pending_reply
+                for term in ("не надо", "отмена", "отмени", "забудь")
+            ):
+                await SharedMemoryTools.complete_pending_action(
+                    session,
+                    action=pending_action,
+                    status="cancelled",
+                )
+                action_name = (
+                    "незавершённую календарную задачу"
+                    if pending_action.action_type in {"calendar_recurring", "calendar_event"}
+                    else "незавершённое напоминание"
+                )
+                return f"Хорошо, отменил {action_name}."
+            semantic_plan = await CalendarIntentInterpreter().interpret(
+                message_text=message_text,
+                local_now=datetime.now(timezone.utc).astimezone(ZoneInfo(timezone_name)),
+                timezone_name=timezone_name,
+                pending_context=cls._semantic_pending_context(
+                    pending_action,
+                    timezone_name=timezone_name,
+                ),
+            )
+            semantic_response = await cls._handle_semantic_calendar_plan(
+                session,
+                plan=semantic_plan,
+                pending_action=pending_action,
+                user_id=user_id,
+                household_id=household_id,
+                telegram_chat_id=telegram_chat_id,
+                timezone_name=timezone_name,
+            )
+            if semantic_response is not None:
+                return semantic_response
+            if pending_action is not None and cls._is_complete_calendar_command(message_text):
+                await SharedMemoryTools.complete_pending_action(
+                    session,
+                    action=pending_action,
+                    status="cancelled",
+                )
+                pending_action = None
             if pending_action is not None:
-                normalized_pending_reply = message_text.lower()
-                if any(
-                    term in normalized_pending_reply
-                    for term in ("не надо", "отмена", "отмени", "забудь")
-                ):
-                    await SharedMemoryTools.complete_pending_action(
-                        session,
-                        action=pending_action,
-                        status="cancelled",
-                    )
-                    action_name = (
-                        "незавершённую календарную задачу"
-                        if pending_action.action_type in {"calendar_recurring", "calendar_event"}
-                        else "незавершённое напоминание"
-                    )
-                    return f"Хорошо, отменил {action_name}."
-
                 explicit_title = cls._explicit_title(message_text)
                 if explicit_title is not None:
                     pending_action.payload = {
@@ -779,15 +986,15 @@ class MainOrchestrator:
                         start_date=local_start.date(),
                     )
                     start_at = base_start
-                    if pending_action.payload.get("needs_time"):
-                        clock = request_parts.clock
-                        if clock is None:
-                            return (
-                                "📅 На какое время поставить ежедневную задачу "
-                                f"«{cls._escape_markdown(pending_title)}»? "
-                                "Например: «16:00» или «16 часов»."
-                            )
+                    clock = request_parts.clock
+                    if clock is not None:
                         start_at = datetime.combine(local_start.date(), clock, tzinfo=event_zone)
+                    elif pending_action.payload.get("needs_time"):
+                        return (
+                            "📅 На какое время поставить ежедневную задачу "
+                            f"«{cls._escape_markdown(pending_title)}»? "
+                            "Например: «16:00» или «16 часов»."
+                        )
 
                     recurrence_end = (
                         None
@@ -843,9 +1050,10 @@ class MainOrchestrator:
                         session,
                         action=pending_action,
                     )
+                    display_start_at = start_at.astimezone(event_zone)
                     return (
                         f"📅 Добавил ежедневное событие: **{cls._escape_markdown(event['summary'])}** — "
-                        f"с {start_at:%d.%m в %H:%M}, "
+                        f"с {display_start_at:%d.%m в %H:%M}, "
                         + (
                             "бессрочно."
                             if recurrence == ["RRULE:FREQ=DAILY"]
@@ -1098,17 +1306,17 @@ class MainOrchestrator:
                 return f"📋 Создал семейную задачу: **{cls._escape_markdown(result['title'])}**"
 
             if cls._is_recurring_calendar_request(message_text):
-                start_at = cls._parse_calendar_datetime(
+                recurring_start_at = cls._parse_calendar_datetime(
                     message_text,
                     timezone_name=timezone_name,
                 )
-                needs_time = start_at is None
+                needs_time = recurring_start_at is None
                 if needs_time:
-                    start_at = cls._parse_calendar_datetime(
+                    recurring_start_at = cls._parse_calendar_datetime(
                         f"{message_text} в 00:00",
                         timezone_name=timezone_name,
                     )
-                if start_at is None:
+                if recurring_start_at is None:
                     return (
                         "📅 Напишите время ежедневной задачи, например: "
                         "«Добавь каждый день с сегодняшнего дня в 16:00 Learning Python»."
@@ -1116,8 +1324,8 @@ class MainOrchestrator:
                 if telegram_chat_id is None:
                     return "📅 Не удалось определить чат для календарной задачи. Отправьте просьбу ещё раз в Telegram."
                 title = cls._recurring_calendar_title(message_text)
-                event_timezone = ZoneInfo(timezone_name)
-                local_start = start_at.astimezone(event_timezone)
+                recurring_zone = ZoneInfo(timezone_name)
+                local_start = recurring_start_at.astimezone(recurring_zone)
                 request_parts = parse_calendar_request(
                     message_text,
                     start_date=local_start.date(),
@@ -1128,7 +1336,7 @@ class MainOrchestrator:
                     if needs_time
                     else cls._daily_recurrence_from_reply(
                         message_text,
-                        start_at=start_at,
+                        start_at=recurring_start_at,
                         timezone_name=timezone_name,
                         stored_end_date=recurrence_end,
                     )
@@ -1139,8 +1347,8 @@ class MainOrchestrator:
                             session,
                             user_id=user_id,
                             summary=title,
-                            start_at=start_at,
-                            end_at=start_at + timedelta(hours=1),
+                            start_at=recurring_start_at,
+                            end_at=recurring_start_at + timedelta(hours=1),
                             timezone_name=timezone_name,
                             recurrence=recurrence,
                         )
@@ -1155,7 +1363,7 @@ class MainOrchestrator:
                         return "📅 Сейчас не удалось обратиться к Google Calendar. Попробуйте немного позже."
                     return (
                         f"📅 Добавил ежедневное событие: **{cls._escape_markdown(event['summary'])}** — "
-                        f"с {start_at:%d.%m в %H:%M}, "
+                        f"с {recurring_start_at:%d.%m в %H:%M}, "
                         + (
                             "бессрочно."
                             if recurrence == ["RRULE:FREQ=DAILY"]
@@ -1168,7 +1376,7 @@ class MainOrchestrator:
                     telegram_chat_id=telegram_chat_id,
                     initiated_by_user_id=user_id,
                     title=title,
-                    start_at=start_at,
+                    start_at=recurring_start_at,
                     timezone_name=timezone_name,
                     needs_time=needs_time,
                     recurrence_end_date=recurrence_end,
@@ -1176,39 +1384,39 @@ class MainOrchestrator:
                 if needs_time:
                     return (
                         f"📅 Запомнил ежедневную задачу: **{cls._escape_markdown(title)}** — "
-                        f"с {start_at:%d.%m}. Напишите время, например: «16:00» или «16 часов»."
+                        f"с {recurring_start_at:%d.%m}. Напишите время, например: «16:00» или «16 часов»."
                     )
                 return (
                     f"📅 Запомнил ежедневную задачу: **{cls._escape_markdown(title)}** — "
-                    f"с {start_at:%d.%m в %H:%M}. Сделать бессрочно или до определённой даты?"
+                    f"с {recurring_start_at:%d.%m в %H:%M}. Сделать бессрочно или до определённой даты?"
                 )
 
             if cls._is_calendar_event_request(message_text):
-                start_at = cls._parse_calendar_datetime(
+                calendar_start_at = cls._parse_calendar_datetime(
                     message_text,
                     timezone_name=timezone_name,
                 )
                 title = cls._calendar_title(message_text)
-                if start_at is None and cls._calendar_has_date(message_text):
-                    start_at = cls._parse_calendar_datetime(
+                if calendar_start_at is None and cls._calendar_has_date(message_text):
+                    calendar_start_at = cls._parse_calendar_datetime(
                         f"{message_text} в 00:00",
                         timezone_name=timezone_name,
                     )
-                    if start_at is not None and telegram_chat_id is not None:
+                    if calendar_start_at is not None and telegram_chat_id is not None:
                         await SharedMemoryTools.create_pending_calendar_event(
                             session,
                             household_id=household_id,
                             telegram_chat_id=telegram_chat_id,
                             initiated_by_user_id=user_id,
                             title=title,
-                            start_at=start_at,
+                            start_at=calendar_start_at,
                             timezone_name=timezone_name,
                         )
                         return (
-                            f"📅 Запомнил: **{cls._escape_markdown(title)}** на {start_at:%d.%m}. "
+                            f"📅 Запомнил: **{cls._escape_markdown(title)}** на {calendar_start_at:%d.%m}. "
                             "На какое время поставить?"
                         )
-                if start_at is None:
+                if calendar_start_at is None:
                     return (
                         "📅 Напишите дату и время, например: "
                         "«Запиши меня на стрижку завтра в 15:00»."
@@ -1218,8 +1426,8 @@ class MainOrchestrator:
                         session,
                         user_id=user_id,
                         summary=title,
-                        start_at=start_at,
-                        end_at=start_at + timedelta(hours=1),
+                        start_at=calendar_start_at,
+                        end_at=calendar_start_at + timedelta(hours=1),
                         timezone_name=timezone_name,
                     )
                 except GoogleWorkspaceError as error:
@@ -1231,7 +1439,7 @@ class MainOrchestrator:
                             "Включите Calendar API в Google Cloud Console и выполните /google ещё раз."
                         )
                     return "📅 Сейчас не удалось обратиться к Google Calendar. Попробуйте немного позже."
-                return f"📅 Добавил в календарь: **{event['summary']}** — {start_at:%d.%m в %H:%M}."
+                return f"📅 Добавил в календарь: **{event['summary']}** — {calendar_start_at:%d.%m в %H:%M}."
 
             if is_reminder_request(message_text):
                 parsed = parse_reminder_request(
@@ -1279,11 +1487,11 @@ class MainOrchestrator:
             if "календар" in normalized:
                 try:
                     if any(term in normalized for term in ("добав", "созд", "постав")):
-                        start_at = cls._parse_calendar_datetime(
+                        fallback_start_at = cls._parse_calendar_datetime(
                             message_text,
                             timezone_name=timezone_name,
                         )
-                        if start_at is None:
+                        if fallback_start_at is None:
                             return (
                                 "📅 Напишите дату и время, например: "
                                 "«Добавь в календарь завтра в 15:00 встречу с врачом»."
@@ -1292,11 +1500,11 @@ class MainOrchestrator:
                             session,
                             user_id=user_id,
                             summary=cls._calendar_title(message_text),
-                            start_at=start_at,
-                            end_at=start_at + timedelta(hours=1),
+                            start_at=fallback_start_at,
+                            end_at=fallback_start_at + timedelta(hours=1),
                             timezone_name=timezone_name,
                         )
-                        return f"📅 Добавил в календарь: **{event['summary']}** — {start_at:%d.%m в %H:%M}."
+                        return f"📅 Добавил в календарь: **{event['summary']}** — {fallback_start_at:%d.%m в %H:%M}."
                     if any(term in normalized for term in ("удал", "отмен")):
                         requested = re.sub(
                             r"\b(?:удали|удалить|отмени|отменить|из|календаря|событие)\b",

@@ -290,6 +290,60 @@ class SharedMemoryTools:
         return action
 
     @staticmethod
+    async def create_pending_calendar_draft(
+        session: AsyncSession,
+        *,
+        household_id: uuid.UUID,
+        telegram_chat_id: int,
+        initiated_by_user_id: uuid.UUID,
+        draft_payload: dict[str, Any],
+        now: datetime | None = None,
+    ) -> PendingSharedAction:
+        """Stores a validated semantic calendar draft without requiring all schedule fields yet."""
+
+        current = _utc(now or datetime.now(timezone.utc))
+        existing = await SharedMemoryTools.get_pending_action(
+            session,
+            household_id=household_id,
+            telegram_chat_id=telegram_chat_id,
+            initiated_by_user_id=initiated_by_user_id,
+            now=current,
+        )
+        if existing is not None:
+            existing.status = "cancelled"
+
+        recurrence = str(draft_payload.get("recurrence", "none"))
+        action_type = "calendar_recurring" if recurrence == "daily" else "calendar_event"
+        missing_fields = [
+            str(field)
+            for field in draft_payload.get("missing_fields", [])
+            if str(field) in {"title", "date", "time", "recurrence_end"}
+        ]
+        raw_title = str(draft_payload.get("title", ""))
+        payload = {
+            "semantic_draft": True,
+            "title": _normalized_text(raw_title, max_length=255) if raw_title.strip() else "",
+            "event_date": draft_payload.get("event_date"),
+            "time": draft_payload.get("time"),
+            "timezone_name": str(draft_payload.get("timezone_name", "Europe/Kyiv"))[:64],
+            "recurrence": recurrence if recurrence in {"none", "daily"} else "none",
+            "recurrence_end_date": draft_payload.get("recurrence_end_date"),
+            "recurring_forever": bool(draft_payload.get("recurring_forever", False)),
+            "missing_fields": missing_fields,
+        }
+        action = PendingSharedAction(
+            household_id=household_id,
+            telegram_chat_id=telegram_chat_id,
+            initiated_by_user_id=initiated_by_user_id,
+            action_type=action_type,
+            payload=payload,
+            expires_at=current + timedelta(hours=24),
+        )
+        session.add(action)
+        await session.flush()
+        return action
+
+    @staticmethod
     async def create_pending_calendar_event(
         session: AsyncSession,
         *,
