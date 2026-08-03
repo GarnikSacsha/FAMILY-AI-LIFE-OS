@@ -1,6 +1,6 @@
 import re
 import uuid
-from datetime import datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -8,6 +8,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domains.identity.models import User
+from app.domains.planning.calendar_parser import (
+    calendar_clock,
+    daily_recurrence,
+    extract_calendar_title,
+    parse_calendar_request,
+)
 from app.domains.planning.reminder_parser import (
     is_reminder_request,
     parse_reminder_request,
@@ -370,30 +376,7 @@ class MainOrchestrator:
         explicit_title = MainOrchestrator._explicit_title(message_text)
         if explicit_title is not None:
             return explicit_title
-        title = re.sub(
-            r"(?i)^\s*(?:так\s*,?\s*)?(?:можешь\s+)?(?:запиши|записать|добавь|добавить|"
-            r"создай|создать|поставь|поставить)\b[\s,:—-]*(?:меня|мне|нас)?"
-            r"[\s,:—-]*(?:пожалуйста)?[\s,:—-]*(?:в\s+календар\w*)?"
-            r"[\s,:—-]*(?:на\s+)?",
-            " ",
-            message_text,
-        )
-        title = re.sub(
-            r"\b(?:добавь|добавить|создай|создать|поставь|поставить|запиши|записать|"
-            r"меня|мне|пожалуйста|календар\w*|напомин\w*|сегодня|завтра|послезавтра)\b",
-            " ",
-            title,
-            flags=re.IGNORECASE,
-        )
-        title = re.sub(
-            r"(?<!\d)\d{1,2}[./-]\d{1,2}(?:[./-]\d{2,4})?(?!\d)",
-            " ",
-            title,
-        )
-        title = re.sub(r"(?<!\d)\d{1,2}(?:[:.-]\d{2})?(?!\d)", " ", title)
-        title = re.sub(r"(?i)\b(?:на|в)\s*$", " ", title)
-        title = re.sub(r"(?i)\bстрижку\b", "стрижка", title)
-        return " ".join(title.strip(" ,.!—-").split()) or "Событие"
+        return extract_calendar_title(message_text)
 
     @staticmethod
     def _explicit_title(message_text: str) -> str | None:
@@ -478,74 +461,31 @@ class MainOrchestrator:
 
     @staticmethod
     def _calendar_clock(message_text: str) -> time | None:
-        match = re.search(
-            r"(?<!\d)([01]?\d|2[0-3])(?:[:.]([0-5]\d)|\s+час(?:а|ов)?)(?!\d)",
-            message_text.lower(),
-        )
-        if match is None:
-            return None
-        return time(int(match.group(1)), int(match.group(2) or 0))
+        return calendar_clock(message_text)
 
     @staticmethod
     def _recurring_calendar_title(message_text: str) -> str:
         explicit_title = MainOrchestrator._explicit_title(message_text)
         if explicit_title is not None:
             return explicit_title
-        title = message_text
-        title = re.sub(
-            r"(?i)^\s*(?:так\s*,?\s*)?(?:а\s+)?можешь\s+мне(?:\s*,?\s*пожалуйста)?\s*",
-            " ",
-            title,
-        )
-        title = re.sub(
-            r"(?i)^\s*(?:так\s*,?\s*)?(?:а\s+)?(?:можешь\s+)?(?:запиши|записать|добавь|добавить|создай|создать|поставь|поставить)\b"
-            r"[\s,:—-]*(?:меня|мне|нас)?[\s,:—-]*(?:пожалуйста)?[\s,:—-]*"
-            r"(?:в\s+календар\w*)?[\s,:—-]*(?:на\s+)?",
-            " ",
-            title,
-        )
-        title = re.sub(r"(?i)\b(?:короче|давай|наверное)\b", " ", title)
-        title = re.sub(
-            r"(?i)\b(?:добавь|добавить|создай|создать|поставь|запиши|записать)\b",
-            " ",
-            title,
-        )
-        title = re.sub(
-            r"(?i)\b(?:на\s+)?каждый\s+день\b|\bежедневн\w*\b|"
-            r"\bвключая\s+сегодня(?:шний)?\s+день\b",
-            " ",
-            title,
-        )
-        title = re.sub(
-            r"(?i)\bначиная\s+с\s+(?:сегодня(?:шнего)?\s+дня|сегодня)\b|"
-            r"\bс\s+сегодня(?:шнего)?\s+дня\b",
-            " ",
-            title,
-        )
-        title = re.sub(
-            r"(?i)\b(?:напомин\w*|календар\w*|задач\w*|то\s+есть|название)\b",
-            " ",
-            title,
-        )
-        title = re.sub(
-            r"(?i)\bчто\s+мне\s+нужно\s+(?:проходить|учить|изучать)\b|"
-            r"\bкурс(?:а|е|ом)?\b|\bчтобы\s+я\s+не\s+забыл\b",
-            " ",
-            title,
-        )
-        title = re.sub(r"(?i)\b(?:на\s+)?курсер(?:е|а)?\b", " ", title)
-        title = re.sub(r"(?<!\d)(?:[01]?\d|2[0-3])(?:[:.]\d{2})?(?!\d)", " ", title)
-        title = re.sub(r"(?i)\b(?:в|на)\b", " ", title)
-        title = re.sub(r"\s*[,.;:—-]\s*", " ", title)
-        title = re.sub(r"\s+", " ", title).strip(" ,.!—-\t\n")
-        return title or "Ежедневное событие"
+        return extract_calendar_title(message_text)
 
     @staticmethod
-    def _daily_recurrence_from_reply(message_text: str) -> list[str] | None:
-        normalized = (message_text or "").lower().replace("ё", "е")
-        if any(marker in normalized for marker in ("бессроч", "без конца", "навсегда")):
-            return ["RRULE:FREQ=DAILY"]
-        return None
+    def _daily_recurrence_from_reply(
+        message_text: str,
+        *,
+        start_at: datetime | None = None,
+        timezone_name: str = "Europe/Kyiv",
+        stored_end_date: date | None = None,
+    ) -> list[str] | None:
+        if start_at is None:
+            return ["RRULE:FREQ=DAILY"] if parse_calendar_request(message_text).recurring_forever else None
+        return daily_recurrence(
+            message_text,
+            start_at=start_at,
+            timezone_name=timezone_name,
+            stored_end_date=stored_end_date,
+        )
 
     @staticmethod
     async def _reminder_recipient(
@@ -822,35 +762,54 @@ class MainOrchestrator:
 
                 if pending_action.action_type == "calendar_recurring":
                     pending_title = str(pending_action.payload.get("title", "")).strip()
+                    try:
+                        base_start = datetime.fromisoformat(str(pending_action.payload["start_at"]))
+                        event_timezone = str(pending_action.payload.get("timezone_name", timezone_name))
+                        event_zone = ZoneInfo(event_timezone)
+                        local_start = base_start.astimezone(event_zone)
+                        stored_end_text = pending_action.payload.get("recurrence_end_date")
+                        stored_end_date = (
+                            date.fromisoformat(str(stored_end_text)) if stored_end_text else None
+                        )
+                    except (KeyError, TypeError, ValueError, ZoneInfoNotFoundError):
+                        return "Не смог восстановить параметры календарной задачи. Создай её ещё раз."
+
+                    request_parts = parse_calendar_request(
+                        message_text,
+                        start_date=local_start.date(),
+                    )
+                    start_at = base_start
                     if pending_action.payload.get("needs_time"):
-                        clock = cls._calendar_clock(message_text)
+                        clock = request_parts.clock
                         if clock is None:
                             return (
                                 "📅 На какое время поставить ежедневную задачу "
                                 f"«{cls._escape_markdown(pending_title)}»? "
                                 "Например: «16:00» или «16 часов»."
                             )
-                        try:
-                            base_start = datetime.fromisoformat(str(pending_action.payload["start_at"]))
-                            event_timezone = str(pending_action.payload.get("timezone_name", timezone_name))
-                            event_zone = ZoneInfo(event_timezone)
-                            local_start = base_start.astimezone(event_zone)
-                            start_at = datetime.combine(local_start.date(), clock, tzinfo=event_zone)
-                        except (KeyError, TypeError, ValueError, ZoneInfoNotFoundError):
-                            return "Не смог восстановить параметры календарной задачи. Создай её ещё раз."
-                        pending_action.payload = {
-                            **pending_action.payload,
-                            "start_at": start_at.astimezone(timezone.utc).isoformat(),
-                            "time": clock.strftime("%H:%M"),
-                            "needs_time": False,
-                        }
-                        await session.flush()
-                        return (
-                            f"📅 Время ежедневной задачи «{cls._escape_markdown(pending_title)}» — "
-                            f"{clock:%H:%M}. Сделать бессрочно или до определённой даты?"
-                        )
+                        start_at = datetime.combine(local_start.date(), clock, tzinfo=event_zone)
 
-                    recurrence = cls._daily_recurrence_from_reply(message_text)
+                    recurrence_end = (
+                        None
+                        if request_parts.recurring_forever
+                        else request_parts.recurrence_end_date or stored_end_date
+                    )
+                    recurrence = cls._daily_recurrence_from_reply(
+                        message_text,
+                        start_at=start_at,
+                        timezone_name=event_timezone,
+                        stored_end_date=recurrence_end,
+                    )
+                    pending_action.payload = {
+                        **pending_action.payload,
+                        "start_at": start_at.astimezone(timezone.utc).isoformat(),
+                        "time": start_at.astimezone(event_zone).strftime("%H:%M"),
+                        "needs_time": False,
+                        "recurrence_end_date": (
+                            recurrence_end.isoformat() if recurrence_end is not None else None
+                        ),
+                    }
+                    await session.flush()
                     if recurrence is None:
                         return (
                             f"Уточни срок для ежедневной задачи «{cls._escape_markdown(pending_title)}»: "
@@ -886,7 +845,12 @@ class MainOrchestrator:
                     )
                     return (
                         f"📅 Добавил ежедневное событие: **{cls._escape_markdown(event['summary'])}** — "
-                        f"с {start_at:%d.%m в %H:%M}, бессрочно."
+                        f"с {start_at:%d.%m в %H:%M}, "
+                        + (
+                            "бессрочно."
+                            if recurrence == ["RRULE:FREQ=DAILY"]
+                            else f"до {recurrence_end:%d.%m}."
+                        )
                     )
 
                 pending_title = str(pending_action.payload.get("title", "")).strip()
@@ -1152,6 +1116,52 @@ class MainOrchestrator:
                 if telegram_chat_id is None:
                     return "📅 Не удалось определить чат для календарной задачи. Отправьте просьбу ещё раз в Telegram."
                 title = cls._recurring_calendar_title(message_text)
+                event_timezone = ZoneInfo(timezone_name)
+                local_start = start_at.astimezone(event_timezone)
+                request_parts = parse_calendar_request(
+                    message_text,
+                    start_date=local_start.date(),
+                )
+                recurrence_end = request_parts.recurrence_end_date
+                recurrence = (
+                    None
+                    if needs_time
+                    else cls._daily_recurrence_from_reply(
+                        message_text,
+                        start_at=start_at,
+                        timezone_name=timezone_name,
+                        stored_end_date=recurrence_end,
+                    )
+                )
+                if recurrence is not None:
+                    try:
+                        event = await GoogleWorkspaceTools.create_calendar_event(
+                            session,
+                            user_id=user_id,
+                            summary=title,
+                            start_at=start_at,
+                            end_at=start_at + timedelta(hours=1),
+                            timezone_name=timezone_name,
+                            recurrence=recurrence,
+                        )
+                    except GoogleWorkspaceError as error:
+                        if error.error_code == "GOOGLE_CALENDAR_SCOPE_MISSING":
+                            return "📅 Для календаря нужен новый доступ. Выполните /google в личном чате."
+                        if error.error_code == "GOOGLE_PERMISSION_OR_API_DISABLED":
+                            return (
+                                "📅 Доступ выдан, но Google Calendar API отклоняет запрос. "
+                                "Включите Calendar API в Google Cloud Console и выполните /google ещё раз."
+                            )
+                        return "📅 Сейчас не удалось обратиться к Google Calendar. Попробуйте немного позже."
+                    return (
+                        f"📅 Добавил ежедневное событие: **{cls._escape_markdown(event['summary'])}** — "
+                        f"с {start_at:%d.%m в %H:%M}, "
+                        + (
+                            "бессрочно."
+                            if recurrence == ["RRULE:FREQ=DAILY"]
+                            else f"до {recurrence_end:%d.%m}."
+                        )
+                    )
                 await SharedMemoryTools.create_pending_calendar_recurring(
                     session,
                     household_id=household_id,
@@ -1161,6 +1171,7 @@ class MainOrchestrator:
                     start_at=start_at,
                     timezone_name=timezone_name,
                     needs_time=needs_time,
+                    recurrence_end_date=recurrence_end,
                 )
                 if needs_time:
                     return (

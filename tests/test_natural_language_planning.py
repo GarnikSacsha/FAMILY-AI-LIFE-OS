@@ -167,6 +167,64 @@ def test_recurring_calendar_title_extracts_any_task_subject(
     assert MainOrchestrator._recurring_calendar_title(message) == expected_title
 
 
+@pytest.mark.parametrize(
+    ("message", "expected_title"),
+    [
+        (
+            "Поставь на завтра напоминание: отвести собаку на стрижку в 9:00 утра",
+            "отвести собаку на стрижку",
+        ),
+        (
+            "Добавь в календарь завтра в 14:00 интервью с рекрутером",
+            "интервью с рекрутером",
+        ),
+        (
+            "Запиши на завтра в 18:30 купить корм собаке",
+            "купить корм собаке",
+        ),
+        (
+            "Добавь в календарь завтра в 11:00 пойти к дедушке набрать воды",
+            "пойти к дедушке набрать воды",
+        ),
+    ],
+)
+def test_calendar_title_extracts_arbitrary_one_off_action(
+    message: str,
+    expected_title: str,
+) -> None:
+    assert MainOrchestrator._calendar_title(message) == expected_title
+
+
+@pytest.mark.asyncio
+async def test_arbitrary_one_off_action_reaches_google_calendar_with_clean_title() -> None:
+    engine, factory = await _memory_database()
+    household_id, user_id = await _seed_family(factory)
+    message = "Поставь на завтра напоминание: отвести собаку на стрижку в 9:00 утра"
+
+    with patch.object(
+        GoogleWorkspaceTools,
+        "create_calendar_event",
+        new=AsyncMock(
+            return_value={"id": "event-dog-grooming", "summary": "отвести собаку на стрижку"}
+        ),
+    ) as create_event:
+        async with factory.begin() as session:
+            response = await MainOrchestrator.process_user_message(
+                session=session,
+                user_id=user_id,
+                household_id=household_id,
+                user_name="Денис",
+                message_text=message,
+                telegram_chat_id=123456789,
+                pending_actions_enabled=True,
+            )
+
+    assert "добавил" in response.lower()
+    assert create_event.await_args.kwargs["summary"] == "отвести собаку на стрижку"
+    assert create_event.await_args.kwargs["start_at"].hour == 9
+    await engine.dispose()
+
+
 @pytest.mark.asyncio
 async def test_recurring_calendar_followup_keeps_context_when_time_is_missing() -> None:
     engine, factory = await _memory_database()

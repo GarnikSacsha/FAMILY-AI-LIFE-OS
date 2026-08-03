@@ -1,4 +1,6 @@
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
+from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy import select
@@ -12,6 +14,12 @@ from tests.test_shared_memory import _memory_database, _seed_family
 RECURRING_LEARNING_REQUEST = (
     "А можешь мне, пожалуйста, добавить на каждый день, 16:00 каждый день, "
     "начиная с сегодняшнего дня, Learning Python. Запиши, чтобы я не забыл."
+)
+
+BOUNDED_RECURRING_REQUEST = (
+    "Так, запиши мне, пожалуйста, Learning Python на каждый день. "
+    "Вот чтобы типа с сегодняшнего дня по четверг у меня было в календаре написано Learning Python. "
+    "Давай время поставь 16.00."
 )
 
 
@@ -150,4 +158,98 @@ async def test_private_chat_calendar_followup_uses_pending_action() -> None:
     assert create_event.await_args.kwargs["recurrence"] == ["RRULE:FREQ=DAILY"]
     general_response.assert_not_awaited()
 
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_complete_bounded_recurring_request_is_created_without_followup() -> None:
+    engine, factory = await _memory_database()
+    household_id, user_id = await _seed_family(factory)
+
+    with (
+        patch("app.orchestration.orchestrator.datetime", wraps=datetime) as clock,
+        patch.object(
+            GoogleWorkspaceTools,
+            "create_calendar_event",
+            new=AsyncMock(return_value={"id": "event-bounded", "summary": "Learning Python"}),
+        ) as create_event,
+    ):
+        clock.now.return_value = datetime(2026, 8, 3, 8, tzinfo=timezone.utc)
+        async with factory.begin() as session:
+            response = await MainOrchestrator.process_user_message(
+                session=session,
+                user_id=user_id,
+                household_id=household_id,
+                user_name="Денис",
+                message_text=BOUNDED_RECURRING_REQUEST,
+                telegram_chat_id=123456789,
+                pending_actions_enabled=True,
+            )
+
+    assert "добавил" in response.lower()
+    assert create_event.await_args.kwargs["summary"] == "Learning Python"
+    assert create_event.await_args.kwargs["start_at"] == datetime(
+        2026,
+        8,
+        3,
+        16,
+        tzinfo=ZoneInfo("Europe/Kyiv"),
+    )
+    assert create_event.await_args.kwargs["recurrence"] == [
+        "RRULE:FREQ=DAILY;UNTIL=20260806T130000Z"
+    ]
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_recurring_followup_accepts_time_and_end_date_together() -> None:
+    engine, factory = await _memory_database()
+    household_id, user_id = await _seed_family(factory)
+    initial_message = (
+        "Добавь в календарь каждый день, начиная с сегодняшнего дня, "
+        "пойти к дедушке набрать воды"
+    )
+
+    with (
+        patch("app.orchestration.orchestrator.datetime", wraps=datetime) as clock,
+        patch.object(
+            GoogleWorkspaceTools,
+            "create_calendar_event",
+            new=AsyncMock(
+                return_value={"id": "event-grandfather", "summary": "пойти к дедушке набрать воды"}
+            ),
+        ) as create_event,
+    ):
+        clock.now.return_value = datetime(2026, 8, 3, 8, tzinfo=timezone.utc)
+        async with factory.begin() as session:
+            await MainOrchestrator.process_user_message(
+                session=session,
+                user_id=user_id,
+                household_id=household_id,
+                user_name="Денис",
+                message_text=initial_message,
+                telegram_chat_id=123456789,
+                pending_actions_enabled=True,
+            )
+
+        async with factory.begin() as session:
+            response = await MainOrchestrator.process_user_message(
+                session=session,
+                user_id=user_id,
+                household_id=household_id,
+                user_name="Денис",
+                message_text="Поставить время 16:00 и продлить это до конца недели",
+                telegram_chat_id=123456789,
+                pending_actions_enabled=True,
+            )
+
+    async with factory() as session:
+        action = (await session.execute(select(PendingSharedAction))).scalar_one()
+
+    assert "добавил" in response.lower()
+    assert action.status == "completed"
+    assert create_event.await_args.kwargs["summary"] == "пойти к дедушке набрать воды"
+    assert create_event.await_args.kwargs["recurrence"] == [
+        "RRULE:FREQ=DAILY;UNTIL=20260809T130000Z"
+    ]
     await engine.dispose()

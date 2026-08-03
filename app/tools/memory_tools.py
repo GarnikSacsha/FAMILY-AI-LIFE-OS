@@ -1,7 +1,7 @@
 import hashlib
 import re
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import func, select, update
@@ -255,6 +255,7 @@ class SharedMemoryTools:
         start_at: datetime,
         timezone_name: str,
         needs_time: bool = False,
+        recurrence_end_date: date | None = None,
         now: datetime | None = None,
     ) -> PendingSharedAction:
         current = _utc(now or datetime.now(timezone.utc))
@@ -278,6 +279,9 @@ class SharedMemoryTools:
                 "time": start_at.strftime("%H:%M"),
                 "timezone_name": timezone_name,
                 "needs_time": needs_time,
+                "recurrence_end_date": (
+                    recurrence_end_date.isoformat() if recurrence_end_date is not None else None
+                ),
             },
             expires_at=current + timedelta(hours=24),
         )
