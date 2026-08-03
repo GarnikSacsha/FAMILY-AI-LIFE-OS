@@ -87,3 +87,67 @@ async def test_recurring_learning_request_persists_calendar_followup() -> None:
     assert create_event.await_args.kwargs["recurrence"] == ["RRULE:FREQ=DAILY"]
 
     await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_private_chat_calendar_followup_uses_pending_action() -> None:
+    engine, factory = await _memory_database()
+    household_id, user_id = await _seed_family(factory)
+    private_chat_id = 123456789
+
+    async with factory.begin() as session:
+        response = await MainOrchestrator.process_user_message(
+            session=session,
+            user_id=user_id,
+            household_id=household_id,
+            user_name="Саша",
+            message_text=RECURRING_LEARNING_REQUEST,
+            telegram_chat_id=private_chat_id,
+            shared_context_enabled=False,
+            pending_actions_enabled=True,
+        )
+
+    assert "бессрочно" in response
+
+    with (
+        patch.object(
+            GoogleWorkspaceTools,
+            "create_calendar_event",
+            new=AsyncMock(return_value={"id": "event-private", "summary": "Learning Python"}),
+        ) as create_event,
+        patch.object(
+            MainOrchestrator,
+            "_generate_general_response",
+            new=AsyncMock(return_value="FALLBACK"),
+        ) as general_response,
+    ):
+        async with factory.begin() as session:
+            followup_response = await MainOrchestrator.process_user_message(
+                session=session,
+                user_id=user_id,
+                household_id=household_id,
+                user_name="Саша",
+                message_text="Бессрочно",
+                telegram_chat_id=private_chat_id,
+                shared_context_enabled=False,
+                pending_actions_enabled=True,
+            )
+
+    async with factory() as session:
+        action = (
+            await session.execute(
+                select(PendingSharedAction).where(
+                    PendingSharedAction.household_id == household_id,
+                    PendingSharedAction.telegram_chat_id == private_chat_id,
+                    PendingSharedAction.initiated_by_user_id == user_id,
+                )
+            )
+        ).scalar_one()
+
+    assert followup_response != "FALLBACK"
+    assert action.status == "completed"
+    assert create_event.await_args.kwargs["summary"] == "Learning Python"
+    assert create_event.await_args.kwargs["recurrence"] == ["RRULE:FREQ=DAILY"]
+    general_response.assert_not_awaited()
+
+    await engine.dispose()

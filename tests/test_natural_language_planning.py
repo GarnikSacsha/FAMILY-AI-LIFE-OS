@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, time
 from unittest.mock import AsyncMock, patch
 from zoneinfo import ZoneInfo
 
@@ -138,4 +138,73 @@ async def test_calendar_title_correction_updates_pending_action_without_losing_s
     assert action.status == "pending"
     assert action.payload["title"] == "Learning Python Coursera"
     assert action.payload["start_at"] == start_at.astimezone(ZoneInfo("UTC")).isoformat()
+    await engine.dispose()
+
+
+def test_calendar_clock_treats_hours_word_form_as_a_clock_time() -> None:
+    assert MainOrchestrator._calendar_clock("16 часов") == time(16, 0)
+
+
+def test_including_today_is_recurring_calendar_language() -> None:
+    message = "Запиши меня в календарь, включая сегодняшний день, Learning Python на 16:00"
+
+    assert MainOrchestrator._is_recurring_calendar_request(message) is True
+
+
+@pytest.mark.parametrize(
+    ("message", "expected_title"),
+    [
+        ("Запиши мне каждый день учить английский в 18:00", "учить английский"),
+        ("Добавь ежедневную задачу читать книгу в 20:00", "читать книгу"),
+        ("Поставь на каждый день тренировку в 07:30", "тренировку"),
+        ("Запиши каждый день принимать витамины в 09:00", "принимать витамины"),
+    ],
+)
+def test_recurring_calendar_title_extracts_any_task_subject(
+    message: str,
+    expected_title: str,
+) -> None:
+    assert MainOrchestrator._recurring_calendar_title(message) == expected_title
+
+
+@pytest.mark.asyncio
+async def test_recurring_calendar_followup_keeps_context_when_time_is_missing() -> None:
+    engine, factory = await _memory_database()
+    household_id, user_id = await _seed_family(factory)
+    initial_message = (
+        "Запиши мне, пожалуйста, на каждый день, включая сегодняшний день, "
+        "что мне нужно проходить Learning Python"
+    )
+
+    async with factory.begin() as session:
+        initial_response = await MainOrchestrator.process_user_message(
+            session=session,
+            user_id=user_id,
+            household_id=household_id,
+            user_name="Саша",
+            message_text=initial_message,
+            telegram_chat_id=-100123,
+            shared_context_enabled=True,
+        )
+
+    assert "время" in initial_response.lower()
+
+    async with factory.begin() as session:
+        followup_response = await MainOrchestrator.process_user_message(
+            session=session,
+            user_id=user_id,
+            household_id=household_id,
+            user_name="Саша",
+            message_text="16 часов",
+            telegram_chat_id=-100123,
+            shared_context_enabled=True,
+        )
+
+    async with factory() as session:
+        action = (await session.execute(select(PendingSharedAction))).scalar_one()
+
+    assert action.action_type == "calendar_recurring"
+    assert action.payload["title"] == "Learning Python"
+    assert action.payload["time"] == "16:00"
+    assert "бессрочно" in followup_response.lower()
     await engine.dispose()

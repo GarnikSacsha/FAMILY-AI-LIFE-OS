@@ -254,6 +254,7 @@ class SharedMemoryTools:
         title: str,
         start_at: datetime,
         timezone_name: str,
+        needs_time: bool = False,
         now: datetime | None = None,
     ) -> PendingSharedAction:
         current = _utc(now or datetime.now(timezone.utc))
@@ -276,6 +277,7 @@ class SharedMemoryTools:
                 "start_at": _utc(start_at).isoformat(),
                 "time": start_at.strftime("%H:%M"),
                 "timezone_name": timezone_name,
+                "needs_time": needs_time,
             },
             expires_at=current + timedelta(hours=24),
         )

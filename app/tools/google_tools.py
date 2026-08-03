@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.domains.identity.models import OAuthToken
 from app.integrations.google.oauth import GoogleOAuthClient, GoogleOAuthError
 from app.security.token_cipher import TokenCipher, get_token_cipher
+from app.tools.mail_filter import classify_mail
 
 logger = logging.getLogger(__name__)
 
@@ -233,6 +234,65 @@ class GoogleWorkspaceTools:
         user_id: uuid.UUID,
         limit: int = 5,
     ) -> list[dict[str, str]]:
+        messages = await GoogleWorkspaceTools._list_mail_messages(
+            session,
+            user_id=user_id,
+            limit=limit,
+            query="in:inbox",
+        )
+        return [
+            {
+                "id": str(message["id"]),
+                "subject": str(message["subject"]),
+                "from": str(message["from"]),
+                "date": str(message["date"]),
+                "snippet": str(message["snippet"]),
+            }
+            for message in messages
+        ]
+
+    @staticmethod
+    async def list_important_mail(
+        session: AsyncSession,
+        *,
+        user_id: uuid.UUID,
+        limit: int = 10,
+        scan_limit: int = 50,
+    ) -> list[dict[str, str]]:
+        messages = await GoogleWorkspaceTools._list_mail_messages(
+            session,
+            user_id=user_id,
+            limit=scan_limit,
+            query="in:inbox newer_than:30d",
+        )
+        important: list[dict[str, str]] = []
+        for message in messages:
+            classification = classify_mail(message)
+            if classification is None:
+                continue
+            important.append(
+                {
+                    "id": str(message["id"]),
+                    "subject": str(message["subject"]),
+                    "from": str(message["from"]),
+                    "date": str(message["date"]),
+                    "snippet": str(message["snippet"]),
+                    "category": classification.category,
+                    "reason": classification.reason,
+                }
+            )
+            if len(important) >= limit:
+                break
+        return important
+
+    @staticmethod
+    async def _list_mail_messages(
+        session: AsyncSession,
+        *,
+        user_id: uuid.UUID,
+        limit: int,
+        query: str,
+    ) -> list[dict[str, Any]]:
         access_token = await GoogleWorkspaceTools.get_valid_access_token(
             session,
             user_id=user_id,
@@ -240,13 +300,13 @@ class GoogleWorkspaceTools:
         listing = await GoogleWorkspaceTools._get_json(
             "https://gmail.googleapis.com/gmail/v1/users/me/messages",
             access_token=access_token,
-            params={"maxResults": str(max(1, min(limit, 10))), "q": "in:inbox"},
+            params={"maxResults": str(max(1, min(limit, 50))), "q": query},
         )
         messages = listing.get("messages")
         if not isinstance(messages, list):
             return []
 
-        async def load_message(message_id: str) -> dict[str, str]:
+        async def load_message(message_id: str) -> dict[str, Any]:
             payload = await GoogleWorkspaceTools._get_json(
                 f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{message_id}",
                 access_token=access_token,
@@ -258,12 +318,16 @@ class GoogleWorkspaceTools:
                 for item in headers
                 if isinstance(item, dict)
             }
+            label_ids = payload.get("labelIds", [])
+            if not isinstance(label_ids, list):
+                label_ids = []
             return {
                 "id": message_id,
                 "subject": values.get("subject", "(без темы)"),
                 "from": values.get("from", "неизвестный отправитель"),
                 "date": values.get("date", ""),
                 "snippet": str(payload.get("snippet", "")),
+                "label_ids": [str(label) for label in label_ids],
             }
 
         ids = [str(item["id"]) for item in messages if isinstance(item, dict) and item.get("id")]

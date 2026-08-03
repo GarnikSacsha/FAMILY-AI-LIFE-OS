@@ -346,7 +346,7 @@ async def cmd_mail(message: types.Message) -> None:
         async with unit_of_work() as session:
             actor = await _resolve_actor(session, message)
             IdentityService.validate_domain_access(actor, "email")
-            messages = await GoogleWorkspaceTools.list_recent_mail(
+            messages = await GoogleWorkspaceTools.list_important_mail(
                 session,
                 user_id=actor.user_id,
             )
@@ -364,8 +364,13 @@ async def cmd_mail(message: types.Message) -> None:
     if not messages:
         await message.answer("✉️ Во входящих письмах ничего не найдено.")
         return
-    lines = [f"{index}. {item['subject']}\nОт: {item['from']}" for index, item in enumerate(messages, start=1)]
-    await message.answer("✉️ Последние письма:\n\n" + "\n\n".join(lines))
+    lines = [
+        f"{index}. [{item['category']}] {item['subject']}\n"
+        f"От: {item['from']}\n"
+        f"Почему важно: {item['reason']}"
+        for index, item in enumerate(messages, start=1)
+    ]
+    await message.answer("✉️ Важные письма за последние 30 дней:\n\n" + "\n\n".join(lines))
 
 
 @dp.message(Command("calendar"))
@@ -513,6 +518,7 @@ async def handle_user_message(message: types.Message) -> None:
                 timezone_name=actor.timezone,
                 telegram_chat_id=actor.chat_id,
                 shared_context_enabled=shared_context_enabled,
+                pending_actions_enabled=True,
             )
             if shared_context_enabled:
                 shared_response_coordinates = (

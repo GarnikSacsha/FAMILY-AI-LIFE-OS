@@ -417,7 +417,14 @@ class MainOrchestrator:
     def _is_recurring_calendar_request(message_text: str) -> bool:
         normalized = (message_text or "").lower().replace("ё", "е")
         has_daily_schedule = any(
-            marker in normalized for marker in ("каждый день", "ежедневно", "ежедневный")
+            marker in normalized
+            for marker in (
+                "каждый день",
+                "ежедневно",
+                "ежедневный",
+                "включая сегодня",
+                "включая сегодняшний день",
+            )
         )
         has_action = any(
             marker in normalized for marker in ("добав", "созда", "постав", "запиш", "не забыть")
@@ -471,19 +478,29 @@ class MainOrchestrator:
 
     @staticmethod
     def _calendar_clock(message_text: str) -> time | None:
-        match = re.search(r"(?<!\d)([01]?\d|2[0-3])(?:[:.]([0-5]\d))(?!\d)", message_text.lower())
+        match = re.search(
+            r"(?<!\d)([01]?\d|2[0-3])(?:[:.]([0-5]\d)|\s+час(?:а|ов)?)(?!\d)",
+            message_text.lower(),
+        )
         if match is None:
             return None
-        return time(int(match.group(1)), int(match.group(2)))
+        return time(int(match.group(1)), int(match.group(2) or 0))
 
     @staticmethod
     def _recurring_calendar_title(message_text: str) -> str:
         explicit_title = MainOrchestrator._explicit_title(message_text)
         if explicit_title is not None:
             return explicit_title
-        title = re.split(r"(?i)\b(?:вот так|запиши|чтобы я)\b", message_text, maxsplit=1)[0]
+        title = message_text
         title = re.sub(
             r"(?i)^\s*(?:так\s*,?\s*)?(?:а\s+)?можешь\s+мне(?:\s*,?\s*пожалуйста)?\s*",
+            " ",
+            title,
+        )
+        title = re.sub(
+            r"(?i)^\s*(?:так\s*,?\s*)?(?:а\s+)?(?:можешь\s+)?(?:запиши|записать|добавь|добавить|создай|создать|поставь|поставить)\b"
+            r"[\s,:—-]*(?:меня|мне|нас)?[\s,:—-]*(?:пожалуйста)?[\s,:—-]*"
+            r"(?:в\s+календар\w*)?[\s,:—-]*(?:на\s+)?",
             " ",
             title,
         )
@@ -493,14 +510,29 @@ class MainOrchestrator:
             " ",
             title,
         )
-        title = re.sub(r"(?i)\b(?:на\s+)?каждый\s+день\b|\bежедневн\w*\b", " ", title)
+        title = re.sub(
+            r"(?i)\b(?:на\s+)?каждый\s+день\b|\bежедневн\w*\b|"
+            r"\bвключая\s+сегодня(?:шний)?\s+день\b",
+            " ",
+            title,
+        )
         title = re.sub(
             r"(?i)\bначиная\s+с\s+(?:сегодня(?:шнего)?\s+дня|сегодня)\b|"
             r"\bс\s+сегодня(?:шнего)?\s+дня\b",
             " ",
             title,
         )
-        title = re.sub(r"(?i)\b(?:напомин\w*|календар\w*|то\s+есть|название)\b", " ", title)
+        title = re.sub(
+            r"(?i)\b(?:напомин\w*|календар\w*|задач\w*|то\s+есть|название)\b",
+            " ",
+            title,
+        )
+        title = re.sub(
+            r"(?i)\bчто\s+мне\s+нужно\s+(?:проходить|учить|изучать)\b|"
+            r"\bкурс(?:а|е|ом)?\b|\bчтобы\s+я\s+не\s+забыл\b",
+            " ",
+            title,
+        )
         title = re.sub(r"(?i)\b(?:на\s+)?курсер(?:е|а)?\b", " ", title)
         title = re.sub(r"(?<!\d)(?:[01]?\d|2[0-3])(?:[:.]\d{2})?(?!\d)", " ", title)
         title = re.sub(r"(?i)\b(?:в|на)\b", " ", title)
@@ -692,12 +724,15 @@ class MainOrchestrator:
         timezone_name: str = "Europe/Kyiv",
         telegram_chat_id: int | None = None,
         shared_context_enabled: bool = False,
+        pending_actions_enabled: bool | None = None,
     ) -> str:
         """Processes incoming user input, delegates to deterministic tools, and returns response."""
         has_photo = photo_bytes is not None
         has_doc = document_bytes is not None
+        if pending_actions_enabled is None:
+            pending_actions_enabled = shared_context_enabled
 
-        if shared_context_enabled and telegram_chat_id is not None:
+        if pending_actions_enabled and telegram_chat_id is not None:
             pending_action = await SharedMemoryTools.get_pending_action(
                 session,
                 household_id=household_id,
@@ -733,7 +768,11 @@ class MainOrchestrator:
                         return (
                             f"📌 Название обновил: **{cls._escape_markdown(explicit_title)}**. "
                             + (
-                                "Теперь укажи срок: бессрочно или до определённой даты?"
+                                (
+                                    "Теперь укажи время."
+                                    if pending_action.payload.get("needs_time")
+                                    else "Теперь укажи срок: бессрочно или до определённой даты?"
+                                )
                                 if pending_action.action_type == "calendar_recurring"
                                 else "Теперь укажи время."
                             )
@@ -782,8 +821,36 @@ class MainOrchestrator:
                     )
 
                 if pending_action.action_type == "calendar_recurring":
-                    recurrence = cls._daily_recurrence_from_reply(message_text)
                     pending_title = str(pending_action.payload.get("title", "")).strip()
+                    if pending_action.payload.get("needs_time"):
+                        clock = cls._calendar_clock(message_text)
+                        if clock is None:
+                            return (
+                                "📅 На какое время поставить ежедневную задачу "
+                                f"«{cls._escape_markdown(pending_title)}»? "
+                                "Например: «16:00» или «16 часов»."
+                            )
+                        try:
+                            base_start = datetime.fromisoformat(str(pending_action.payload["start_at"]))
+                            event_timezone = str(pending_action.payload.get("timezone_name", timezone_name))
+                            event_zone = ZoneInfo(event_timezone)
+                            local_start = base_start.astimezone(event_zone)
+                            start_at = datetime.combine(local_start.date(), clock, tzinfo=event_zone)
+                        except (KeyError, TypeError, ValueError, ZoneInfoNotFoundError):
+                            return "Не смог восстановить параметры календарной задачи. Создай её ещё раз."
+                        pending_action.payload = {
+                            **pending_action.payload,
+                            "start_at": start_at.astimezone(timezone.utc).isoformat(),
+                            "time": clock.strftime("%H:%M"),
+                            "needs_time": False,
+                        }
+                        await session.flush()
+                        return (
+                            f"📅 Время ежедневной задачи «{cls._escape_markdown(pending_title)}» — "
+                            f"{clock:%H:%M}. Сделать бессрочно или до определённой даты?"
+                        )
+
+                    recurrence = cls._daily_recurrence_from_reply(message_text)
                     if recurrence is None:
                         return (
                             f"Уточни срок для ежедневной задачи «{cls._escape_markdown(pending_title)}»: "
@@ -1071,6 +1138,12 @@ class MainOrchestrator:
                     message_text,
                     timezone_name=timezone_name,
                 )
+                needs_time = start_at is None
+                if needs_time:
+                    start_at = cls._parse_calendar_datetime(
+                        f"{message_text} в 00:00",
+                        timezone_name=timezone_name,
+                    )
                 if start_at is None:
                     return (
                         "📅 Напишите время ежедневной задачи, например: "
@@ -1087,7 +1160,13 @@ class MainOrchestrator:
                     title=title,
                     start_at=start_at,
                     timezone_name=timezone_name,
+                    needs_time=needs_time,
                 )
+                if needs_time:
+                    return (
+                        f"📅 Запомнил ежедневную задачу: **{cls._escape_markdown(title)}** — "
+                        f"с {start_at:%d.%m}. Напишите время, например: «16:00» или «16 часов»."
+                    )
                 return (
                     f"📅 Запомнил ежедневную задачу: **{cls._escape_markdown(title)}** — "
                     f"с {start_at:%d.%m в %H:%M}. Сделать бессрочно или до определённой даты?"

@@ -635,8 +635,17 @@ async def test_google_telegram_commands_success_empty_and_access_errors():
         patch("app.telegram.bot.unit_of_work", new=_fake_uow),
         patch("app.telegram.bot._resolve_actor", new=AsyncMock(return_value=actor)),
         patch(
-            "app.telegram.bot.GoogleWorkspaceTools.list_recent_mail",
-            new=AsyncMock(return_value=[{"subject": "Hello", "from": "Family"}]),
+            "app.telegram.bot.GoogleWorkspaceTools.list_important_mail",
+            new=AsyncMock(
+                return_value=[
+                    {
+                        "subject": "Hello",
+                        "from": "Family",
+                        "category": "Личное",
+                        "reason": "Письмо от живого отправителя без рекламных признаков",
+                    }
+                ]
+            ),
         ),
     ):
         await telegram_module.cmd_mail(mail)
@@ -647,7 +656,7 @@ async def test_google_telegram_commands_success_empty_and_access_errors():
         patch("app.telegram.bot.unit_of_work", new=_fake_uow),
         patch("app.telegram.bot._resolve_actor", new=AsyncMock(return_value=actor)),
         patch(
-            "app.telegram.bot.GoogleWorkspaceTools.list_recent_mail",
+            "app.telegram.bot.GoogleWorkspaceTools.list_important_mail",
             new=AsyncMock(return_value=[]),
         ),
     ):

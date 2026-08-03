@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "label": "fixed",
+  "captured_at": "2026-08-02T20:56:27.388256+00:00",
+  "command": [
+    ".\\.venv\\Scripts\\python.exe",
+    "-m",
+    "pytest",
+    "tests/test_calendar_parser.py",
+    "tests/test_reminders.py",
+    "-q"
+  ],
+  "cwd": "C:\\Users\\\u0414\u0435\u043d\u0438\u0441\\Desktop\\\u0412\u0441\u044f\u043a\u043e\u0435 \u0432\u0430\u0439\u0431\u043a\u043e\u0434\u0438\u043d\u0433\\\u041f\u0440\u043e\u0441\u0442\u043e \u0442\u0435\u0441\u0442 \u0432\u0441\u044f\u043a\u043e\u0435\\FAMILY-AI-LIFE-OS",
+  "runtime": "Python 3.14.6 on Windows AMD64",
+  "duration_ms": 6834.125,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "............                                                             [100%]\r\n12 passed in 5.37s\r\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}
