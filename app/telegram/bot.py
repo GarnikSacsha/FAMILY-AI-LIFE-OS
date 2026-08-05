@@ -537,8 +537,6 @@ async def handle_user_message(message: types.Message) -> None:
         return
 
     # A success response is sent only after the Unit of Work has committed.
-    if transcript is not None:
-        response_text = f"🎙 Распознал: «{_escape_markdown_text(transcript)}»\n\n{response_text}"
     sent_message = await message.answer(response_text, parse_mode=ParseMode.MARKDOWN)
     if shared_response_coordinates is not None:
         household_id, chat_id = shared_response_coordinates
