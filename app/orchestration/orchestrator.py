@@ -2,7 +2,7 @@ import re
 import uuid
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
-from typing import cast
+from typing import Any, cast
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import select
@@ -24,6 +24,7 @@ from app.domains.planning.reminder_parser import (
 )
 from app.domains.planning.semantic_calendar import CalendarIntentInterpreter, SemanticCalendarPlan
 from app.orchestration.router import IntentRouter
+from app.tools.confirmation_tools import ConfirmationTools
 from app.tools.finance_tools import FinanceTools
 from app.tools.google_tools import GoogleWorkspaceError, GoogleWorkspaceTools
 from app.tools.health_tools import HealthIntegrationError, HealthTools
@@ -49,6 +50,10 @@ class MainOrchestrator:
         r"мои|наши|траты|расходы|сегодняшние|сегодня|за)\b",
         re.IGNORECASE,
     )
+    _CONFIRMATION_REPLY = re.compile(
+        r"^\s*(?P<verb>подтвердить|отмена|отменить)\s+(?P<code>[A-Za-z0-9_-]{6,32})\s*$",
+        re.IGNORECASE,
+    )
     _CATEGORY_NAMES = {
         "Entertainment": "Развлечения",
         "Groceries": "Продукты",
@@ -65,6 +70,100 @@ class MainOrchestrator:
     @staticmethod
     def _escape_markdown(value: str) -> str:
         return re.sub(r"([\\_*`\[])", r"\\\1", value)
+
+    @staticmethod
+    def _confirmation_request_key(
+        *,
+        telegram_chat_id: int,
+        telegram_message_id: int | None,
+        action_type: str,
+    ) -> str:
+        if telegram_message_id is not None:
+            return f"telegram:{telegram_chat_id}:{telegram_message_id}:{action_type}"
+        return f"interactive:{uuid.uuid4()}:{action_type}"
+
+    @classmethod
+    async def _handle_confirmation_reply(
+        cls,
+        session: AsyncSession,
+        *,
+        user_id: uuid.UUID,
+        household_id: uuid.UUID,
+        telegram_chat_id: int,
+        message_text: str,
+    ) -> str | None:
+        parsed = cls._CONFIRMATION_REPLY.match(message_text)
+        if parsed is None:
+            return None
+        confirmation = await ConfirmationTools.find_for_reply(
+            session,
+            household_id=household_id,
+            telegram_chat_id=telegram_chat_id,
+            initiated_by_user_id=user_id,
+            confirmation_code=parsed.group("code"),
+        )
+        if confirmation is None:
+            return "Не нашёл активного подтверждения с таким кодом."
+        if parsed.group("verb").lower() in {"отмена", "отменить"}:
+            if await ConfirmationTools.cancel(confirmation):
+                await session.flush()
+                return "Операция отменена."
+            return "Эта операция уже не ожидает подтверждения."
+        if not await ConfirmationTools.claim(session, confirmation):
+            return "Эта операция уже не ожидает подтверждения или срок кода истёк."
+
+        try:
+            if confirmation.action_type == "finance_log":
+                from app.agents.finance.agent import FinanceAgent
+
+                results: list[dict[str, Any]] = []
+                for expense in confirmation.payload.get("expenses", []):
+                    results.append(
+                        await FinanceAgent().categorize_and_log_transaction(
+                            session=session,
+                            owner_type="household",
+                            owner_id=household_id,
+                            amount=float(expense["amount"]),
+                            merchant=str(expense["merchant"]),
+                            description=str(expense["description"]),
+                            external_id=str(expense["external_id"]) if expense.get("external_id") else None,
+                            telegram_chat_id=telegram_chat_id,
+                        )
+                    )
+                if not results or not all(result.get("status") in {"SUCCESS", "DUPLICATE"} for result in results):
+                    raise RuntimeError("Finance confirmation was not persisted.")
+                await ConfirmationTools.complete(confirmation)
+                await session.flush()
+                return "💳 Расход сохранён. Синхронизация с Google Sheets поставлена в очередь."
+            if confirmation.action_type == "calendar_delete":
+                await GoogleWorkspaceTools.delete_calendar_event(
+                    session,
+                    user_id=user_id,
+                    event_id=str(confirmation.payload["event_id"]),
+                )
+                await ConfirmationTools.complete(confirmation)
+                await session.flush()
+                return f"📅 Удалил событие **{confirmation.payload['summary']}**."
+            if confirmation.action_type == "memory_dismiss":
+                item_ids = [uuid.UUID(str(item_id)) for item_id in confirmation.payload.get("item_ids", [])]
+                dismissed = await SharedMemoryTools.dismiss_by_ids(
+                    session,
+                    household_id=household_id,
+                    item_ids=item_ids,
+                )
+                await ConfirmationTools.complete(confirmation)
+                await session.flush()
+                if not dismissed:
+                    return "Записи уже нет среди активной общей памяти."
+                return f"🧠 Убрал из общей памяти: {cls._escape_markdown(dismissed[0].content)}"
+        except GoogleWorkspaceError as error:
+            await ConfirmationTools.fail(confirmation, error)
+            return "📅 Не удалось выполнить подтверждённое удаление в Google Calendar. Попробуйте позже."
+        except Exception as error:
+            await ConfirmationTools.fail(confirmation, error)
+            return "Не удалось выполнить подтверждённую операцию. Ничего не повторял автоматически."
+        await ConfirmationTools.fail(confirmation, RuntimeError("Unsupported confirmation action."))
+        return "Не удалось выполнить подтверждённую операцию."
 
     @staticmethod
     def _routing_text(message_text: str) -> str:
@@ -885,6 +984,15 @@ class MainOrchestrator:
             pending_actions_enabled = shared_context_enabled
 
         if pending_actions_enabled and telegram_chat_id is not None:
+            confirmation_response = await cls._handle_confirmation_reply(
+                session,
+                user_id=user_id,
+                household_id=household_id,
+                telegram_chat_id=telegram_chat_id,
+                message_text=message_text,
+            )
+            if confirmation_response is not None:
+                return confirmation_response
             pending_action = await SharedMemoryTools.get_pending_action(
                 session,
                 household_id=household_id,
@@ -1236,6 +1344,41 @@ class MainOrchestrator:
 
             expenses = cls._extract_expenses(message_text)
             if expenses:
+                if pending_actions_enabled and telegram_chat_id is not None:
+                    confirmation = await ConfirmationTools.create_or_get(
+                        session,
+                        household_id=household_id,
+                        telegram_chat_id=telegram_chat_id,
+                        initiated_by_user_id=user_id,
+                        action_type="finance_log",
+                        request_key=cls._confirmation_request_key(
+                            telegram_chat_id=telegram_chat_id,
+                            telegram_message_id=telegram_message_id,
+                            action_type="finance_log",
+                        ),
+                        payload={
+                            "expenses": [
+                                {
+                                    "amount": amount,
+                                    "merchant": merchant,
+                                    "description": message_text if len(expenses) == 1 else merchant,
+                                    "external_id": (
+                                        f"telegram:{telegram_chat_id}:{telegram_message_id}:expense:{line_number}"
+                                        if telegram_message_id is not None
+                                        else None
+                                    ),
+                                }
+                                for line_number, (amount, merchant) in enumerate(expenses, start=1)
+                            ]
+                        },
+                    )
+                    if confirmation.status == "pending":
+                        preview = ", ".join(f"{amount:g} грн — {merchant}" for amount, merchant in expenses)
+                        return (
+                            f"💳 Подтвердите запись расхода: {preview}.\n"
+                            f"Напишите: `подтвердить {confirmation.confirmation_code}`"
+                        )
+                    return "Этот запрос на расход уже был обработан."
                 from app.agents.finance.agent import FinanceAgent
 
                 transaction_results: list[dict[str, object]] = []
@@ -1252,6 +1395,7 @@ class MainOrchestrator:
                             merchant=merchant,
                             description=message_text if len(expenses) == 1 else merchant,
                             external_id=external_id,
+                            telegram_chat_id=telegram_chat_id,
                         )
                     )
 
@@ -1550,6 +1694,26 @@ class MainOrchestrator:
                                 "📅 Не смог однозначно определить событие. "
                                 "Напишите его точное название из списка /calendar."
                             )
+                        if pending_actions_enabled and telegram_chat_id is not None:
+                            confirmation = await ConfirmationTools.create_or_get(
+                                session,
+                                household_id=household_id,
+                                telegram_chat_id=telegram_chat_id,
+                                initiated_by_user_id=user_id,
+                                action_type="calendar_delete",
+                                request_key=cls._confirmation_request_key(
+                                    telegram_chat_id=telegram_chat_id,
+                                    telegram_message_id=telegram_message_id,
+                                    action_type="calendar_delete",
+                                ),
+                                payload={"event_id": matches[0]["id"], "summary": matches[0]["summary"]},
+                            )
+                            if confirmation.status == "pending":
+                                return (
+                                    f"📅 Подтвердите удаление события **{matches[0]['summary']}**.\n"
+                                    f"Напишите: `подтвердить {confirmation.confirmation_code}`"
+                                )
+                            return "Этот запрос на удаление уже был обработан."
                         await GoogleWorkspaceTools.delete_calendar_event(
                             session,
                             user_id=user_id,
@@ -1623,14 +1787,32 @@ class MainOrchestrator:
             )
             if forget_memory is not None:
                 query = " ".join(forget_memory.group(1).strip().split())
-                dismissed = await SharedMemoryTools.dismiss_matching(
+                memory_matches = await SharedMemoryTools.find_dismiss_matches(
                     session,
                     household_id=household_id,
                     query=query,
                 )
-                if not dismissed:
+                if not memory_matches:
                     return "Не нашёл в общей памяти подходящую активную запись."
-                return f"🧠 Убрал из общей памяти: {cls._escape_markdown(dismissed[0].content)}"
+                confirmation = await ConfirmationTools.create_or_get(
+                    session,
+                    household_id=household_id,
+                    telegram_chat_id=telegram_chat_id,
+                    initiated_by_user_id=user_id,
+                    action_type="memory_dismiss",
+                    request_key=cls._confirmation_request_key(
+                        telegram_chat_id=telegram_chat_id,
+                        telegram_message_id=telegram_message_id,
+                        action_type="memory_dismiss",
+                    ),
+                    payload={"item_ids": [str(item.id) for item in memory_matches]},
+                )
+                if confirmation.status == "pending":
+                    return (
+                        f"🧠 Подтвердите удаление из общей памяти: {cls._escape_markdown(memory_matches[0].content)}.\n"
+                        f"Напишите: `подтвердить {confirmation.confirmation_code}`"
+                    )
+                return "Этот запрос на удаление уже был обработан."
 
             explicit_memory = re.match(
                 r"^\s*(?:запомни|запомните)\b[\s,:—-]*(.+)$",

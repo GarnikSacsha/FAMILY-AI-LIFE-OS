@@ -141,6 +141,40 @@ async def test_voice_message_is_transcribed_then_routed(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_voice_reminder_transcript_is_routed_without_command_rewriting(monkeypatch):
+    message = _VoiceMessage()
+    actor = ActorContext(
+        user_id=uuid.uuid4(),
+        telegram_id=message.from_user.id,
+        household_id=uuid.uuid4(),
+        chat_id=message.chat.id,
+        chat_type="private",
+    )
+
+    @asynccontextmanager
+    async def fake_uow():
+        yield object()
+
+    async def download_file(_path, *, destination):
+        destination.write(b"voice-bytes")
+
+    transcript = "сделай мне напоминание: завтра набрать проводницу, уточнить по поводу билетов"
+    with (
+        patch("app.telegram.bot.unit_of_work", new=fake_uow),
+        patch("app.telegram.bot._resolve_actor", new=AsyncMock(return_value=actor)),
+        patch("app.telegram.bot.bot.get_file", new=AsyncMock(return_value=SimpleNamespace(file_path="voice/path.ogg"))),
+        patch("app.telegram.bot.bot.download_file", new=AsyncMock(side_effect=download_file)),
+        patch("app.telegram.bot.OpenAITranscriptionClient.transcribe", new=AsyncMock(return_value=transcript)),
+        patch(
+            "app.telegram.bot.MainOrchestrator.process_user_message", new=AsyncMock(return_value="Готово.")
+        ) as process_message,
+    ):
+        await handle_user_message(message)
+
+    assert process_message.await_args.kwargs["message_text"] == transcript
+
+
+@pytest.mark.asyncio
 async def test_long_voice_message_is_rejected_before_download():
     message = _VoiceMessage()
     message.voice.duration = settings.AUDIO_MAX_DURATION_SECONDS + 1

@@ -4,13 +4,14 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import func, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domains.identity.models import Household
 from app.domains.memory.models import (
     PendingSharedAction,
     SharedConversationMessage,
+    SharedConversationMessageRetry,
     SharedConversationSummary,
     SharedMemoryItem,
 )
@@ -64,6 +65,17 @@ class SharedMemoryTools:
             raise ValueError("Shared message role must be user or assistant.")
         if message_type not in ALLOWED_MESSAGE_TYPES:
             raise ValueError("Unsupported shared message type.")
+        if telegram_message_id is not None:
+            existing = await session.execute(
+                select(SharedConversationMessage).where(
+                    SharedConversationMessage.telegram_chat_id == telegram_chat_id,
+                    SharedConversationMessage.telegram_message_id == telegram_message_id,
+                    SharedConversationMessage.role == role,
+                )
+            )
+            prior_message = existing.scalar_one_or_none()
+            if prior_message is not None:
+                return prior_message
         message = SharedConversationMessage(
             household_id=household_id,
             author_user_id=author_user_id,
@@ -79,6 +91,116 @@ class SharedMemoryTools:
         session.add(message)
         await session.flush()
         return message
+
+    @staticmethod
+    async def queue_message_for_retry(
+        session: AsyncSession,
+        *,
+        household_id: uuid.UUID,
+        telegram_chat_id: int,
+        telegram_message_id: int,
+        author_name: str,
+        message_type: str,
+        content: str,
+        now: datetime | None = None,
+    ) -> SharedConversationMessageRetry:
+        """Persist a delivered assistant reply until it is present in shared context."""
+        if message_type not in ALLOWED_MESSAGE_TYPES:
+            raise ValueError("Unsupported shared message type.")
+        current = _utc(now or datetime.now(timezone.utc))
+        existing = await session.execute(
+            select(SharedConversationMessageRetry).where(
+                SharedConversationMessageRetry.telegram_chat_id == telegram_chat_id,
+                SharedConversationMessageRetry.telegram_message_id == telegram_message_id,
+            )
+        )
+        retry = existing.scalar_one_or_none()
+        if retry is not None:
+            return retry
+        retry = SharedConversationMessageRetry(
+            household_id=household_id,
+            telegram_chat_id=telegram_chat_id,
+            telegram_message_id=telegram_message_id,
+            author_name=_normalized_text(author_name, max_length=100),
+            message_type=message_type,
+            content=content.strip()[:20_000],
+            next_attempt_at=current,
+        )
+        if not retry.content:
+            raise ValueError("Shared message content cannot be empty.")
+        session.add(retry)
+        await session.flush()
+        return retry
+
+    @staticmethod
+    async def claim_due_message_retries(
+        session: AsyncSession,
+        *,
+        now: datetime | None = None,
+        limit: int = 20,
+        lease_seconds: int = 60,
+    ) -> list[SharedConversationMessageRetry]:
+        """Lease pending retries so concurrent workers do not replay one reply twice."""
+        current = _utc(now or datetime.now(timezone.utc))
+        due = or_(
+            and_(
+                SharedConversationMessageRetry.status == "pending",
+                SharedConversationMessageRetry.next_attempt_at <= current,
+            ),
+            and_(
+                SharedConversationMessageRetry.status == "processing",
+                SharedConversationMessageRetry.lease_expires_at <= current,
+            ),
+        )
+        result = await session.execute(
+            select(SharedConversationMessageRetry)
+            .where(due)
+            .order_by(
+                SharedConversationMessageRetry.next_attempt_at,
+                SharedConversationMessageRetry.id,
+            )
+            .limit(limit)
+            .with_for_update(skip_locked=True)
+        )
+        retries = list(result.scalars().all())
+        for retry in retries:
+            retry.status = "processing"
+            retry.attempt_count += 1
+            retry.lease_expires_at = current + timedelta(seconds=lease_seconds)
+        await session.flush()
+        return retries
+
+    @staticmethod
+    async def mark_message_retry_delivered(
+        session: AsyncSession,
+        *,
+        retry_id: uuid.UUID,
+    ) -> None:
+        retry = await session.get(SharedConversationMessageRetry, retry_id)
+        if retry is None:
+            return
+        retry.status = "delivered"
+        retry.lease_expires_at = None
+        retry.last_error = None
+        await session.flush()
+
+    @staticmethod
+    async def reschedule_message_retry(
+        session: AsyncSession,
+        *,
+        retry_id: uuid.UUID,
+        error_code: str,
+        now: datetime | None = None,
+    ) -> None:
+        retry = await session.get(SharedConversationMessageRetry, retry_id)
+        if retry is None:
+            return
+        current = _utc(now or datetime.now(timezone.utc))
+        retry.status = "pending"
+        retry.lease_expires_at = None
+        retry.last_error = error_code[:100]
+        retry.next_attempt_at = current + timedelta(seconds=min(2**retry.attempt_count, 300))
+        await session.flush()
 
     @staticmethod
     async def recent_context(
@@ -180,6 +302,26 @@ class SharedMemoryTools:
         limit: int = 20,
     ) -> list[SharedMemoryItem]:
         """Dismiss active shared memories whose meaningful words overlap a request."""
+        matches = await SharedMemoryTools.find_dismiss_matches(
+            session,
+            household_id=household_id,
+            query=query,
+            limit=limit,
+        )
+        for item in matches:
+            item.status = "dismissed"
+        await session.flush()
+        return matches
+
+    @staticmethod
+    async def find_dismiss_matches(
+        session: AsyncSession,
+        *,
+        household_id: uuid.UUID,
+        query: str,
+        limit: int = 20,
+    ) -> list[SharedMemoryItem]:
+        """Find dismissible memories without mutating them."""
         result = await session.execute(
             select(SharedMemoryItem)
             .where(
@@ -201,6 +343,27 @@ class SharedMemoryTools:
             return []
         best_score = max(score for score, _ in ranked)
         matches = [item for score, item in ranked if score == best_score][:limit]
+        return matches
+
+    @staticmethod
+    async def dismiss_by_ids(
+        session: AsyncSession,
+        *,
+        household_id: uuid.UUID,
+        item_ids: list[uuid.UUID],
+    ) -> list[SharedMemoryItem]:
+        if not item_ids:
+            return []
+        result = await session.execute(
+            select(SharedMemoryItem)
+            .where(
+                SharedMemoryItem.household_id == household_id,
+                SharedMemoryItem.id.in_(item_ids),
+                SharedMemoryItem.status == "active",
+            )
+            .order_by(SharedMemoryItem.updated_at.desc(), SharedMemoryItem.id.desc())
+        )
+        matches = list(result.scalars().all())
         for item in matches:
             item.status = "dismissed"
         await session.flush()
@@ -579,6 +742,32 @@ class SharedMemoryTools:
                 SharedConversationSummary.window_started_at,
                 SharedConversationSummary.id,
             )
+        )
+        return list(result.scalars().all())
+
+    @staticmethod
+    async def messages_in_window(
+        session: AsyncSession,
+        *,
+        household_id: uuid.UUID,
+        telegram_chat_id: int,
+        start_at: datetime,
+        end_at: datetime,
+        limit: int,
+        offset: int = 0,
+    ) -> list[SharedConversationMessage]:
+        """Return the persisted transcript for one authorized chat and time window."""
+        result = await session.execute(
+            select(SharedConversationMessage)
+            .where(
+                SharedConversationMessage.household_id == household_id,
+                SharedConversationMessage.telegram_chat_id == telegram_chat_id,
+                SharedConversationMessage.created_at >= _utc(start_at),
+                SharedConversationMessage.created_at < _utc(end_at),
+            )
+            .order_by(SharedConversationMessage.created_at, SharedConversationMessage.id)
+            .offset(offset)
+            .limit(limit)
         )
         return list(result.scalars().all())
 

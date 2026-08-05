@@ -1,4 +1,7 @@
 import asyncio
+import os
+import subprocess
+import sys
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -15,6 +18,48 @@ from app.telegram.bot import (
     polling_health,
     start_bot,
 )
+
+
+def test_application_starts_with_the_documented_sqlite_test_environment() -> None:
+    script = """
+import asyncio
+import httpx
+from app.api.application import create_application
+from app.domains.identity.models import User
+from app.infrastructure.database.session import engine
+
+async def main():
+    application = create_application(start_telegram=False)
+    async with engine.begin() as connection:
+        await connection.run_sync(User.metadata.create_all, tables=[User.__table__])
+    async with application.router.lifespan_context(application):
+        transport = httpx.ASGITransport(app=application)
+        async with httpx.AsyncClient(transport=transport, base_url=\"http://test\") as client:
+            live = await client.get(\"/live\")
+            health = await client.get(\"/health\")
+    assert live.status_code == 200 and live.json() == {\"status\": \"ok\"}
+    assert health.status_code == 200 and health.json() == {\"status\": \"ok\"}
+
+asyncio.run(main())
+"""
+    environment = os.environ | {
+        "ENVIRONMENT": "test",
+        "DATABASE_URL": "sqlite+aiosqlite:///:memory:",
+        "TELEGRAM_BOT_TOKEN": "123456789:AAA_test_token_for_ci_pipeline",
+        "DENYS_TELEGRAM_ID": "100000001",
+        "OLEKSANDRA_TELEGRAM_ID": "100000002",
+    }
+
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=os.getcwd(),
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 @pytest.mark.asyncio

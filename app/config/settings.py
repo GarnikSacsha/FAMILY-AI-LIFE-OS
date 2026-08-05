@@ -82,6 +82,7 @@ class Settings(BaseSettings):
     GOOGLE_CREDENTIALS_JSON_PATH: str | None = None
     GOOGLE_CREDENTIALS_JSON: SecretStr | None = None
     GOOGLE_SHEETS_RANGE: str = "A:I"
+    GOOGLE_SHEETS_OPERATION_TIMEOUT_SECONDS: float = 45.0
 
     # Shared family-chat memory and proactive summaries
     SHARED_CHAT_MEMORY_ENABLED: bool = True
@@ -143,6 +144,13 @@ class Settings(BaseSettings):
     def validate_summary_idle_minutes(cls, value: int) -> int:
         if value < 5 or value > 24 * 60:
             raise ValueError("CHAT_SUMMARY_IDLE_MINUTES must be between 5 and 1440.")
+        return value
+
+    @field_validator("GOOGLE_SHEETS_OPERATION_TIMEOUT_SECONDS")
+    @classmethod
+    def validate_sheets_operation_timeout(cls, value: float) -> float:
+        if value < 5 or value > 300:
+            raise ValueError("GOOGLE_SHEETS_OPERATION_TIMEOUT_SECONDS must be between 5 and 300.")
         return value
 
     @field_validator("CHAT_SUMMARY_POLL_SECONDS")

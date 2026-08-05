@@ -60,6 +60,7 @@ class FinanceTools:
         external_id: str | None = None,
         account_id: str = "default",
         occurred_at: datetime | None = None,
+        telegram_chat_id: int | None = None,
     ) -> dict[str, Any]:
         """Log a transaction, atomically deduplicating imported records on PostgreSQL."""
         normalized_owner_type = owner_type.strip().lower()
@@ -83,6 +84,8 @@ class FinanceTools:
         normalized_description = description.strip() if description else None
         if normalized_description and len(normalized_description) > 500:
             raise ValueError("Description exceeds the maximum length of 500.")
+        if telegram_chat_id is not None and not isinstance(telegram_chat_id, int):
+            raise ValueError("telegram_chat_id must be an integer when provided.")
 
         timestamp = occurred_at or datetime.now(timezone.utc)
         if timestamp.tzinfo is None or timestamp.utcoffset() is None:
@@ -103,6 +106,7 @@ class FinanceTools:
             "source": normalized_source,
             "account_id": normalized_account_id,
             "external_id": normalized_external_id,
+            "telegram_chat_id": telegram_chat_id,
         }
 
         if normalized_external_id and session.get_bind().dialect.name == "postgresql":

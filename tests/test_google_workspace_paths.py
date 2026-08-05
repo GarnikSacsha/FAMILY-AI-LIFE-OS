@@ -601,6 +601,15 @@ async def test_worker_claim_mark_and_loop_paths(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_sheets_failure_notification_is_retryable_until_delivery():
+    bot = SimpleNamespace(send_message=AsyncMock(side_effect=[RuntimeError("telegram"), None]))
+
+    assert await worker_module._notify_failure(bot, -100123) is False
+    assert await worker_module._notify_failure(bot, -100123) is True
+    assert bot.send_message.await_count == 2
+
+
+@pytest.mark.asyncio
 async def test_google_telegram_commands_success_empty_and_access_errors():
     actor = _actor()
     google_message = _Message("/google reconnect")

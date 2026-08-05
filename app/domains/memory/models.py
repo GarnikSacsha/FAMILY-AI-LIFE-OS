@@ -81,6 +81,50 @@ class SharedConversationMessage(Base, TimestampMixin):
     )
 
 
+class SharedConversationMessageRetry(Base, TimestampMixin):
+    """Durable retry outbox for an assistant reply already delivered by Telegram."""
+
+    __tablename__ = "shared_conversation_message_retries"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'processing', 'delivered')",
+            name="ck_shared_conversation_message_retries_status",
+        ),
+        UniqueConstraint(
+            "telegram_chat_id",
+            "telegram_message_id",
+            name="uq_shared_conversation_message_retries_telegram_identity",
+        ),
+        Index(
+            "ix_shared_conversation_message_retries_due",
+            "status",
+            "next_attempt_at",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    household_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("households.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    telegram_chat_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+    telegram_message_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    author_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    message_type: Mapped[str] = mapped_column(String(20), nullable=False, default="text")
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(20),
+        default="pending",
+        server_default="pending",
+        nullable=False,
+    )
+    attempt_count: Mapped[int] = mapped_column(default=0, server_default="0", nullable=False)
+    next_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[str | None] = mapped_column(String(100))
+
+
 class SharedMemoryItem(Base, TimestampMixin):
     """A structured fact or open loop extracted only from the shared chat."""
 
@@ -217,3 +261,60 @@ class PendingSharedAction(Base, TimestampMixin):
         nullable=False,
     )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class PendingConfirmation(Base, TimestampMixin):
+    """One-shot confirmation for a financial or destructive operation."""
+
+    __tablename__ = "pending_confirmations"
+    __table_args__ = (
+        CheckConstraint(
+            "action_type IN ('finance_log', 'calendar_delete', 'memory_dismiss')",
+            name="ck_pending_confirmations_type",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'executing', 'completed', 'cancelled', 'expired', 'failed')",
+            name="ck_pending_confirmations_status",
+        ),
+        UniqueConstraint("confirmation_code", name="uq_pending_confirmations_code"),
+        UniqueConstraint(
+            "household_id",
+            "telegram_chat_id",
+            "initiated_by_user_id",
+            "request_key",
+            name="uq_pending_confirmations_request",
+        ),
+        Index(
+            "ix_pending_confirmations_lookup",
+            "household_id",
+            "telegram_chat_id",
+            "initiated_by_user_id",
+            "status",
+            "expires_at",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    household_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("households.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    telegram_chat_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+    initiated_by_user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    action_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    payload: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    confirmation_code: Mapped[str] = mapped_column(String(32), nullable=False)
+    request_key: Mapped[str] = mapped_column(String(200), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(20),
+        default="pending",
+        server_default="pending",
+        nullable=False,
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    executed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[str | None] = mapped_column(String(100))
