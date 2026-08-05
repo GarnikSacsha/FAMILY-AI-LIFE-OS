@@ -11,7 +11,7 @@ from app.api.oauth import google_oauth_callback
 from app.config.settings import settings
 from app.infrastructure.integrations.google_sheets_worker import TransactionSyncItem
 from app.integrations.google.oauth import GoogleOAuthClient
-from app.integrations.google.sheets import MONTHLY_BUDGET_HEADERS, GoogleSheetsClient
+from app.integrations.google.sheets import MONTHLY_BUDGET_HEADERS, MONTHLY_TEMPLATE_VERSION, GoogleSheetsClient
 from app.security.token_cipher import TokenCipher
 from app.tools.google_tools import GoogleWorkspaceTools
 
@@ -169,7 +169,7 @@ def test_monthly_budget_category_mapping_and_projection_key(monkeypatch):
     assert GoogleSheetsClient.monthly_budget_category("Pets") == "Булка / Долли"
     assert GoogleSheetsClient.monthly_budget_category("Restaurants") == "Продукты"
     assert GoogleSheetsClient.monthly_budget_category("Uncategorized") == "Другое"
-    assert GoogleSheetsClient.projection_key() == "monthly_budget:monthly-sheet:0:2026-08"
+    assert GoogleSheetsClient.projection_key() == f"monthly_budget:monthly-sheet:0:2026-08:{MONTHLY_TEMPLATE_VERSION}"
 
 
 @pytest.mark.asyncio
@@ -242,7 +242,7 @@ async def test_monthly_budget_projection_replay_does_not_append_twice(monkeypatc
         side_effect=[
             metadata,
             metadata,
-            {"values": [["monthly_budget/v1", "2026-08"]]},
+            {"values": [[MONTHLY_TEMPLATE_VERSION, "2026-08"]]},
             {"values": [["transaction_id"], [transaction_id]]},
         ]
     )

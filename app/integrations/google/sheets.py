@@ -18,7 +18,10 @@ logger = logging.getLogger(__name__)
 
 SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets"
 MONTHLY_RECEIPTS_SHEET = "__family_ai_sync_receipts"
-MONTHLY_TEMPLATE_VERSION = "monthly_budget/v1"
+# Bumping this re-applies visible formulas and safely replays receipts after a
+# template-level correction. Receipt IDs remain immutable, so replayed rows do
+# not change financial totals twice.
+MONTHLY_TEMPLATE_VERSION = "monthly_budget/v2"
 KYIV_TIMEZONE = ZoneInfo("Europe/Kyiv")
 MONTHLY_BUDGET_HEADERS = (
     "Продукты",
@@ -140,7 +143,10 @@ class GoogleSheetsClient:
         spreadsheet_id = (settings.GOOGLE_SHEETS_SPREADSHEET_ID or "").strip()
         if settings.GOOGLE_SHEETS_LAYOUT == "monthly_budget":
             period = settings.GOOGLE_SHEETS_PERIOD or ""
-            return f"monthly_budget:{spreadsheet_id}:{settings.GOOGLE_SHEETS_MONTHLY_SHEET_ID}:{period}"
+            return (
+                f"monthly_budget:{spreadsheet_id}:{settings.GOOGLE_SHEETS_MONTHLY_SHEET_ID}:"
+                f"{period}:{MONTHLY_TEMPLATE_VERSION}"
+            )
         return f"ledger:{spreadsheet_id}:{settings.GOOGLE_SHEETS_RANGE.strip()}"
 
     @classmethod
