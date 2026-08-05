@@ -21,7 +21,7 @@ MONTHLY_RECEIPTS_SHEET = "__family_ai_sync_receipts"
 # Bumping this re-applies visible formulas and safely replays receipts after a
 # template-level correction. Receipt IDs remain immutable, so replayed rows do
 # not change financial totals twice.
-MONTHLY_TEMPLATE_VERSION = "monthly_budget/v3"
+MONTHLY_TEMPLATE_VERSION = "monthly_budget/v4"
 KYIV_TIMEZONE = ZoneInfo("Europe/Kyiv")
 MONTHLY_BUDGET_HEADERS = (
     "Продукты",
@@ -381,15 +381,11 @@ class GoogleSheetsClient:
     @classmethod
     def _monthly_grid_formulas(cls, period: str) -> list[list[str]]:
         receipts = cls._a1_range(MONTHLY_RECEIPTS_SHEET, "$A:$E").split("!", maxsplit=1)[0]
-        year, month = (int(part) for part in period.split("-", maxsplit=1))
         formulas = []
         for _day in range(31):
             row = []
             for column in "BCDEFGHIJK":
-                row.append(
-                    f"=IFERROR(SUMIFS({receipts}!$D:$D;{receipts}!$B:$B;ROW()-2;"
-                    f"{receipts}!$C:$C;{column}$2;{receipts}!$E:$E;DATE({year};{month};1));0)"
-                )
+                row.append(f"=IFERROR(SUMIFS({receipts}!$D:$D;{receipts}!$B:$B;ROW()-2;{receipts}!$C:$C;{column}$2);0)")
             formulas.append(row)
         return formulas
 
