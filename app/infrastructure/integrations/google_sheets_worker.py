@@ -105,10 +105,7 @@ async def _claim_next_transaction() -> TransactionSyncItem | None:
         transaction = result.scalar_one_or_none()
         if transaction is None:
             return None
-        if (
-            settings.GOOGLE_SHEETS_LAYOUT == "monthly_budget"
-            and transaction.sheets_projection_key != projection_key
-        ):
+        if settings.GOOGLE_SHEETS_LAYOUT == "monthly_budget" and transaction.sheets_projection_key != projection_key:
             transaction.sheets_sync_attempts = 0
         transaction.sheets_sync_status = "syncing"
         transaction.sheets_sync_attempts += 1
@@ -155,9 +152,7 @@ async def _mark_synced(transaction_id: uuid.UUID, updated_range: str, *, project
         values["sheets_projection_key"] = projection_key[:255]
     async with AsyncSessionLocal.begin() as session:
         await session.execute(
-            update(FinancialTransaction)
-            .where(FinancialTransaction.id == transaction_id)
-            .values(**values)
+            update(FinancialTransaction).where(FinancialTransaction.id == transaction_id).values(**values)
         )
 
 
