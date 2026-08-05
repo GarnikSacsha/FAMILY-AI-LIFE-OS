@@ -43,6 +43,11 @@ class FinancialTransaction(Base, TimestampMixin):
             "sheets_sync_status",
             "created_at",
         ),
+        Index(
+            "ix_financial_transactions_sheets_due",
+            "sheets_sync_status",
+            "sheets_next_attempt_at",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
