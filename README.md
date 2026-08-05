@@ -46,6 +46,15 @@ marked `synced` only after Google reports an inserted row and a follow-up read
 finds its stable transaction ID. Set `GOOGLE_SHEETS_RANGE` to a named worksheet
 range such as `Расходы!A:I` when the spreadsheet has multiple tabs.
 
+For the day/category monthly template, set `GOOGLE_SHEETS_LAYOUT=monthly_budget`,
+`GOOGLE_SHEETS_PERIOD=YYYY-MM`, and `GOOGLE_SHEETS_MONTHLY_SHEET_ID=0`. This mode
+only projects UAH expenses in the chosen Kyiv calendar month. It creates a hidden
+`__family_ai_sync_receipts` worksheet with transaction IDs and drives the visible
+grid with formulas, so a retry cannot increase a total twice. The visible headers
+must remain: Products, Apartment/monthly payments, Medicine, Clothing, Rest,
+Care/sport, Transport, Household, Bulka/Dolli, and Other (in the configured
+template language).
+
 ---
 
 ## 🏗 System Architecture

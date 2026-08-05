@@ -81,4 +81,5 @@ class FinancialTransaction(Base, TimestampMixin):
     sheets_failure_notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     sheets_sync_error: Mapped[str | None] = mapped_column(String(100))
     sheets_updated_range: Mapped[str | None] = mapped_column(String(255))
+    sheets_projection_key: Mapped[str | None] = mapped_column(String(255))
     telegram_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)

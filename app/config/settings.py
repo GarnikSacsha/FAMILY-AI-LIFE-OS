@@ -1,5 +1,6 @@
 import base64
 import binascii
+from datetime import datetime
 from typing import Literal
 
 from pydantic import AliasChoices, Field, SecretStr, field_validator, model_validator
@@ -82,6 +83,12 @@ class Settings(BaseSettings):
     GOOGLE_CREDENTIALS_JSON_PATH: str | None = None
     GOOGLE_CREDENTIALS_JSON: SecretStr | None = None
     GOOGLE_SHEETS_RANGE: str = "A:I"
+    # "ledger" preserves the original append-only projection. "monthly_budget"
+    # projects UAH expenses into the configured month grid and keeps a hidden
+    # idempotency ledger in the same spreadsheet.
+    GOOGLE_SHEETS_LAYOUT: Literal["ledger", "monthly_budget"] = "ledger"
+    GOOGLE_SHEETS_PERIOD: str | None = None
+    GOOGLE_SHEETS_MONTHLY_SHEET_ID: int = 0
     GOOGLE_SHEETS_OPERATION_TIMEOUT_SECONDS: float = 45.0
 
     # Shared family-chat memory and proactive summaries
@@ -153,6 +160,20 @@ class Settings(BaseSettings):
             raise ValueError("GOOGLE_SHEETS_OPERATION_TIMEOUT_SECONDS must be between 5 and 300.")
         return value
 
+    @field_validator("GOOGLE_SHEETS_PERIOD")
+    @classmethod
+    def validate_sheets_period(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        period = value.strip()
+        try:
+            parsed = datetime.strptime(period, "%Y-%m")
+        except ValueError as exc:
+            raise ValueError("GOOGLE_SHEETS_PERIOD must use YYYY-MM.") from exc
+        if parsed.strftime("%Y-%m") != period:
+            raise ValueError("GOOGLE_SHEETS_PERIOD must use YYYY-MM.")
+        return period
+
     @field_validator("CHAT_SUMMARY_POLL_SECONDS")
     @classmethod
     def validate_summary_poll_seconds(cls, value: float) -> float:
@@ -176,6 +197,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_production_configuration(self) -> "Settings":
+        if self.GOOGLE_SHEETS_LAYOUT == "monthly_budget" and self.GOOGLE_SHEETS_PERIOD is None:
+            raise ValueError("GOOGLE_SHEETS_PERIOD is required for the monthly_budget layout.")
         if self.ENVIRONMENT != "production":
             return self
 

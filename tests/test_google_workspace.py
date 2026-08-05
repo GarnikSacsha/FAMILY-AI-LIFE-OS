@@ -11,7 +11,7 @@ from app.api.oauth import google_oauth_callback
 from app.config.settings import settings
 from app.infrastructure.integrations.google_sheets_worker import TransactionSyncItem
 from app.integrations.google.oauth import GoogleOAuthClient
-from app.integrations.google.sheets import GoogleSheetsClient
+from app.integrations.google.sheets import MONTHLY_BUDGET_HEADERS, GoogleSheetsClient
 from app.security.token_cipher import TokenCipher
 from app.tools.google_tools import GoogleWorkspaceTools
 
@@ -158,6 +158,106 @@ async def test_sheets_append_adds_new_transaction(monkeypatch):
     assert request.await_count == 3
     assert request.await_args_list[1].args[0] == "POST"
     assert request.await_args_list[1].kwargs["json_body"]["values"] == [row]
+
+
+def test_monthly_budget_category_mapping_and_projection_key(monkeypatch):
+    monkeypatch.setattr(settings, "GOOGLE_SHEETS_SPREADSHEET_ID", "monthly-sheet")
+    monkeypatch.setattr(settings, "GOOGLE_SHEETS_LAYOUT", "monthly_budget")
+    monkeypatch.setattr(settings, "GOOGLE_SHEETS_PERIOD", "2026-08")
+    monkeypatch.setattr(settings, "GOOGLE_SHEETS_MONTHLY_SHEET_ID", 0)
+
+    assert GoogleSheetsClient.monthly_budget_category("Pets") == "Булка / Долли"
+    assert GoogleSheetsClient.monthly_budget_category("Restaurants") == "Продукты"
+    assert GoogleSheetsClient.monthly_budget_category("Uncategorized") == "Другое"
+    assert GoogleSheetsClient.projection_key() == "monthly_budget:monthly-sheet:0:2026-08"
+
+
+@pytest.mark.asyncio
+async def test_monthly_budget_projection_sets_formulas_and_verifies_receipt(monkeypatch):
+    monkeypatch.setattr(settings, "GOOGLE_SHEETS_SPREADSHEET_ID", "monthly-sheet")
+    monkeypatch.setattr(settings, "GOOGLE_SHEETS_LAYOUT", "monthly_budget")
+    monkeypatch.setattr(settings, "GOOGLE_SHEETS_PERIOD", "2026-08")
+    monkeypatch.setattr(settings, "GOOGLE_SHEETS_MONTHLY_SHEET_ID", 0)
+    transaction_id = str(uuid.uuid4())
+    metadata = {
+        "sheets": [
+            {"properties": {"sheetId": 0, "title": "Расходы", "hidden": False}},
+            {"properties": {"sheetId": 9, "title": "__family_ai_sync_receipts", "hidden": True}},
+        ]
+    }
+    request = AsyncMock(
+        side_effect=[
+            metadata,
+            metadata,
+            {"values": []},
+            {"values": [list(MONTHLY_BUDGET_HEADERS)]},
+            {"totalUpdatedCells": 317},
+            {"values": [["transaction_id", "day", "category", "amount", "period"]]},
+            {"updates": {"updatedRows": 1, "updatedRange": "__family_ai_sync_receipts!A2:E2"}},
+            {
+                "values": [
+                    ["transaction_id", "day", "category", "amount", "period"],
+                    [transaction_id, "5", "Продукты", "120.50", "2026-08"],
+                ]
+            },
+        ]
+    )
+
+    with (
+        patch.object(GoogleSheetsClient, "_access_token", new=AsyncMock(return_value="token")),
+        patch.object(GoogleSheetsClient, "_request", new=request),
+    ):
+        updated_range = await GoogleSheetsClient.project_monthly_budget_expense(
+            transaction_id=transaction_id,
+            occurred_at=datetime(2026, 8, 5, 12, tzinfo=timezone.utc),
+            category="Restaurants",
+            amount="120.50",
+        )
+
+    assert updated_range == "__family_ai_sync_receipts!A2:E2"
+    template_update = request.await_args_list[4].kwargs["json_body"]
+    assert template_update["data"][0]["range"] == "'Расходы'!B3:K33"
+    assert len(template_update["data"][0]["values"]) == 31
+    assert "SUMIFS" in template_update["data"][0]["values"][0][0]
+    assert "K$2" in template_update["data"][0]["values"][0][-1]
+    append = request.await_args_list[6].kwargs["json_body"]
+    assert append["values"] == [[transaction_id, "5", "Продукты", "120.50", "2026-08"]]
+
+
+@pytest.mark.asyncio
+async def test_monthly_budget_projection_replay_does_not_append_twice(monkeypatch):
+    monkeypatch.setattr(settings, "GOOGLE_SHEETS_SPREADSHEET_ID", "monthly-sheet")
+    monkeypatch.setattr(settings, "GOOGLE_SHEETS_LAYOUT", "monthly_budget")
+    monkeypatch.setattr(settings, "GOOGLE_SHEETS_PERIOD", "2026-08")
+    transaction_id = str(uuid.uuid4())
+    metadata = {
+        "sheets": [
+            {"properties": {"sheetId": 0, "title": "Расходы", "hidden": False}},
+            {"properties": {"sheetId": 9, "title": "__family_ai_sync_receipts", "hidden": True}},
+        ]
+    }
+    request = AsyncMock(
+        side_effect=[
+            metadata,
+            metadata,
+            {"values": [["monthly_budget/v1", "2026-08"]]},
+            {"values": [["transaction_id"], [transaction_id]]},
+        ]
+    )
+
+    with (
+        patch.object(GoogleSheetsClient, "_access_token", new=AsyncMock(return_value="token")),
+        patch.object(GoogleSheetsClient, "_request", new=request),
+    ):
+        updated_range = await GoogleSheetsClient.project_monthly_budget_expense(
+            transaction_id=transaction_id,
+            occurred_at=datetime(2026, 8, 5, 12, tzinfo=timezone.utc),
+            category="Groceries",
+            amount="10",
+        )
+
+    assert updated_range == "__family_ai_sync_receipts!A:A"
+    assert all(call.args[0] == "GET" for call in request.await_args_list)
 
 
 def test_sheet_worker_row_has_stable_transaction_identity():

@@ -124,3 +124,29 @@ def test_google_oauth_requires_complete_https_configuration_in_production():
         GOOGLE_OAUTH_REDIRECT_URI="https://family.example.com/oauth/google/callback",
     )
     assert str(configured.GOOGLE_OAUTH_CLIENT_SECRET) == "**********"
+
+
+def test_monthly_sheets_layout_requires_a_canonical_period():
+    with pytest.raises(ValidationError, match="GOOGLE_SHEETS_PERIOD"):
+        Settings(
+            ENVIRONMENT="test",
+            GOOGLE_SHEETS_LAYOUT="monthly_budget",
+            GOOGLE_SHEETS_PERIOD=None,
+            _env_file=None,
+        )
+
+    with pytest.raises(ValidationError, match="YYYY-MM"):
+        Settings(
+            ENVIRONMENT="test",
+            GOOGLE_SHEETS_LAYOUT="monthly_budget",
+            GOOGLE_SHEETS_PERIOD="2026-8",
+            _env_file=None,
+        )
+
+    configured = Settings(
+        ENVIRONMENT="test",
+        GOOGLE_SHEETS_LAYOUT="monthly_budget",
+        GOOGLE_SHEETS_PERIOD="2026-08",
+        _env_file=None,
+    )
+    assert configured.GOOGLE_SHEETS_PERIOD == "2026-08"
