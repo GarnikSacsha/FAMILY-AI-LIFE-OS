@@ -38,6 +38,12 @@ class MainOrchestrator:
         r"(?P<amount>\d+(?:[.,]\d{1,2})?)\s*(?:грн(?:\.|ивен|ивні)?|uah|₴)\b",
         re.IGNORECASE,
     )
+    _EXPENSE_LINE = re.compile(
+        r"^\s*(?P<amount>\d+(?:[.,]\d{1,2})?)\s*"
+        r"(?:(?P<currency>грн(?:\.|ивен|ивні)?|uah|₴)(?=\s|$))?\s+"
+        r"(?P<merchant>.+?)\s*$",
+        re.IGNORECASE,
+    )
     _EXPENSE_PREFIX = re.compile(
         r"\b(?:запиши|записать|добавь|добавить|пожалуйста|"
         r"мои|наши|траты|расходы|сегодняшние|сегодня|за)\b",
@@ -49,6 +55,7 @@ class MainOrchestrator:
         "Transport": "Транспорт",
         "Restaurants": "Кафе и рестораны",
         "Shopping": "Покупки",
+        "Sports": "Спорт",
         "Health": "Здоровье",
         "Pets": "Питомцы",
         "Utilities": "Коммунальные услуги",
@@ -207,9 +214,40 @@ class MainOrchestrator:
         merchant_source = message_text[: amount_match.start()].strip(" \t\n,;:—-")
         merchant_parts = [part.strip() for part in re.split(r"[,;:\n]", merchant_source) if part.strip()]
         merchant = merchant_parts[-1] if merchant_parts else merchant_source
-        merchant = cls._EXPENSE_PREFIX.sub(" ", merchant)
-        merchant = " ".join(merchant.split()).strip(" \t\n,;:—-")
+        merchant = cls._clean_expense_merchant(merchant)
         return amount, merchant or "Расход"
+
+    @classmethod
+    def _clean_expense_merchant(cls, merchant: str) -> str:
+        merchant = cls._EXPENSE_PREFIX.sub(" ", merchant)
+        return " ".join(merchant.split()).strip(" \t\n,;:—-")
+
+    @classmethod
+    def _extract_expenses(cls, message_text: str) -> list[tuple[float, str]]:
+        """Extract one expense per line while preserving the legacy single-line format."""
+        lines = [line.strip() for line in message_text.splitlines() if line.strip()]
+        if not lines:
+            return []
+
+        has_explicit_currency = cls._EXPENSE_AMOUNT.search(message_text) is not None
+        expenses: list[tuple[float, str]] = []
+        for line in lines:
+            line_match = cls._EXPENSE_LINE.match(line)
+            if line_match is not None and (line_match.group("currency") or has_explicit_currency):
+                amount = float(line_match.group("amount").replace(",", "."))
+                merchant = cls._clean_expense_merchant(line_match.group("merchant"))
+                if merchant:
+                    expenses.append((amount, merchant))
+                    continue
+
+            legacy_expense = cls._extract_expense(line)
+            if legacy_expense is not None:
+                expenses.append(legacy_expense)
+
+        if expenses:
+            return expenses
+        legacy_expense = cls._extract_expense(message_text)
+        return [legacy_expense] if legacy_expense is not None else []
 
     @staticmethod
     def _named_expense_query(message_text: str) -> str | None:
@@ -844,6 +882,7 @@ class MainOrchestrator:
         document_bytes: bytes | None = None,
         timezone_name: str = "Europe/Kyiv",
         telegram_chat_id: int | None = None,
+        telegram_message_id: int | None = None,
         shared_context_enabled: bool = False,
         pending_actions_enabled: bool | None = None,
     ) -> str:
@@ -1218,27 +1257,54 @@ class MainOrchestrator:
                     casual=casual,
                 )
 
-            expense = cls._extract_expense(message_text)
-            if expense is not None:
+            expenses = cls._extract_expenses(message_text)
+            if expenses:
                 from app.agents.finance.agent import FinanceAgent
 
-                amount, merchant = expense
-                result = await FinanceAgent().categorize_and_log_transaction(
-                    session=session,
-                    owner_type="household",
-                    owner_id=household_id,
-                    amount=amount,
-                    merchant=merchant,
-                    description=message_text,
-                )
-                if result.get("status") == "SUCCESS":
+                transaction_results: list[dict[str, object]] = []
+                for line_number, (amount, merchant) in enumerate(expenses, start=1):
+                    external_id = None
+                    if telegram_chat_id is not None and telegram_message_id is not None:
+                        external_id = f"telegram:{telegram_chat_id}:{telegram_message_id}:expense:{line_number}"
+                    transaction_results.append(
+                        await FinanceAgent().categorize_and_log_transaction(
+                            session=session,
+                            owner_type="household",
+                            owner_id=household_id,
+                            amount=amount,
+                            merchant=merchant,
+                            description=message_text if len(expenses) == 1 else merchant,
+                            external_id=external_id,
+                        )
+                    )
+
+                successful = [
+                    transaction_result
+                    for transaction_result in transaction_results
+                    if transaction_result.get("status") == "SUCCESS"
+                ]
+                if successful and len(expenses) == 1:
+                    single_result = successful[0]
                     return (
-                        f"💳 Записал расход: **{result['amount']} {result['currency']}** — "
-                        f"**{result['merchant']}** ({result['category']}).\n"
+                        f"💳 Записал расход: **{single_result['amount']} {single_result['currency']}** — "
+                        f"**{single_result['merchant']}** ({single_result['category']}).\n"
                         "Синхронизация с Google Sheets поставлена в очередь."
                     )
-                if result.get("status") == "DUPLICATE":
-                    return "💳 Этот расход уже был записан ранее."
+                if successful:
+                    lines = [
+                        f"• **{transaction_result['amount']} {transaction_result['currency']}** — "
+                        f"**{transaction_result['merchant']}** ({transaction_result['category']})"
+                        for transaction_result in successful
+                    ]
+                    return (
+                        "💳 Записал расходы:\n"
+                        + "\n".join(lines)
+                        + "\nСинхронизация с Google Sheets поставлена в очередь."
+                    )
+                if transaction_results and all(
+                    result.get("status") == "DUPLICATE" for result in transaction_results
+                ):
+                    return "💳 Эти расходы уже были записаны ранее."
 
             if "таблиц" in message_text.lower() or "google sheet" in message_text.lower():
                 sync = await FinanceTools.get_latest_sheet_sync_status(

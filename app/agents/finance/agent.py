@@ -9,7 +9,9 @@ from app.tools.finance_tools import FinanceTools
 
 
 class CategorySchema(BaseModel):
-    category: str = Field(description="Expense category e.g. Restaurants, Groceries, Transport, Health, Utilities")
+    category: str = Field(
+        description="Expense category e.g. Restaurants, Groceries, Transport, Health, Utilities, Sports"
+    )
     subcategory: str | None = Field(description="Specific subcategory")
     confidence: float = Field(description="Confidence rating from 0.0 to 1.0")
 
@@ -25,12 +27,13 @@ class FinanceAgent:
         normalized = f"{merchant} {description}".lower()
         rules = (
             ("Pets", ("корм", "ветеринар", "зоомагаз", "кот", "собак")),
-            ("Entertainment", ("отдых", "кино", "игр", "развлеч", "концерт")),
-            ("Groceries", ("продукт", "супермаркет", "рынок", "базар", "еда")),
+            ("Entertainment", ("відпочинок", "отдых", "кино", "ігр", "игр", "развлеч", "концерт")),
+            ("Groceries", ("продукт", "супермаркет", "ринок", "рынок", "базар", "їжа", "еда")),
             ("Restaurants", ("кафе", "ресторан", "доставка", "кофе", "пицц")),
-            ("Transport", ("такси", "бензин", "топливо", "проезд", "парков")),
-            ("Health", ("аптек", "врач", "лекар", "анализ")),
-            ("Utilities", ("коммун", "свет", "газ", "вода", "интернет")),
+            ("Transport", ("транспорт", "таксі", "такси", "бензин", "паливо", "топливо", "проїзд", "проезд", "парков")),
+            ("Health", ("здоров", "аптек", "лікар", "врач", "лекар", "аналіз", "анализ")),
+            ("Utilities", ("рахунк", "коммун", "комун", "моб", "світ", "свет", "газ", "вод", "інтернет", "интернет")),
+            ("Sports", ("спорт", "тренув", "тренир", "фітнес", "фитнес", "gym", "зал")),
         )
         for category, terms in rules:
             if any(term in normalized for term in terms):
@@ -45,6 +48,7 @@ class FinanceAgent:
         amount: float,
         merchant: str,
         description: str = "",
+        external_id: str | None = None,
     ) -> dict[str, Any]:
         """Uses Gemini to intelligently categorize an expense, then logs it via FinanceTools."""
         prompt = (
@@ -63,6 +67,7 @@ class FinanceAgent:
             "Pets",
             "Restaurants",
             "Shopping",
+            "Sports",
             "Transport",
             "Utilities",
         }
@@ -81,6 +86,7 @@ class FinanceAgent:
             merchant=merchant,
             category=category,
             description=description,
+            external_id=external_id,
         )
 
         return result

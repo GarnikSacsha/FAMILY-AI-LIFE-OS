@@ -517,6 +517,7 @@ async def handle_user_message(message: types.Message) -> None:
                 photo_bytes=photo_bytes,
                 timezone_name=actor.timezone,
                 telegram_chat_id=actor.chat_id,
+                telegram_message_id=getattr(message, "message_id", None),
                 shared_context_enabled=shared_context_enabled,
                 pending_actions_enabled=True,
             )
