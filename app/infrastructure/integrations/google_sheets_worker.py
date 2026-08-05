@@ -3,6 +3,7 @@ import logging
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from aiogram import Bot
 from sqlalchemy import and_, or_, select, update
@@ -17,6 +18,7 @@ logger = logging.getLogger(__name__)
 GOOGLE_SHEETS_POLL_SECONDS = 5.0
 GOOGLE_SHEETS_MAX_ATTEMPTS = 10
 GOOGLE_SHEETS_LEASE_MARGIN_SECONDS = 30
+KYIV_TIMEZONE = ZoneInfo("Europe/Kyiv")
 
 
 @dataclass(frozen=True)
@@ -53,26 +55,49 @@ async def _claim_next_transaction() -> TransactionSyncItem | None:
         int(settings.GOOGLE_SHEETS_OPERATION_TIMEOUT_SECONDS) + GOOGLE_SHEETS_LEASE_MARGIN_SECONDS,
     )
     stale_before = current - timedelta(seconds=lease_seconds)
+    projection_key = GoogleSheetsClient.projection_key()
+    state_is_retryable = or_(
+        FinancialTransaction.sheets_sync_status == "pending",
+        and_(
+            FinancialTransaction.sheets_sync_status == "failed",
+            or_(
+                FinancialTransaction.sheets_next_attempt_at.is_(None),
+                FinancialTransaction.sheets_next_attempt_at <= current,
+            ),
+        ),
+        and_(
+            FinancialTransaction.sheets_sync_status == "syncing",
+            FinancialTransaction.sheets_sync_started_at <= stale_before,
+        ),
+    )
+    target_mismatch = or_(
+        FinancialTransaction.sheets_projection_key.is_(None),
+        FinancialTransaction.sheets_projection_key != projection_key,
+    )
+    conditions = [state_is_retryable, FinancialTransaction.sheets_sync_attempts < GOOGLE_SHEETS_MAX_ATTEMPTS]
+    if settings.GOOGLE_SHEETS_LAYOUT == "monthly_budget":
+        period_start, period_end = _monthly_period_bounds()
+        conditions = [
+            or_(
+                state_is_retryable,
+                and_(
+                    FinancialTransaction.sheets_sync_status == "synced",
+                    target_mismatch,
+                ),
+            ),
+            or_(
+                FinancialTransaction.sheets_sync_attempts < GOOGLE_SHEETS_MAX_ATTEMPTS,
+                target_mismatch,
+            ),
+            FinancialTransaction.direction == "expense",
+            FinancialTransaction.currency == "UAH",
+            FinancialTransaction.occurred_at >= period_start,
+            FinancialTransaction.occurred_at < period_end,
+        ]
     async with AsyncSessionLocal.begin() as session:
         result = await session.execute(
             select(FinancialTransaction)
-            .where(
-                or_(
-                    FinancialTransaction.sheets_sync_status == "pending",
-                    and_(
-                        FinancialTransaction.sheets_sync_status == "failed",
-                        or_(
-                            FinancialTransaction.sheets_next_attempt_at.is_(None),
-                            FinancialTransaction.sheets_next_attempt_at <= current,
-                        ),
-                    ),
-                    and_(
-                        FinancialTransaction.sheets_sync_status == "syncing",
-                        FinancialTransaction.sheets_sync_started_at <= stale_before,
-                    ),
-                ),
-                FinancialTransaction.sheets_sync_attempts < GOOGLE_SHEETS_MAX_ATTEMPTS,
-            )
+            .where(*conditions)
             .order_by(FinancialTransaction.created_at, FinancialTransaction.id)
             .with_for_update(skip_locked=True)
             .limit(1)
@@ -80,6 +105,8 @@ async def _claim_next_transaction() -> TransactionSyncItem | None:
         transaction = result.scalar_one_or_none()
         if transaction is None:
             return None
+        if settings.GOOGLE_SHEETS_LAYOUT == "monthly_budget" and transaction.sheets_projection_key != projection_key:
+            transaction.sheets_sync_attempts = 0
         transaction.sheets_sync_status = "syncing"
         transaction.sheets_sync_attempts += 1
         transaction.sheets_sync_started_at = current
@@ -99,19 +126,33 @@ async def _claim_next_transaction() -> TransactionSyncItem | None:
         )
 
 
-async def _mark_synced(transaction_id: uuid.UUID, updated_range: str) -> None:
+def _monthly_period_bounds() -> tuple[datetime, datetime]:
+    period = settings.GOOGLE_SHEETS_PERIOD
+    if period is None:
+        raise ValueError("GOOGLE_SHEETS_PERIOD is required for the monthly_budget layout.")
+    year, month = (int(part) for part in period.split("-", maxsplit=1))
+    period_start = datetime(year, month, 1, tzinfo=KYIV_TIMEZONE)
+    if month == 12:
+        period_end = datetime(year + 1, 1, 1, tzinfo=KYIV_TIMEZONE)
+    else:
+        period_end = datetime(year, month + 1, 1, tzinfo=KYIV_TIMEZONE)
+    return period_start.astimezone(timezone.utc), period_end.astimezone(timezone.utc)
+
+
+async def _mark_synced(transaction_id: uuid.UUID, updated_range: str, *, projection_key: str | None = None) -> None:
+    values: dict[str, object] = {
+        "sheets_sync_status": "synced",
+        "sheets_synced_at": datetime.now(timezone.utc),
+        "sheets_sync_started_at": None,
+        "sheets_next_attempt_at": None,
+        "sheets_sync_error": None,
+        "sheets_updated_range": updated_range[:255],
+    }
+    if projection_key is not None:
+        values["sheets_projection_key"] = projection_key[:255]
     async with AsyncSessionLocal.begin() as session:
         await session.execute(
-            update(FinancialTransaction)
-            .where(FinancialTransaction.id == transaction_id)
-            .values(
-                sheets_sync_status="synced",
-                sheets_synced_at=datetime.now(timezone.utc),
-                sheets_sync_started_at=None,
-                sheets_next_attempt_at=None,
-                sheets_sync_error=None,
-                sheets_updated_range=updated_range[:255],
-            )
+            update(FinancialTransaction).where(FinancialTransaction.id == transaction_id).values(**values)
         )
 
 
@@ -176,7 +217,16 @@ async def run_google_sheets_worker(bot_instance: Bot | None = None) -> None:
             await asyncio.sleep(GOOGLE_SHEETS_POLL_SECONDS)
             continue
         try:
-            updated_range = await GoogleSheetsClient.append_transaction(item.as_sheet_row())
+            projection_key = GoogleSheetsClient.projection_key()
+            if settings.GOOGLE_SHEETS_LAYOUT == "monthly_budget":
+                updated_range = await GoogleSheetsClient.project_monthly_budget_expense(
+                    transaction_id=str(item.id),
+                    occurred_at=item.occurred_at,
+                    category=item.category,
+                    amount=item.amount,
+                )
+            else:
+                updated_range = await GoogleSheetsClient.append_transaction(item.as_sheet_row())
         except asyncio.CancelledError:
             raise
         except Exception as error:
@@ -190,4 +240,7 @@ async def run_google_sheets_worker(bot_instance: Bot | None = None) -> None:
                 if await _notify_failure(bot_instance, telegram_chat_id):
                     await _mark_failure_notification_sent(item.id)
         else:
-            await _mark_synced(item.id, updated_range)
+            if settings.GOOGLE_SHEETS_LAYOUT == "monthly_budget":
+                await _mark_synced(item.id, updated_range, projection_key=projection_key)
+            else:
+                await _mark_synced(item.id, updated_range)
