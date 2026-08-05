@@ -66,11 +66,7 @@ class SemanticCalendarPlan(BaseModel):
             missing.append("date")
         if self.event_time is None:
             missing.append("time")
-        if (
-            self.recurrence == "daily"
-            and self.recurrence_end_date is None
-            and not self.recurring_forever
-        ):
+        if self.recurrence == "daily" and self.recurrence_end_date is None and not self.recurring_forever:
             missing.append("recurrence_end")
         return missing
 
@@ -87,9 +83,7 @@ class SemanticCalendarPlan(BaseModel):
             "timezone_name": timezone_name,
             "recurrence": self.recurrence,
             "recurrence_end_date": (
-                self.recurrence_end_date.isoformat()
-                if self.recurrence_end_date is not None
-                else None
+                self.recurrence_end_date.isoformat() if self.recurrence_end_date is not None else None
             ),
             "recurring_forever": self.recurring_forever,
             "missing_fields": self.missing_fields,
@@ -167,10 +161,13 @@ def looks_like_planning_message(message_text: str, *, has_pending_action: bool =
         "груд",
     )
     has_clock = re.search(r"(?<!\d)(?:[01]?\d|2[0-3])[:.]([0-5]\d)(?!\d)", normalized) is not None
-    has_numeric_date = re.search(
-        r"(?<!\d)(?:0?[1-9]|[12]\d|3[01])[./-](?:0?[1-9]|1[0-2])(?:[./-]\d{2,4})?(?!\d)",
-        normalized,
-    ) is not None
+    has_numeric_date = (
+        re.search(
+            r"(?<!\d)(?:0?[1-9]|[12]\d|3[01])[./-](?:0?[1-9]|1[0-2])(?:[./-]\d{2,4})?(?!\d)",
+            normalized,
+        )
+        is not None
+    )
     return (
         any(marker in normalized for marker in planning_markers)
         or any(marker in normalized for marker in temporal_markers)

@@ -145,7 +145,9 @@ def classify_mail(message: dict[str, Any]) -> MailImportance | None:
         return MailImportance("Важное", "Письмо отмечено звездой в Gmail")
     if "IMPORTANT" in labels and not (promo or noise):
         return MailImportance("Важное", "Gmail пометил письмо как важное")
-    if financial and not (promo and not _contains_any(text, ("receipt", "invoice", "payment", "оплат", "списан", "транзакц"))):
+    if financial and not (
+        promo and not _contains_any(text, ("receipt", "invoice", "payment", "оплат", "списан", "транзакц"))
+    ):
         return MailImportance("Деньги", "Платёж, списание, счёт или банковская операция")
     if career and not (promo or noise):
         return MailImportance("Карьера", "Вакансия, рекрутер, отклик или собеседование")

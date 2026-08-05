@@ -376,11 +376,7 @@ class GoogleWorkspaceTools:
                 {
                     "id": recurring_event_id or event_id,
                     "summary": str(item.get("summary", "(без названия)")),
-                    "start": str(
-                        item.get("start", {}).get("dateTime")
-                        or item.get("start", {}).get("date")
-                        or ""
-                    ),
+                    "start": str(item.get("start", {}).get("dateTime") or item.get("start", {}).get("date") or ""),
                 }
             )
             if len(events) >= limit:

@@ -139,8 +139,7 @@ class GoogleSheetsClient:
         verified = await cls._request("GET", values_url, access_token=access_token)
         verified_rows = verified.get("values", [])
         if not isinstance(verified_rows, list) or not any(
-            isinstance(row, list) and len(row) >= 9 and str(row[8]) == transaction_id
-            for row in verified_rows
+            isinstance(row, list) and len(row) >= 9 and str(row[8]) == transaction_id for row in verified_rows
         ):
             raise GoogleSheetsError("Google Sheets row verification failed.")
         return str(updates["updatedRange"])

@@ -204,9 +204,7 @@ async def test_arbitrary_one_off_action_reaches_google_calendar_with_clean_title
     with patch.object(
         GoogleWorkspaceTools,
         "create_calendar_event",
-        new=AsyncMock(
-            return_value={"id": "event-dog-grooming", "summary": "отвести собаку на стрижку"}
-        ),
+        new=AsyncMock(return_value={"id": "event-dog-grooming", "summary": "отвести собаку на стрижку"}),
     ) as create_event:
         async with factory.begin() as session:
             response = await MainOrchestrator.process_user_message(
@@ -230,8 +228,7 @@ async def test_recurring_calendar_followup_keeps_context_when_time_is_missing() 
     engine, factory = await _memory_database()
     household_id, user_id = await _seed_family(factory)
     initial_message = (
-        "Запиши мне, пожалуйста, на каждый день, включая сегодняшний день, "
-        "что мне нужно проходить Learning Python"
+        "Запиши мне, пожалуйста, на каждый день, включая сегодняшний день, что мне нужно проходить Learning Python"
     )
 
     async with factory.begin() as session:

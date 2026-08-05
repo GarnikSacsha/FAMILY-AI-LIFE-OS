@@ -1,4 +1,4 @@
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 from zoneinfo import ZoneInfo
@@ -68,12 +68,13 @@ async def test_semantic_calendar_followup_merges_draft_and_creates_google_event(
     engine, factory = await _memory_database()
     household_id, user_id = await _seed_family(factory)
     chat_id = 123456789
+    event_date = datetime.now(ZoneInfo("Europe/Kyiv")).date() + timedelta(days=1)
     plans = [
         SemanticCalendarPlan(
             intent="calendar",
             is_new_request=True,
             title="Купить билеты на концерт",
-            event_date=date(2026, 8, 4),
+            event_date=event_date,
             event_time=None,
             recurrence="none",
             confidence=0.98,
@@ -82,7 +83,7 @@ async def test_semantic_calendar_followup_merges_draft_and_creates_google_event(
             intent="calendar",
             is_new_request=False,
             title="Купить билеты на концерт Дорофеевой",
-            event_date=date(2026, 8, 4),
+            event_date=event_date,
             event_time=time(10, 0),
             recurrence="none",
             confidence=0.99,
@@ -136,11 +137,9 @@ async def test_semantic_calendar_followup_merges_draft_and_creates_google_event(
     assert action.status == "completed"
     assert action.payload["title"] == "Купить билеты на концерт"
     assert create_event.await_args.kwargs["summary"] == "Купить билеты на концерт Дорофеевой"
-    assert create_event.await_args.kwargs["start_at"] == datetime(
-        2026,
-        8,
-        4,
-        10,
+    assert create_event.await_args.kwargs["start_at"] == datetime.combine(
+        event_date,
+        time(10, 0),
         tzinfo=ZoneInfo("Europe/Kyiv"),
     )
     await engine.dispose()
@@ -187,7 +186,5 @@ async def test_semantic_daily_task_uses_any_title_and_inclusive_end_date() -> No
             )
 
     assert create_event.await_args.kwargs["summary"] == "Читать книгу"
-    assert create_event.await_args.kwargs["recurrence"] == [
-        "RRULE:FREQ=DAILY;UNTIL=20260806T170000Z"
-    ]
+    assert create_event.await_args.kwargs["recurrence"] == ["RRULE:FREQ=DAILY;UNTIL=20260806T170000Z"]
     await engine.dispose()

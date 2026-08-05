@@ -16,9 +16,7 @@ from app.domains.memory.models import (
 )
 
 ALLOWED_MESSAGE_TYPES = frozenset({"text", "voice", "photo", "document", "other"})
-ALLOWED_MEMORY_KINDS = frozenset(
-    {"decision", "action", "money", "open_question", "fact", "preference", "suggestion"}
-)
+ALLOWED_MEMORY_KINDS = frozenset({"decision", "action", "money", "open_question", "fact", "preference", "suggestion"})
 
 
 def _utc(value: datetime) -> datetime:
@@ -192,11 +190,7 @@ class SharedMemoryTools:
             .limit(100)
         )
         items = list(result.scalars().all())
-        query_words = {
-            word
-            for word in re.findall(r"[a-zа-яіїєё0-9]+", query.casefold())
-            if len(word) >= 4
-        }
+        query_words = {word for word in re.findall(r"[a-zа-яіїєё0-9]+", query.casefold()) if len(word) >= 4}
         ranked: list[tuple[int, SharedMemoryItem]] = []
         for item in items:
             item_words = set(re.findall(r"[a-zа-яіїєё0-9]+", item.content.casefold()))
@@ -279,9 +273,7 @@ class SharedMemoryTools:
                 "time": start_at.strftime("%H:%M"),
                 "timezone_name": timezone_name,
                 "needs_time": needs_time,
-                "recurrence_end_date": (
-                    recurrence_end_date.isoformat() if recurrence_end_date is not None else None
-                ),
+                "recurrence_end_date": (recurrence_end_date.isoformat() if recurrence_end_date is not None else None),
             },
             expires_at=current + timedelta(hours=24),
         )
@@ -508,11 +500,7 @@ class SharedMemoryTools:
         if source_messages:
             await session.execute(
                 update(SharedConversationMessage)
-                .where(
-                    SharedConversationMessage.id.in_(
-                        [message.id for message in source_messages]
-                    )
-                )
+                .where(SharedConversationMessage.id.in_([message.id for message in source_messages]))
                 .values(included_in_conversation_summary=True)
             )
         await session.flush()

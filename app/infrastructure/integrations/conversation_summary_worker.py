@@ -271,9 +271,7 @@ async def deliver_due_shared_summaries(
     summaries = await create_idle_conversation_summaries(now=now, agent=agent)
     summaries.extend(await create_daily_summaries(now=now))
     seen_ids = {summary.id for summary in existing}
-    summaries = existing + [
-        summary for summary in summaries if summary.id not in seen_ids
-    ]
+    summaries = existing + [summary for summary in summaries if summary.id not in seen_ids]
     delivered = 0
     for summary in summaries:
         if await _deliver_summary(bot_instance, summary):

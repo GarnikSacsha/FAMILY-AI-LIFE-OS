@@ -365,9 +365,7 @@ async def cmd_mail(message: types.Message) -> None:
         await message.answer("✉️ Во входящих письмах ничего не найдено.")
         return
     lines = [
-        f"{index}. [{item['category']}] {item['subject']}\n"
-        f"От: {item['from']}\n"
-        f"Почему важно: {item['reason']}"
+        f"{index}. [{item['category']}] {item['subject']}\nОт: {item['from']}\nПочему важно: {item['reason']}"
         for index, item in enumerate(messages, start=1)
     ]
     await message.answer("✉️ Важные письма за последние 30 дней:\n\n" + "\n\n".join(lines))
@@ -467,21 +465,14 @@ async def handle_user_message(message: types.Message) -> None:
                 await bot.download_file(file_info.file_path, destination=photo_buffer)
                 photo_bytes = photo_buffer.getvalue()
 
-            shared_context_enabled = (
-                settings.SHARED_CHAT_MEMORY_ENABLED
-                and actor.chat_type in {"group", "supergroup"}
-            )
+            shared_context_enabled = settings.SHARED_CHAT_MEMORY_ENABLED and actor.chat_type in {"group", "supergroup"}
 
             domain = MainOrchestrator.domain_for_message(
                 text,
                 has_photo=bool(message.photo),
                 has_document=bool(message.document),
             )
-            if (
-                shared_context_enabled
-                and message.photo
-                and domain == "health"
-            ):
+            if shared_context_enabled and message.photo and domain == "health":
                 # A food photo intentionally posted in the authorized family
                 # group may be analyzed, but it is not added to personal health
                 # history or used as private context.

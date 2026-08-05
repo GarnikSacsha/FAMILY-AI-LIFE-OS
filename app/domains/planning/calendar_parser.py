@@ -29,11 +29,7 @@ _MONTHS = {
     "ноября": 11,
     "декабря": 12,
 }
-_MONTH_END = re.compile(
-    r"(?i)\b(?:по|до)\s+(0?[1-9]|[12]\d|3[01])\s+("
-    + "|".join(_MONTHS)
-    + r")(?:\s+(\d{4}))?\b"
-)
+_MONTH_END = re.compile(r"(?i)\b(?:по|до)\s+(0?[1-9]|[12]\d|3[01])\s+(" + "|".join(_MONTHS) + r")(?:\s+(\d{4}))?\b")
 _WEEKDAYS = {
     "понедельник": 0,
     "понедельника": 0,
@@ -50,13 +46,9 @@ _WEEKDAYS = {
     "воскресенье": 6,
     "воскресенья": 6,
 }
-_WEEKDAY_END = re.compile(
-    r"(?i)\b(?:по|до)\s+(" + "|".join(_WEEKDAYS) + r")\b"
-)
+_WEEKDAY_END = re.compile(r"(?i)\b(?:по|до)\s+(" + "|".join(_WEEKDAYS) + r")\b")
 _FOREVER = re.compile(r"(?i)\b(?:бессроч\w*|навсегда|без\s+конца)\b")
-_QUOTED_TITLE = re.compile(
-    r'"([^"\r\n]{1,255})"|«([^»\r\n]{1,255})»|“([^”\r\n]{1,255})”'
-)
+_QUOTED_TITLE = re.compile(r'"([^"\r\n]{1,255})"|«([^»\r\n]{1,255})»|“([^”\r\n]{1,255})”')
 
 
 @dataclass(frozen=True)

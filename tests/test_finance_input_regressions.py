@@ -53,10 +53,7 @@ async def test_replayed_manual_expense_uses_stable_telegram_identity() -> None:
                 )
 
     assert log_transaction.await_count == 2
-    external_ids = [
-        call.kwargs["external_id"]
-        for call in log_transaction.await_args_list
-    ]
+    external_ids = [call.kwargs["external_id"] for call in log_transaction.await_args_list]
     assert external_ids == [
         "telegram:-100123:456:expense:1",
         "telegram:-100123:456:expense:1",

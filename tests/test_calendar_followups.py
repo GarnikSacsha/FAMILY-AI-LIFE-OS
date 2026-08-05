@@ -196,9 +196,7 @@ async def test_complete_bounded_recurring_request_is_created_without_followup() 
         16,
         tzinfo=ZoneInfo("Europe/Kyiv"),
     )
-    assert create_event.await_args.kwargs["recurrence"] == [
-        "RRULE:FREQ=DAILY;UNTIL=20260806T130000Z"
-    ]
+    assert create_event.await_args.kwargs["recurrence"] == ["RRULE:FREQ=DAILY;UNTIL=20260806T130000Z"]
     await engine.dispose()
 
 
@@ -206,19 +204,14 @@ async def test_complete_bounded_recurring_request_is_created_without_followup() 
 async def test_recurring_followup_accepts_time_and_end_date_together() -> None:
     engine, factory = await _memory_database()
     household_id, user_id = await _seed_family(factory)
-    initial_message = (
-        "Добавь в календарь каждый день, начиная с сегодняшнего дня, "
-        "пойти к дедушке набрать воды"
-    )
+    initial_message = "Добавь в календарь каждый день, начиная с сегодняшнего дня, пойти к дедушке набрать воды"
 
     with (
         patch("app.orchestration.orchestrator.datetime", wraps=datetime) as clock,
         patch.object(
             GoogleWorkspaceTools,
             "create_calendar_event",
-            new=AsyncMock(
-                return_value={"id": "event-grandfather", "summary": "пойти к дедушке набрать воды"}
-            ),
+            new=AsyncMock(return_value={"id": "event-grandfather", "summary": "пойти к дедушке набрать воды"}),
         ) as create_event,
     ):
         clock.now.return_value = datetime(2026, 8, 3, 8, tzinfo=timezone.utc)
@@ -250,9 +243,7 @@ async def test_recurring_followup_accepts_time_and_end_date_together() -> None:
     assert "добавил" in response.lower()
     assert action.status == "completed"
     assert create_event.await_args.kwargs["summary"] == "пойти к дедушке набрать воды"
-    assert create_event.await_args.kwargs["recurrence"] == [
-        "RRULE:FREQ=DAILY;UNTIL=20260809T130000Z"
-    ]
+    assert create_event.await_args.kwargs["recurrence"] == ["RRULE:FREQ=DAILY;UNTIL=20260809T130000Z"]
     await engine.dispose()
 
 
@@ -288,10 +279,7 @@ async def test_complete_quoted_calendar_request_supersedes_stale_pending_action(
                 user_id=user_id,
                 household_id=household_id,
                 user_name="Денис",
-                message_text=(
-                    'Добавь в календарь с сегодняшнего дня до четверга на 17:00 '
-                    '😊 "изучение python"'
-                ),
+                message_text=('Добавь в календарь с сегодняшнего дня до четверга на 17:00 😊 "изучение python"'),
                 telegram_chat_id=chat_id,
                 pending_actions_enabled=True,
             )
@@ -304,7 +292,5 @@ async def test_complete_quoted_calendar_request_supersedes_stale_pending_action(
         17,
         tzinfo=ZoneInfo("Europe/Kyiv"),
     )
-    assert create_event.await_args.kwargs["recurrence"] == [
-        "RRULE:FREQ=DAILY;UNTIL=20260806T140000Z"
-    ]
+    assert create_event.await_args.kwargs["recurrence"] == ["RRULE:FREQ=DAILY;UNTIL=20260806T140000Z"]
     await engine.dispose()

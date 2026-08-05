@@ -69,22 +69,26 @@ class IntentRouter:
                 "ресторан",
             )
         )
-        if relative_spending_question or named_expense_question or any(
-            w in text
-            for w in [
-                "потратили",
-                "расходы",
-                "бюджет",
-                "купили",
-                "чек",
-                "цена",
-                "стоит",
-                "деньги",
-                "грн",
-                "долларов",
-                "таблиц",
-                "google sheet",
-            ]
+        if (
+            relative_spending_question
+            or named_expense_question
+            or any(
+                w in text
+                for w in [
+                    "потратили",
+                    "расходы",
+                    "бюджет",
+                    "купили",
+                    "чек",
+                    "цена",
+                    "стоит",
+                    "деньги",
+                    "грн",
+                    "долларов",
+                    "таблиц",
+                    "google sheet",
+                ]
+            )
         ):
             return {
                 "intent": "FINANCIAL_QUERY_OR_LOG",
@@ -93,31 +97,35 @@ class IntentRouter:
             }
 
         # Planning Domain Patterns
-        if any(
-            w in text
-            for w in [
-                "напомн",
-                "напомин",
-                "напомни",
-                "не забыть",
-                "нужно завтра",
-                "надо завтра",
-                "задач",
-                "список покупок",
-                "купить",
-                "план",
-                "встреча",
-                "стоматолог",
-                "календарь",
-            ]
-        ) or (
-            any(marker in text for marker in ("каждый день", "ежедневно", "ежедневный"))
-            and any(marker in text for marker in ("добав", "созда", "постав", "запиш", "не забыть"))
-        ) or (
-            any(marker in text for marker in ("запиш", "постав", "добав", "созда"))
-            and any(
-                marker in text
-                for marker in ("сегодня", "завтра", "послезавтра", "в понедельник", "вторник", "стрижк")
+        if (
+            any(
+                w in text
+                for w in [
+                    "напомн",
+                    "напомин",
+                    "напомни",
+                    "не забыть",
+                    "нужно завтра",
+                    "надо завтра",
+                    "задач",
+                    "список покупок",
+                    "купить",
+                    "план",
+                    "встреча",
+                    "стоматолог",
+                    "календарь",
+                ]
+            )
+            or (
+                any(marker in text for marker in ("каждый день", "ежедневно", "ежедневный"))
+                and any(marker in text for marker in ("добав", "созда", "постав", "запиш", "не забыть"))
+            )
+            or (
+                any(marker in text for marker in ("запиш", "постав", "добав", "созда"))
+                and any(
+                    marker in text
+                    for marker in ("сегодня", "завтра", "послезавтра", "в понедельник", "вторник", "стрижк")
+                )
             )
         ):
             return {

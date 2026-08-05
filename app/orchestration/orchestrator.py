@@ -194,8 +194,7 @@ class MainOrchestrator:
             total = Decimal(str(currency_summary.get("total_expense", "0")))
             categories = currency_summary.get("categories", {})
             category_lines = "\n".join(
-                f"• {MainOrchestrator._CATEGORY_NAMES.get(category, category)}: "
-                f"{Decimal(str(amount)):.2f} {currency}"
+                f"• {MainOrchestrator._CATEGORY_NAMES.get(category, category)}: {Decimal(str(amount)):.2f} {currency}"
                 for category, amount in sorted(categories.items())
             )
             if not category_lines:
@@ -290,13 +289,9 @@ class MainOrchestrator:
         local_now = datetime.now(timezone.utc).astimezone(ZoneInfo(timezone_name))
         context = shared_context or {"messages": [], "memories": []}
         message_lines = "\n".join(
-            f"[{item['author']}/{item['role']}] {item['content']}"
-            for item in context.get("messages", [])
+            f"[{item['author']}/{item['role']}] {item['content']}" for item in context.get("messages", [])
         )
-        memory_lines = "\n".join(
-            f"[{item['kind']}] {item['content']}"
-            for item in context.get("memories", [])
-        )
+        memory_lines = "\n".join(f"[{item['kind']}] {item['content']}" for item in context.get("memories", []))
         prompt = message_text
         if message_lines or memory_lines:
             prompt = (
@@ -445,30 +440,30 @@ class MainOrchestrator:
     @staticmethod
     def _is_recurring_calendar_request(message_text: str) -> bool:
         normalized = (message_text or "").lower().replace("ё", "е")
-        has_daily_schedule = any(
-            marker in normalized
-            for marker in (
-                "каждый день",
-                "ежедневно",
-                "ежедневный",
-                "включая сегодня",
-                "включая сегодняшний день",
+        has_daily_schedule = (
+            any(
+                marker in normalized
+                for marker in (
+                    "каждый день",
+                    "ежедневно",
+                    "ежедневный",
+                    "включая сегодня",
+                    "включая сегодняшний день",
+                )
             )
-        ) or re.search(
-            r"\bс\s+(?:сегодня|сегодняшн\w*(?:\s+дн\w*)?)\s+(?:по|до)\s+",
-            normalized,
-        ) is not None
-        has_action = any(
-            marker in normalized for marker in ("добав", "созда", "постав", "запиш", "не забыть")
+            or re.search(
+                r"\bс\s+(?:сегодня|сегодняшн\w*(?:\s+дн\w*)?)\s+(?:по|до)\s+",
+                normalized,
+            )
+            is not None
         )
+        has_action = any(marker in normalized for marker in ("добав", "созда", "постав", "запиш", "не забыть"))
         return has_daily_schedule and has_action
 
     @staticmethod
     def _is_complete_calendar_command(message_text: str) -> bool:
         normalized = (message_text or "").lower().replace("ё", "е")
-        has_action = any(
-            marker in normalized for marker in ("добав", "созда", "постав", "запиш", "записать")
-        )
+        has_action = any(marker in normalized for marker in ("добав", "созда", "постав", "запиш", "записать"))
         return (
             has_action
             and "календар" in normalized
@@ -481,9 +476,7 @@ class MainOrchestrator:
         normalized = (message_text or "").lower().replace("ё", "е")
         if MainOrchestrator._is_recurring_calendar_request(message_text):
             return False
-        has_action = any(
-            marker in normalized for marker in ("добав", "созда", "постав", "запиш", "записать")
-        )
+        has_action = any(marker in normalized for marker in ("добав", "созда", "постав", "запиш", "записать"))
         has_date_or_calendar = any(
             marker in normalized
             for marker in (
@@ -505,21 +498,24 @@ class MainOrchestrator:
     @staticmethod
     def _calendar_has_date(message_text: str) -> bool:
         normalized = (message_text or "").lower().replace("ё", "е")
-        return any(
-            marker in normalized
-            for marker in (
-                "сегодня",
-                "завтра",
-                "послезавтра",
-                "понедельник",
-                "вторник",
-                "среду",
-                "четверг",
-                "пятниц",
-                "суббот",
-                "воскресень",
+        return (
+            any(
+                marker in normalized
+                for marker in (
+                    "сегодня",
+                    "завтра",
+                    "послезавтра",
+                    "понедельник",
+                    "вторник",
+                    "среду",
+                    "четверг",
+                    "пятниц",
+                    "суббот",
+                    "воскресень",
+                )
             )
-        ) or re.search(r"(?<!\d)(?:0?[1-9]|[12]\d|3[01])[./-](?:0?[1-9]|1[0-2])", normalized) is not None
+            or re.search(r"(?<!\d)(?:0?[1-9]|[12]\d|3[01])[./-](?:0?[1-9]|1[0-2])", normalized) is not None
+        )
 
     @staticmethod
     def _calendar_clock(message_text: str) -> time | None:
@@ -585,18 +581,14 @@ class MainOrchestrator:
                 event_timezone = str(payload.get("timezone_name", timezone_name))
                 local_start = datetime.fromisoformat(str(start_text)).astimezone(ZoneInfo(event_timezone))
                 context["event_date"] = local_start.date().isoformat()
-                context["event_time"] = (
-                    None if payload.get("needs_time") else local_start.strftime("%H:%M")
-                )
+                context["event_time"] = None if payload.get("needs_time") else local_start.strftime("%H:%M")
             except (TypeError, ValueError, ZoneInfoNotFoundError):
                 pass
         return context
 
     @classmethod
     def _semantic_calendar_question(cls, plan: SemanticCalendarPlan) -> str:
-        title_prefix = (
-            f"📅 Понял задачу: **{cls._escape_markdown(plan.title)}**. " if plan.title else "📅 "
-        )
+        title_prefix = f"📅 Понял задачу: **{cls._escape_markdown(plan.title)}**. " if plan.title else "📅 "
         missing = set(plan.missing_fields)
         if {"title", "date", "time"}.issubset(missing):
             return title_prefix + "Что именно сделать и на какую дату и время поставить?"
@@ -901,8 +893,7 @@ class MainOrchestrator:
             )
             normalized_pending_reply = message_text.lower()
             if pending_action is not None and any(
-                term in normalized_pending_reply
-                for term in ("не надо", "отмена", "отмени", "забудь")
+                term in normalized_pending_reply for term in ("не надо", "отмена", "отмени", "забудь")
             ):
                 await SharedMemoryTools.complete_pending_action(
                     session,
@@ -951,17 +942,14 @@ class MainOrchestrator:
                     }
                     await session.flush()
                     if pending_action.action_type in {"calendar_recurring", "calendar_event"}:
-                        return (
-                            f"📌 Название обновил: **{cls._escape_markdown(explicit_title)}**. "
-                            + (
-                                (
-                                    "Теперь укажи время."
-                                    if pending_action.payload.get("needs_time")
-                                    else "Теперь укажи срок: бессрочно или до определённой даты?"
-                                )
-                                if pending_action.action_type == "calendar_recurring"
-                                else "Теперь укажи время."
+                        return f"📌 Название обновил: **{cls._escape_markdown(explicit_title)}**. " + (
+                            (
+                                "Теперь укажи время."
+                                if pending_action.payload.get("needs_time")
+                                else "Теперь укажи срок: бессрочно или до определённой даты?"
                             )
+                            if pending_action.action_type == "calendar_recurring"
+                            else "Теперь укажи время."
                         )
                     return (
                         f"🔔 Название напоминания обновил: **{cls._escape_markdown(explicit_title)}**. "
@@ -1014,9 +1002,7 @@ class MainOrchestrator:
                         event_zone = ZoneInfo(event_timezone)
                         local_start = base_start.astimezone(event_zone)
                         stored_end_text = pending_action.payload.get("recurrence_end_date")
-                        stored_end_date = (
-                            date.fromisoformat(str(stored_end_text)) if stored_end_text else None
-                        )
+                        stored_end_date = date.fromisoformat(str(stored_end_text)) if stored_end_text else None
                     except (KeyError, TypeError, ValueError, ZoneInfoNotFoundError):
                         return "Не смог восстановить параметры календарной задачи. Создай её ещё раз."
 
@@ -1051,9 +1037,7 @@ class MainOrchestrator:
                         "start_at": start_at.astimezone(timezone.utc).isoformat(),
                         "time": start_at.astimezone(event_zone).strftime("%H:%M"),
                         "needs_time": False,
-                        "recurrence_end_date": (
-                            recurrence_end.isoformat() if recurrence_end is not None else None
-                        ),
+                        "recurrence_end_date": (recurrence_end.isoformat() if recurrence_end is not None else None),
                     }
                     await session.flush()
                     if recurrence is None:
@@ -1069,9 +1053,7 @@ class MainOrchestrator:
                             summary=pending_title,
                             start_at=start_at,
                             end_at=start_at + timedelta(hours=1),
-                            timezone_name=str(
-                                pending_action.payload.get("timezone_name", timezone_name)
-                            ),
+                            timezone_name=str(pending_action.payload.get("timezone_name", timezone_name)),
                             recurrence=recurrence,
                         )
                     except (KeyError, TypeError, ValueError):
@@ -1093,11 +1075,7 @@ class MainOrchestrator:
                     return (
                         f"📅 Добавил ежедневное событие: **{cls._escape_markdown(event['summary'])}** — "
                         f"с {display_start_at:%d.%m в %H:%M}, "
-                        + (
-                            "бессрочно."
-                            if recurrence == ["RRULE:FREQ=DAILY"]
-                            else f"до {recurrence_end:%d.%m}."
-                        )
+                        + ("бессрочно." if recurrence == ["RRULE:FREQ=DAILY"] else f"до {recurrence_end:%d.%m}.")
                     )
 
                 pending_title = str(pending_action.payload.get("title", "")).strip()
@@ -1120,8 +1098,7 @@ class MainOrchestrator:
                     )
                     zone = ZoneInfo(timezone_name)
                     formatted_times = ", ".join(
-                        reminder["trigger_at"].astimezone(zone).strftime("%d.%m.%Y в %H:%M")
-                        for reminder in reminders
+                        reminder["trigger_at"].astimezone(zone).strftime("%d.%m.%Y в %H:%M") for reminder in reminders
                     )
                     return (
                         f"🔔 **Напоминание создано:** {cls._escape_markdown(pending_title)}\n"
@@ -1301,9 +1278,7 @@ class MainOrchestrator:
                         + "\n".join(lines)
                         + "\nСинхронизация с Google Sheets поставлена в очередь."
                     )
-                if transaction_results and all(
-                    result.get("status") == "DUPLICATE" for result in transaction_results
-                ):
+                if transaction_results and all(result.get("status") == "DUPLICATE" for result in transaction_results):
                     return "💳 Эти расходы уже были записаны ранее."
 
             if "таблиц" in message_text.lower() or "google sheet" in message_text.lower():
@@ -1316,21 +1291,13 @@ class MainOrchestrator:
                 status_text = {
                     "synced": (
                         "Google подтвердил строку"
-                        + (
-                            f" в диапазоне {sync['updated_range']}"
-                            if sync.get("updated_range")
-                            else ""
-                        )
+                        + (f" в диапазоне {sync['updated_range']}" if sync.get("updated_range") else "")
                     ),
                     "pending": "ожидает синхронизации с Google Sheets",
                     "syncing": "сейчас синхронизируется с Google Sheets",
                     "failed": (
                         "не прошла проверку в Google Sheets; бот повторит попытку автоматически"
-                        + (
-                            f" (код: {sync['error_code']})"
-                            if sync.get("error_code")
-                            else ""
-                        )
+                        + (f" (код: {sync['error_code']})" if sync.get("error_code") else "")
                     ),
                     "disabled": "создана до включения автоматической синхронизации",
                 }.get(sync["status"], "имеет неизвестный статус синхронизации")
@@ -1430,11 +1397,7 @@ class MainOrchestrator:
                     return (
                         f"📅 Добавил ежедневное событие: **{cls._escape_markdown(event['summary'])}** — "
                         f"с {recurring_start_at:%d.%m в %H:%M}, "
-                        + (
-                            "бессрочно."
-                            if recurrence == ["RRULE:FREQ=DAILY"]
-                            else f"до {recurrence_end:%d.%m}."
-                        )
+                        + ("бессрочно." if recurrence == ["RRULE:FREQ=DAILY"] else f"до {recurrence_end:%d.%m}.")
                     )
                 await SharedMemoryTools.create_pending_calendar_recurring(
                     session,
@@ -1483,10 +1446,7 @@ class MainOrchestrator:
                             "На какое время поставить?"
                         )
                 if calendar_start_at is None:
-                    return (
-                        "📅 Напишите дату и время, например: "
-                        "«Запиши меня на стрижку завтра в 15:00»."
-                    )
+                    return "📅 Напишите дату и время, например: «Запиши меня на стрижку завтра в 15:00»."
                 try:
                     event = await GoogleWorkspaceTools.create_calendar_event(
                         session,

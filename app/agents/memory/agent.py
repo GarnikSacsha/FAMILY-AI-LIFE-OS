@@ -80,8 +80,7 @@ class SharedMemoryAgent:
         messages: list[dict[str, str]],
     ) -> dict[str, list[str]]:
         transcript = "\n".join(
-            f"{index}. [{item['author']}] {item['content']}"
-            for index, item in enumerate(messages, start=1)
+            f"{index}. [{item['author']}] {item['content']}" for index, item in enumerate(messages, start=1)
         )
         result = await self.provider.generate_structured_json(
             prompt=(
@@ -103,10 +102,7 @@ class SharedMemoryAgent:
             schema={
                 "type": "object",
                 "required": list(SUMMARY_KEYS),
-                "properties": {
-                    key: {"type": "array", "items": {"type": "string"}}
-                    for key in SUMMARY_KEYS
-                },
+                "properties": {key: {"type": "array", "items": {"type": "string"}} for key in SUMMARY_KEYS},
             },
         )
         return normalize_summary_data(result)
