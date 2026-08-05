@@ -380,8 +380,8 @@ class GoogleSheetsClient:
             row = []
             for column in "BCDEFGHIJK":
                 row.append(
-                    f"=IFERROR(SUMIFS({receipts}!$D:$D,{receipts}!$B:$B,ROW()-2,"
-                    f'{receipts}!$C:$C,{column}$2,{receipts}!$E:$E,"{period}"),0)'
+                    f"=IFERROR(SUMIFS({receipts}!$D:$D;{receipts}!$B:$B;ROW()-2;"
+                    f'{receipts}!$C:$C;{column}$2;{receipts}!$E:$E;"{period}");0)'
                 )
             formulas.append(row)
         return formulas
