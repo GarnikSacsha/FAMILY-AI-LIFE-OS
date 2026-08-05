@@ -197,7 +197,7 @@ async def test_monthly_budget_projection_sets_formulas_and_verifies_receipt(monk
             {
                 "values": [
                     ["transaction_id", "day", "category", "amount", "period"],
-                    [transaction_id, "5", "Продукты", "120.50", "2026-08"],
+                    [transaction_id, "5", "Продукты", "120.5", "2026-08"],
                 ]
             },
         ]
@@ -224,7 +224,7 @@ async def test_monthly_budget_projection_sets_formulas_and_verifies_receipt(monk
     assert "," not in template_update["data"][0]["values"][0][0]
     assert "!$E:$E" not in template_update["data"][0]["values"][0][0]
     append = request.await_args_list[6].kwargs["json_body"]
-    assert append["values"] == [[transaction_id, "5", "Продукты", "120.50", "2026-08"]]
+    assert append["values"] == [[transaction_id, "5", "Продукты", 120.5, "2026-08"]]
 
 
 @pytest.mark.asyncio
@@ -245,6 +245,7 @@ async def test_monthly_budget_projection_replay_does_not_append_twice(monkeypatc
             metadata,
             {"values": [[MONTHLY_TEMPLATE_VERSION, "2026-08"]]},
             {"values": [["transaction_id"], [transaction_id]]},
+            {"totalUpdatedCells": 1},
         ]
     )
 
@@ -260,7 +261,9 @@ async def test_monthly_budget_projection_replay_does_not_append_twice(monkeypatc
         )
 
     assert updated_range == "__family_ai_sync_receipts!A:A"
-    assert all(call.args[0] == "GET" for call in request.await_args_list)
+    normalize = request.await_args_list[-1]
+    assert normalize.args[0] == "POST"
+    assert normalize.kwargs["json_body"]["data"][0]["values"] == [[10.0]]
 
 
 def test_sheet_worker_row_has_stable_transaction_identity():

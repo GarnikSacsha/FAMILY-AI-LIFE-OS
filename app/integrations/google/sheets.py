@@ -21,7 +21,7 @@ MONTHLY_RECEIPTS_SHEET = "__family_ai_sync_receipts"
 # Bumping this re-applies visible formulas and safely replays receipts after a
 # template-level correction. Receipt IDs remain immutable, so replayed rows do
 # not change financial totals twice.
-MONTHLY_TEMPLATE_VERSION = "monthly_budget/v4"
+MONTHLY_TEMPLATE_VERSION = "monthly_budget/v5"
 KYIV_TIMEZONE = ZoneInfo("Europe/Kyiv")
 MONTHLY_BUDGET_HEADERS = (
     "Продукты",
@@ -215,9 +215,21 @@ class GoogleSheetsClient:
         receipts_url = cls._values_url(encoded_sheet, receipts_range)
         existing = await cls._request("GET", receipts_url, access_token=access_token)
         rows = existing.get("values", [])
-        if isinstance(rows, list) and any(
-            isinstance(row, list) and row and str(row[0]) == transaction_id for row in rows[1:]
-        ):
+        existing_row = next(
+            (
+                index
+                for index, row in enumerate(rows[1:], start=2)
+                if isinstance(row, list) and row and str(row[0]) == transaction_id
+            ),
+            None,
+        )
+        if existing_row is not None:
+            await cls._write_monthly_receipt_amount(
+                spreadsheet_id=encoded_sheet,
+                access_token=access_token,
+                row_number=existing_row,
+                amount=normalized_amount,
+            )
             return f"{MONTHLY_RECEIPTS_SHEET}!A:A"
 
         day = occurred_at.astimezone(KYIV_TIMEZONE).day
@@ -225,7 +237,7 @@ class GoogleSheetsClient:
             transaction_id,
             str(day),
             cls.monthly_budget_category(category),
-            format(normalized_amount, "f"),
+            float(normalized_amount),
             period,
         ]
         append_url = f"{receipts_url}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS"
@@ -250,6 +262,34 @@ class GoogleSheetsClient:
         ):
             raise GoogleSheetsError("Google Sheets expense verification failed.")
         return str(updates["updatedRange"])
+
+    @classmethod
+    async def _write_monthly_receipt_amount(
+        cls,
+        *,
+        spreadsheet_id: str,
+        access_token: str,
+        row_number: int,
+        amount: Decimal,
+    ) -> None:
+        update_url = f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}/values:batchUpdate"
+        updated = await cls._request(
+            "POST",
+            update_url,
+            access_token=access_token,
+            json_body={
+                "valueInputOption": "USER_ENTERED",
+                "data": [
+                    {
+                        "range": cls._a1_range(MONTHLY_RECEIPTS_SHEET, f"D{row_number}"),
+                        "majorDimension": "ROWS",
+                        "values": [[float(amount)]],
+                    }
+                ],
+            },
+        )
+        if int(updated.get("totalUpdatedCells", 0)) < 1:
+            raise GoogleSheetsError("Google Sheets did not normalize a monthly expense amount.")
 
     @classmethod
     def _values_url(cls, encoded_spreadsheet_id: str, range_name: str) -> str:
