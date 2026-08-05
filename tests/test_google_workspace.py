@@ -220,6 +220,8 @@ async def test_monthly_budget_projection_sets_formulas_and_verifies_receipt(monk
     assert len(template_update["data"][0]["values"]) == 31
     assert "SUMIFS" in template_update["data"][0]["values"][0][0]
     assert "K$2" in template_update["data"][0]["values"][0][-1]
+    assert ";" in template_update["data"][0]["values"][0][0]
+    assert "," not in template_update["data"][0]["values"][0][0]
     append = request.await_args_list[6].kwargs["json_body"]
     assert append["values"] == [[transaction_id, "5", "Продукты", "120.50", "2026-08"]]
 
