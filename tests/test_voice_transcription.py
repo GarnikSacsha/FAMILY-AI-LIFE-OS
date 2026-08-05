@@ -136,8 +136,9 @@ async def test_voice_message_is_transcribed_then_routed(monkeypatch):
         await handle_user_message(message)
 
     assert process_message.await_args.kwargs["message_text"] == "Сколько мы потратили сегодня?"
-    assert "Распознал" in message.answers[0][0]
     assert "Сегодня потратили" in message.answers[0][0]
+    assert "Распознал" not in message.answers[0][0]
+    assert "Сколько мы потратили сегодня?" not in message.answers[0][0]
 
 
 @pytest.mark.asyncio
