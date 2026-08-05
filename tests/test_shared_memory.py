@@ -337,7 +337,9 @@ async def test_idle_chat_creates_and_delivers_persisted_summary(monkeypatch) -> 
     engine, factory = await _memory_database()
     household_id, user_id = await _seed_family(factory)
     chat_id = -100123
-    old = datetime.now(timezone.utc) - timedelta(hours=1)
+    # Keep this scenario before the Kyiv evening cutoff so it isolates the
+    # inactivity recap from the separate daily-digest path.
+    old = datetime(2026, 8, 5, 10, tzinfo=timezone.utc)
     async with factory.begin() as session:
         first = await SharedMemoryTools.record_message(
             session,
