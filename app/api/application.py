@@ -96,7 +96,7 @@ def create_application(*, start_telegram: bool = True) -> FastAPI:
                 application.state.summary_task = summary_task
         if GoogleSheetsClient.is_configured():
             sheets_task = asyncio.create_task(
-                run_google_sheets_worker(),
+                run_google_sheets_worker(bot if start_telegram else None),
                 name="google-sheets-sync",
             )
             application.state.google_sheets_task = sheets_task

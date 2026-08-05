@@ -11,15 +11,19 @@ from app.config.settings import settings
 from app.domains.finance.models import FinancialTransaction
 from app.domains.identity.models import Household, User
 from app.domains.memory.models import (
+    PendingConfirmation,
     PendingSharedAction,
     SharedConversationMessage,
+    SharedConversationMessageRetry,
     SharedConversationSummary,
     SharedMemoryItem,
 )
 from app.domains.planning.models import Reminder, Task
 from app.infrastructure.database.base import Base
 from app.infrastructure.integrations.conversation_summary_worker import (
+    create_daily_summaries,
     deliver_due_shared_summaries,
+    retry_due_shared_context_messages,
 )
 from app.orchestration.orchestrator import MainOrchestrator
 from app.tools.memory_tools import SharedMemoryTools
@@ -28,9 +32,11 @@ MEMORY_TABLES = [
     Household.__table__,
     User.__table__,
     SharedConversationMessage.__table__,
+    SharedConversationMessageRetry.__table__,
     SharedMemoryItem.__table__,
     SharedConversationSummary.__table__,
     PendingSharedAction.__table__,
+    PendingConfirmation.__table__,
     Reminder.__table__,
     Task.__table__,
     FinancialTransaction.__table__,
@@ -141,8 +147,26 @@ async def test_explicit_shared_memory_is_persisted() -> None:
         )
     async with factory() as session:
         memory = (await session.execute(select(SharedMemoryItem))).scalar_one()
+        confirmation = (await session.execute(select(PendingConfirmation))).scalar_one()
+    assert memory.status == "active"
+    assert "Подтвердите удаление" in forget_response
+
+    async with factory.begin() as session:
+        confirmed_response = await MainOrchestrator.process_user_message(
+            session=session,
+            user_id=user_id,
+            household_id=household_id,
+            user_name="Саша",
+            message_text=f"подтвердить {confirmation.confirmation_code}",
+            telegram_chat_id=-100123,
+            shared_context_enabled=True,
+        )
+    async with factory() as session:
+        memory = (await session.execute(select(SharedMemoryItem))).scalar_one()
+        confirmation = (await session.execute(select(PendingConfirmation))).scalar_one()
     assert memory.status == "dismissed"
-    assert "Убрал из общей памяти" in forget_response
+    assert confirmation.status == "completed"
+    assert "Убрал из общей памяти" in confirmed_response
     await engine.dispose()
 
 
@@ -176,10 +200,12 @@ async def test_followup_time_completes_pending_reminder_with_original_title() ->
     async with factory() as session:
         reminder = (await session.execute(select(Reminder))).scalar_one()
         action = (await session.execute(select(PendingSharedAction))).scalar_one()
+        confirmations = list((await session.execute(select(PendingConfirmation))).scalars())
     assert "Напишите следующим сообщением, когда" in first_response
     assert reminder.title == "чтоб я уточнил у Сани, что они решили по поводу брони"
     assert reminder.telegram_chat_id == chat_id
     assert action.status == "completed"
+    assert confirmations == []
     assert "Напоминание создано" in second_response
     await engine.dispose()
 
@@ -276,6 +302,37 @@ async def test_shared_food_photo_is_analyzed_without_personal_meal_write() -> No
 
 
 @pytest.mark.asyncio
+async def test_shared_message_recording_is_idempotent_for_repeated_telegram_updates() -> None:
+    engine, factory = await _memory_database()
+    household_id, user_id = await _seed_family(factory)
+    async with factory.begin() as session:
+        first = await SharedMemoryTools.record_message(
+            session,
+            household_id=household_id,
+            author_user_id=user_id,
+            telegram_chat_id=-100123,
+            telegram_message_id=777,
+            role="user",
+            author_name="Alex",
+            message_type="text",
+            content="same update",
+        )
+        second = await SharedMemoryTools.record_message(
+            session,
+            household_id=household_id,
+            author_user_id=user_id,
+            telegram_chat_id=-100123,
+            telegram_message_id=777,
+            role="user",
+            author_name="Alex",
+            message_type="text",
+            content="same update again",
+        )
+        assert second.id == first.id
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_idle_chat_creates_and_delivers_persisted_summary(monkeypatch) -> None:
     engine, factory = await _memory_database()
     household_id, user_id = await _seed_family(factory)
@@ -342,6 +399,45 @@ async def test_idle_chat_creates_and_delivers_persisted_summary(monkeypatch) -> 
 
 
 @pytest.mark.asyncio
+async def test_retry_worker_persists_delivered_assistant_reply_once(monkeypatch) -> None:
+    engine, factory = await _memory_database()
+    household_id, _ = await _seed_family(factory)
+    chat_id = -100123
+    now = datetime.now(timezone.utc)
+
+    async with factory.begin() as session:
+        await SharedMemoryTools.queue_message_for_retry(
+            session,
+            household_id=household_id,
+            telegram_chat_id=chat_id,
+            telegram_message_id=42,
+            author_name="Family",
+            message_type="text",
+            content="Завтра без встреч.",
+            now=now,
+        )
+
+    monkeypatch.setattr(
+        "app.infrastructure.integrations.conversation_summary_worker.AsyncSessionLocal",
+        factory,
+    )
+    monkeypatch.setattr(settings, "SHARED_CHAT_MEMORY_ENABLED", True)
+
+    delivered = await retry_due_shared_context_messages(now=now)
+    delivered_again = await retry_due_shared_context_messages(now=now)
+
+    assert delivered == 1
+    assert delivered_again == 0
+    async with factory() as session:
+        message = (await session.execute(select(SharedConversationMessage))).scalar_one()
+        retry = (await session.execute(select(SharedConversationMessageRetry))).scalar_one()
+    assert message.telegram_message_id == 42
+    assert message.content == "Завтра без встреч."
+    assert retry.status == "delivered"
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_persisted_summary_preserves_visual_sections() -> None:
     engine, factory = await _memory_database()
     household_id, _ = await _seed_family(factory)
@@ -373,6 +469,68 @@ async def test_persisted_summary_preserves_visual_sections() -> None:
     assert summary.summary_text == expected
     assert "\n\n✅ Решили\n• Кофе относится к кафе" in summary.summary_text
     assert "\n\n💳 Деньги\n• 95 грн — кофе" in summary.summary_text
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_daily_summary_uses_full_transcript_and_recovers_previous_day(monkeypatch) -> None:
+    engine, factory = await _memory_database()
+    household_id, user_id = await _seed_family(factory)
+    chat_id = -100123
+    day = datetime(2026, 8, 4, 12, tzinfo=timezone.utc)
+    async with factory.begin() as session:
+        user_message = await SharedMemoryTools.record_message(
+            session,
+            household_id=household_id,
+            author_user_id=user_id,
+            telegram_chat_id=chat_id,
+            telegram_message_id=20,
+            role="user",
+            author_name="Саша",
+            message_type="text",
+            content="Нужно уточнить билеты.",
+        )
+        assistant_message = await SharedMemoryTools.record_message(
+            session,
+            household_id=household_id,
+            author_user_id=None,
+            telegram_chat_id=chat_id,
+            telegram_message_id=21,
+            role="assistant",
+            author_name="Family",
+            message_type="text",
+            content="Напомню вечером.",
+        )
+        user_message.created_at = day
+        assistant_message.created_at = day + timedelta(minutes=1)
+
+    agent = SharedMemoryAgent()
+    agent.summarize_messages = AsyncMock(
+        return_value={
+            "decisions": [],
+            "actions": ["Уточнить билеты"],
+            "money": [],
+            "open_questions": [],
+            "facts": [],
+            "suggestions": [],
+        }
+    )
+    monkeypatch.setattr("app.infrastructure.integrations.conversation_summary_worker.AsyncSessionLocal", factory)
+    monkeypatch.setattr(settings, "FAMILY_GROUP_CHAT_ID", chat_id)
+    monkeypatch.setattr(settings, "CHAT_SUMMARY_DAILY_HOUR", 21)
+    monkeypatch.setattr(settings, "CHAT_SUMMARY_MAX_MESSAGES", 1)
+
+    summaries = await create_daily_summaries(
+        now=datetime(2026, 8, 5, 8, tzinfo=timezone.utc),
+        agent=agent,
+    )
+
+    assert len(summaries) == 1
+    assert [call.args[0] for call in agent.summarize_messages.await_args_list] == [
+        [{"author": "Саша", "content": "Нужно уточнить билеты."}],
+        [{"author": "Family", "content": "Напомню вечером."}],
+    ]
+    assert await create_daily_summaries(now=datetime(2026, 8, 5, 8, tzinfo=timezone.utc), agent=agent) == []
     await engine.dispose()
 
 

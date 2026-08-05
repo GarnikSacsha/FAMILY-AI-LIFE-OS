@@ -49,6 +49,7 @@ class FinanceAgent:
         merchant: str,
         description: str = "",
         external_id: str | None = None,
+        telegram_chat_id: int | None = None,
     ) -> dict[str, Any]:
         """Uses Gemini to intelligently categorize an expense, then logs it via FinanceTools."""
         prompt = (
@@ -87,6 +88,7 @@ class FinanceAgent:
             category=category,
             description=description,
             external_id=external_id,
+            telegram_chat_id=telegram_chat_id,
         )
 
         return result

@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import JSON, CheckConstraint, DateTime, Float, Index, Integer, Numeric, String, text
+from sqlalchemy import JSON, BigInteger, CheckConstraint, DateTime, Float, Index, Integer, Numeric, String, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.infrastructure.database.base import Base, TimestampMixin
@@ -71,5 +71,9 @@ class FinancialTransaction(Base, TimestampMixin):
     sheets_sync_status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)
     sheets_sync_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     sheets_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    sheets_next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    sheets_sync_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    sheets_failure_notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     sheets_sync_error: Mapped[str | None] = mapped_column(String(100))
     sheets_updated_range: Mapped[str | None] = mapped_column(String(255))
+    telegram_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)

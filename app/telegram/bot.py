@@ -560,6 +560,26 @@ async def handle_user_message(message: types.Message) -> None:
                 "Telegram response was delivered but shared context persistence failed (%s).",
                 type(error).__name__,
             )
+            sent_message_id = getattr(sent_message, "message_id", None)
+            if sent_message_id is None:
+                logger.error("Shared-context retry outbox skipped because Telegram message ID is missing.")
+                return
+            try:
+                async with unit_of_work() as retry_session:
+                    await SharedMemoryTools.queue_message_for_retry(
+                        retry_session,
+                        household_id=household_id,
+                        telegram_chat_id=chat_id,
+                        telegram_message_id=sent_message_id,
+                        author_name="Family",
+                        message_type="text",
+                        content=response_text,
+                    )
+            except Exception as queue_error:
+                logger.error(
+                    "Shared-context retry outbox persistence failed (%s).",
+                    type(queue_error).__name__,
+                )
 
 
 async def start_bot() -> None:

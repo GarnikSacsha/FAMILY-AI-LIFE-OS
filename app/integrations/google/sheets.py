@@ -100,6 +100,14 @@ class GoogleSheetsClient:
 
     @classmethod
     async def append_transaction(cls, values: list[str]) -> str:
+        try:
+            async with asyncio.timeout(settings.GOOGLE_SHEETS_OPERATION_TIMEOUT_SECONDS):
+                return await cls._append_transaction(values)
+        except TimeoutError as exc:
+            raise GoogleSheetsError("Google Sheets operation timed out.") from exc
+
+    @classmethod
+    async def _append_transaction(cls, values: list[str]) -> str:
         if len(values) != 9:
             raise ValueError("Google Sheets transaction rows require exactly 9 values.")
         spreadsheet_id = (settings.GOOGLE_SHEETS_SPREADSHEET_ID or "").strip()
