@@ -1,0 +1,43 @@
+{
+  "status": "FIX_PROVEN",
+  "reason": "The approved regression reproduced the command-routing bug before the fix and passed after the causal normalization was applied.",
+  "before": {
+    "label": "telegram-command-regression-before-fix",
+    "command": [
+      ".venv\\Scripts\\python.exe",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_telegram_command_mentions.py"
+    ],
+    "exit_code": 1,
+    "timed_out": false,
+    "duration_ms": null,
+    "stdout": "Expected failure: assert 'general' == 'planner'\\n1 failed, 3 passed",
+    "stderr": "",
+    "secrets_redacted": true
+  },
+  "after": {
+    "label": "telegram-command-regression",
+    "command": [
+      ".venv\\Scripts\\python.exe",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_telegram_command_mentions.py"
+    ],
+    "exit_code": 0,
+    "timed_out": false,
+    "duration_ms": 8232.236,
+    "stdout": ".............. [100%]\\n14 passed, 1 warning in 6.69s",
+    "stderr": "",
+    "secrets_redacted": true
+  },
+  "same_command": true,
+  "full_suite": "Relevant: 32 passed. Full: 290 passed, 1 skipped. Ruff: All checks passed.",
+  "captured_runs": [
+    "outputs/telegram-command-mentions-fixed.json",
+    "outputs/telegram-command-mentions-relevant.json",
+    "outputs/telegram-command-mentions-full.json"
+  ]
+}

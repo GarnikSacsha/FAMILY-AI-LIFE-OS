@@ -1,5 +1,6 @@
 import io
 import logging
+import re
 import time
 import uuid
 from typing import Any, cast
@@ -38,6 +39,48 @@ from app.tools.memory_tools import SharedMemoryTools
 logger = logging.getLogger(__name__)
 
 POLLING_STALE_AFTER_SECONDS = 45.0
+
+TELEGRAM_COMMANDS = (
+    ("start", "🌿 Запустить семейного ассистента"),
+    ("help", "📖 Справка и возможности"),
+    ("oura", "💍 Подключить Oura Ring"),
+    ("google", "🔗 Подключить Gmail и Calendar"),
+    ("mail", "✉️ Последние письма"),
+    ("calendar", "📅 Ближайшие события"),
+    ("tasks", "📋 Текущие задачи"),
+    ("shopping", "🛒 Семейный список покупок"),
+    ("budget", "💳 Расходы за месяц"),
+    ("health", "🥗 Сводка здоровья и питания"),
+)
+TELEGRAM_COMMAND_NAMES = frozenset(command for command, _ in TELEGRAM_COMMANDS)
+_TELEGRAM_COMMAND_TOKEN = re.compile(
+    r"^(?P<command>/[A-Za-z0-9_]+)(?:@(?P<username>[A-Za-z0-9_]+))?(?P<rest>(?:\s|$).*)",
+    flags=re.DOTALL,
+)
+_telegram_bot_username: str | None = None
+
+
+def normalize_telegram_command(text: str, *, bot_username: str | None) -> tuple[str, bool]:
+    """Normalize a known command addressed to this bot and reject foreign mentions."""
+    match = _TELEGRAM_COMMAND_TOKEN.match(text)
+    if match is None:
+        return text, False
+
+    command_name = match.group("command")[1:].lower()
+    mentioned_username = match.group("username")
+    if command_name not in TELEGRAM_COMMAND_NAMES or mentioned_username is None:
+        return text, False
+    if bot_username is None or mentioned_username.casefold() != bot_username.casefold():
+        return text, True
+
+    return f"/{command_name}{match.group('rest')}", False
+
+
+def _has_known_command_mention(text: str) -> bool:
+    match = _TELEGRAM_COMMAND_TOKEN.match(text)
+    if match is None or match.group("username") is None:
+        return False
+    return match.group("command")[1:].lower() in TELEGRAM_COMMAND_NAMES
 
 
 class TelegramPollingHealth:
@@ -179,18 +222,7 @@ def _message_audio(message: types.Message) -> tuple[Any, str, str] | None:
 
 async def setup_bot_commands(bot_instance: Bot) -> None:
     """Register the public Telegram command menu."""
-    commands = [
-        BotCommand(command="start", description="🌿 Запустить семейного ассистента"),
-        BotCommand(command="help", description="📖 Справка и возможности"),
-        BotCommand(command="oura", description="💍 Подключить Oura Ring"),
-        BotCommand(command="google", description="🔗 Подключить Gmail и Calendar"),
-        BotCommand(command="mail", description="✉️ Последние письма"),
-        BotCommand(command="calendar", description="📅 Ближайшие события"),
-        BotCommand(command="tasks", description="📋 Текущие задачи"),
-        BotCommand(command="shopping", description="🛒 Семейный список покупок"),
-        BotCommand(command="budget", description="💳 Расходы за месяц"),
-        BotCommand(command="health", description="🥗 Сводка здоровья и питания"),
-    ]
+    commands = [BotCommand(command=command, description=description) for command, description in TELEGRAM_COMMANDS]
     await bot_instance.set_my_commands(commands)
     logger.info("Telegram bot commands registered.")
 
@@ -419,6 +451,17 @@ async def handle_user_message(message: types.Message) -> None:
 
     user_name = message.from_user.first_name or "Пользователь"
     text = message.text or message.caption or ""
+    if _has_known_command_mention(text):
+        global _telegram_bot_username
+        if _telegram_bot_username is None:
+            identity = await bot.me()
+            _telegram_bot_username = identity.username
+        text, addressed_to_other_bot = normalize_telegram_command(
+            text,
+            bot_username=_telegram_bot_username,
+        )
+        if addressed_to_other_bot:
+            return
     response_text: str
     transcript: str | None = None
     shared_response_coordinates: tuple[uuid.UUID, int] | None = None
@@ -581,9 +624,11 @@ async def handle_user_message(message: types.Message) -> None:
 
 
 async def start_bot() -> None:
+    global _telegram_bot_username
     polling_health.mark_starting()
     logger.info("Starting Telegram polling.")
     identity = await bot.get_me()
+    _telegram_bot_username = identity.username
     logger.info(
         "Telegram bot identity verified: @%s (id=%d).",
         identity.username or "<none>",
