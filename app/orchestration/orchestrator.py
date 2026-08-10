@@ -182,6 +182,19 @@ class MainOrchestrator:
         return text
 
     @staticmethod
+    def _is_explicit_task_list_request(message_text: str) -> bool:
+        normalized = (message_text or "").lower().replace("ё", "е")
+        return any(marker in normalized for marker in ("в таски", "в задачи", "список задач"))
+
+    @classmethod
+    def _is_explicit_task_request(cls, message_text: str) -> bool:
+        normalized = (message_text or "").lower().replace("ё", "е")
+        return cls._is_explicit_task_list_request(message_text) or re.search(
+            r"\b(?:созда\w*|добав\w*|запиш\w*)\s+задач\w*\b",
+            normalized,
+        ) is not None
+
+    @staticmethod
     def domain_for_message(
         message_text: str,
         *,
@@ -190,6 +203,8 @@ class MainOrchestrator:
     ) -> str:
         """Return the authorization domain before any tool is executed."""
         normalized = (message_text or "").lower()
+        if MainOrchestrator._is_explicit_task_request(message_text):
+            return "planner"
         if (
             "календар" in normalized
             or normalized.startswith("/calendar")
@@ -621,6 +636,61 @@ class MainOrchestrator:
         return calendar_clock(message_text)
 
     @staticmethod
+    def _task_due_date(
+        message_text: str,
+        *,
+        now: datetime | None = None,
+        timezone_name: str = "Europe/Kyiv",
+    ) -> datetime | None:
+        normalized = (message_text or "").lower().replace("ё", "е")
+        zone = ZoneInfo(timezone_name)
+        current = now or datetime.now(timezone.utc)
+        if current.tzinfo is None:
+            current = current.replace(tzinfo=timezone.utc)
+        local_date = current.astimezone(zone).date()
+        if "послезавтра" in normalized:
+            target_date = local_date + timedelta(days=2)
+        elif "завтра" in normalized:
+            target_date = local_date + timedelta(days=1)
+        elif "сегодня" in normalized:
+            target_date = local_date
+        else:
+            return None
+        return datetime.combine(target_date, time.min, tzinfo=zone).astimezone(timezone.utc)
+
+    @staticmethod
+    def _clean_task_title(value: str) -> str:
+        title = re.sub(r"^\s*(?:[-*•◦▪]|\d+\s*[.)])\s*", "", value)
+        title = re.sub(
+            r"^\s*(?:созда\w*|добав\w*|запиш\w*)\s+задач\w*\b",
+            "",
+            title,
+            count=1,
+            flags=re.IGNORECASE,
+        )
+        title = re.sub(r"^\s*(?:в\s+(?:таски|задачи)|список\s+задач)\b", "", title, count=1, flags=re.IGNORECASE)
+        title = re.sub(r"\bдля\s+меня\b", " ", title, flags=re.IGNORECASE)
+        title = re.sub(r"\bна\s+(?:сегодня|завтра|послезавтра)\b", " ", title, flags=re.IGNORECASE)
+        return " ".join(title.strip(" \t,.:;!?—-").rstrip(".").split())
+
+    @classmethod
+    def _parse_task_list_request(
+        cls,
+        message_text: str,
+        *,
+        user_id: uuid.UUID,
+        timezone_name: str,
+    ) -> tuple[list[str], uuid.UUID | None, datetime | None]:
+        lines = [line.strip() for line in (message_text or "").splitlines() if line.strip()]
+        if len(lines) > 1 and cls._is_explicit_task_list_request(lines[0]):
+            lines = lines[1:]
+        titles = [title for title in (cls._clean_task_title(line) for line in lines) if title]
+        normalized = (message_text or "").lower().replace("ё", "е")
+        assignee_id = user_id if "для меня" in normalized else None
+        due_date = cls._task_due_date(message_text, timezone_name=timezone_name)
+        return titles, assignee_id, due_date
+
+    @staticmethod
     def _recurring_calendar_title(message_text: str) -> str:
         explicit_title = MainOrchestrator._explicit_title(message_text)
         if explicit_title is not None:
@@ -1014,26 +1084,27 @@ class MainOrchestrator:
                     else "незавершённое напоминание"
                 )
                 return f"Хорошо, отменил {action_name}."
-            semantic_plan = await CalendarIntentInterpreter().interpret(
-                message_text=message_text,
-                local_now=datetime.now(timezone.utc).astimezone(ZoneInfo(timezone_name)),
-                timezone_name=timezone_name,
-                pending_context=cls._semantic_pending_context(
-                    pending_action,
+            if not cls._is_explicit_task_request(message_text):
+                semantic_plan = await CalendarIntentInterpreter().interpret(
+                    message_text=message_text,
+                    local_now=datetime.now(timezone.utc).astimezone(ZoneInfo(timezone_name)),
                     timezone_name=timezone_name,
-                ),
-            )
-            semantic_response = await cls._handle_semantic_calendar_plan(
-                session,
-                plan=semantic_plan,
-                pending_action=pending_action,
-                user_id=user_id,
-                household_id=household_id,
-                telegram_chat_id=telegram_chat_id,
-                timezone_name=timezone_name,
-            )
-            if semantic_response is not None:
-                return semantic_response
+                    pending_context=cls._semantic_pending_context(
+                        pending_action,
+                        timezone_name=timezone_name,
+                    ),
+                )
+                semantic_response = await cls._handle_semantic_calendar_plan(
+                    session,
+                    plan=semantic_plan,
+                    pending_action=pending_action,
+                    user_id=user_id,
+                    household_id=household_id,
+                    telegram_chat_id=telegram_chat_id,
+                    timezone_name=timezone_name,
+                )
+                if semantic_response is not None:
+                    return semantic_response
             if pending_action is not None and cls._is_complete_calendar_command(message_text):
                 await SharedMemoryTools.complete_pending_action(
                     session,
@@ -1465,6 +1536,32 @@ class MainOrchestrator:
                     for task in tasks
                 ]
                 return "📋 **Активные семейные задачи:**\n" + "\n".join(lines)
+
+            if cls._is_explicit_task_list_request(message_text):
+                titles, assignee_id, due_date = cls._parse_task_list_request(
+                    message_text,
+                    user_id=user_id,
+                    timezone_name=timezone_name,
+                )
+                if not titles:
+                    return "📋 Укажите хотя бы одну задачу отдельной строкой."
+                results = []
+                for title in titles:
+                    results.append(
+                        await PlannerTools.create_task(
+                            session,
+                            creator_id=user_id,
+                            owner_type="household",
+                            owner_id=household_id,
+                            assignee_id=assignee_id,
+                            due_date=due_date,
+                            title=title,
+                        )
+                    )
+                if len(results) == 1:
+                    return f"📋 Создал семейную задачу: **{cls._escape_markdown(results[0]['title'])}**"
+                lines = [f"• {cls._escape_markdown(result['title'])}" for result in results]
+                return "📋 Создал семейные задачи:\n" + "\n".join(lines)
 
             task_match = re.match(
                 r"^\s*(?:создай|добавь|запиши)\s+задачу\b[\s,:—-]*(.+)$",
