@@ -244,8 +244,13 @@ async def test_monthly_budget_projection_replay_does_not_append_twice(monkeypatc
             metadata,
             metadata,
             {"values": [[MONTHLY_TEMPLATE_VERSION, "2026-08"]]},
-            {"values": [["transaction_id"], [transaction_id]]},
-            {"totalUpdatedCells": 1},
+            {
+                "values": [
+                    ["transaction_id", "day", "category", "amount", "period"],
+                    [transaction_id, "13", "Другое", "22650", "2026-08"],
+                ]
+            },
+            {"totalUpdatedCells": 4},
         ]
     )
 
@@ -255,15 +260,21 @@ async def test_monthly_budget_projection_replay_does_not_append_twice(monkeypatc
     ):
         updated_range = await GoogleSheetsClient.project_monthly_budget_expense(
             transaction_id=transaction_id,
-            occurred_at=datetime(2026, 8, 5, 12, tzinfo=timezone.utc),
-            category="Groceries",
-            amount="10",
+            occurred_at=datetime(2026, 8, 13, 12, tzinfo=timezone.utc),
+            category="Utilities",
+            amount="22650",
         )
 
     assert updated_range == "__family_ai_sync_receipts!A:A"
     normalize = request.await_args_list[-1]
     assert normalize.args[0] == "POST"
-    assert normalize.kwargs["json_body"]["data"][0]["values"] == [[10.0]]
+    assert normalize.kwargs["json_body"]["data"] == [
+        {
+            "range": "'__family_ai_sync_receipts'!B2:E2",
+            "majorDimension": "ROWS",
+            "values": [["13", "Квартира / ежемесячные платежи", 22650.0, "2026-08"]],
+        }
+    ]
 
 
 def test_sheet_worker_row_has_stable_transaction_identity():

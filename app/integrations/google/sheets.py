@@ -223,20 +223,24 @@ class GoogleSheetsClient:
             ),
             None,
         )
+        day = occurred_at.astimezone(KYIV_TIMEZONE).day
+        monthly_category = cls.monthly_budget_category(category)
         if existing_row is not None:
-            await cls._write_monthly_receipt_amount(
+            await cls._write_monthly_receipt(
                 spreadsheet_id=encoded_sheet,
                 access_token=access_token,
                 row_number=existing_row,
+                day=day,
+                category=monthly_category,
                 amount=normalized_amount,
+                period=period,
             )
             return f"{MONTHLY_RECEIPTS_SHEET}!A:A"
 
-        day = occurred_at.astimezone(KYIV_TIMEZONE).day
         values = [
             transaction_id,
             str(day),
-            cls.monthly_budget_category(category),
+            monthly_category,
             float(normalized_amount),
             period,
         ]
@@ -264,13 +268,16 @@ class GoogleSheetsClient:
         return str(updates["updatedRange"])
 
     @classmethod
-    async def _write_monthly_receipt_amount(
+    async def _write_monthly_receipt(
         cls,
         *,
         spreadsheet_id: str,
         access_token: str,
         row_number: int,
+        day: int,
+        category: str,
         amount: Decimal,
+        period: str,
     ) -> None:
         update_url = f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}/values:batchUpdate"
         updated = await cls._request(
@@ -281,15 +288,15 @@ class GoogleSheetsClient:
                 "valueInputOption": "USER_ENTERED",
                 "data": [
                     {
-                        "range": cls._a1_range(MONTHLY_RECEIPTS_SHEET, f"D{row_number}"),
+                        "range": cls._a1_range(MONTHLY_RECEIPTS_SHEET, f"B{row_number}:E{row_number}"),
                         "majorDimension": "ROWS",
-                        "values": [[float(amount)]],
+                        "values": [[str(day), category, float(amount), period]],
                     }
                 ],
             },
         )
-        if int(updated.get("totalUpdatedCells", 0)) < 1:
-            raise GoogleSheetsError("Google Sheets did not normalize a monthly expense amount.")
+        if int(updated.get("totalUpdatedCells", 0)) < 4:
+            raise GoogleSheetsError("Google Sheets did not refresh the monthly expense receipt.")
 
     @classmethod
     def _values_url(cls, encoded_spreadsheet_id: str, range_name: str) -> str:

@@ -23,6 +23,20 @@ class FinanceAgent:
         self.provider = GeminiFinanceProvider()
 
     @staticmethod
+    def _explicit_category(description: str, merchant: str) -> str | None:
+        normalized = f"{merchant} {description}".lower()
+        monthly_payment_terms = (
+            "квартир",
+            "ежемесячн",
+            "щомісячн",
+            "подписк",
+            "підписк",
+        )
+        if any(term in normalized for term in monthly_payment_terms):
+            return "Utilities"
+        return None
+
+    @staticmethod
     def _fallback_category(description: str, merchant: str) -> str:
         normalized = f"{merchant} {description}".lower()
         rules = (
@@ -32,7 +46,26 @@ class FinanceAgent:
             ("Restaurants", ("кафе", "ресторан", "доставка", "кофе", "пицц")),
             ("Transport", ("транспорт", "таксі", "такси", "бензин", "паливо", "топливо", "проїзд", "проезд", "парков")),
             ("Health", ("здоров", "аптек", "лікар", "врач", "лекар", "аналіз", "анализ")),
-            ("Utilities", ("рахунк", "коммун", "комун", "моб", "світ", "свет", "газ", "вод", "інтернет", "интернет")),
+            (
+                "Utilities",
+                (
+                    "рахунк",
+                    "коммун",
+                    "комун",
+                    "моб",
+                    "світ",
+                    "свет",
+                    "газ",
+                    "вод",
+                    "інтернет",
+                    "интернет",
+                    "квартир",
+                    "ежемесячн",
+                    "щомісячн",
+                    "подписк",
+                    "підписк",
+                ),
+            ),
             ("Sports", ("спорт", "тренув", "тренир", "фітнес", "фитнес", "gym", "зал")),
         )
         for category, terms in rules:
@@ -60,6 +93,7 @@ class FinanceAgent:
             f"Return the exact category and subcategory."
         )
 
+        explicit_category = self._explicit_category(description, merchant)
         fallback_category = self._fallback_category(description, merchant)
         allowed_categories = {
             "Entertainment",
@@ -72,12 +106,15 @@ class FinanceAgent:
             "Transport",
             "Utilities",
         }
-        try:
-            categorization = await self.provider.generate_structured_json(prompt, CategorySchema)
-            proposed_category = str(categorization.get("category", "")).strip()
-            category = proposed_category if proposed_category in allowed_categories else fallback_category
-        except Exception:
-            category = fallback_category
+        if explicit_category is not None:
+            category = explicit_category
+        else:
+            try:
+                categorization = await self.provider.generate_structured_json(prompt, CategorySchema)
+                proposed_category = str(categorization.get("category", "")).strip()
+                category = proposed_category if proposed_category in allowed_categories else fallback_category
+            except Exception:
+                category = fallback_category
 
         result = await FinanceTools.log_transaction(
             session=session,

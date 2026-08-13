@@ -280,6 +280,36 @@ async def test_finance_agent_uses_valid_category_or_deterministic_fallback(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "expense_label",
+    [
+        "оплата квартиры",
+        "ежемесячные платежи (Gemini Pro)",
+        "ежемесячные платежи (Apple iCloud)",
+        "ежемесячные платежи (Claude)",
+    ],
+)
+async def test_explicit_monthly_payment_label_overrides_model_category(expense_label, monkeypatch):
+    agent = FinanceAgent.__new__(FinanceAgent)
+    agent.provider = SimpleNamespace(
+        generate_structured_json=AsyncMock(return_value={"category": "Shopping"})
+    )
+    log_transaction = AsyncMock(return_value={"status": "SUCCESS", "category": "Utilities"})
+    monkeypatch.setattr(FinanceTools, "log_transaction", log_transaction)
+
+    await agent.categorize_and_log_transaction(
+        session=object(),
+        owner_type="household",
+        owner_id=object(),
+        amount=990,
+        merchant=expense_label,
+        description=f"990 грн — {expense_label}",
+    )
+
+    assert log_transaction.await_args.kwargs["category"] == "Utilities"
+
+
+@pytest.mark.asyncio
 async def test_finance_agent_falls_back_when_categorization_fails(monkeypatch):
     agent = FinanceAgent.__new__(FinanceAgent)
     agent.provider = SimpleNamespace(
