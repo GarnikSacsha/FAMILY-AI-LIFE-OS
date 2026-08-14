@@ -76,6 +76,7 @@ class IntentRouter:
                 w in text
                 for w in [
                     "потратили",
+                    "трат",
                     "расходы",
                     "бюджет",
                     "купили",

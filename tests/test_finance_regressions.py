@@ -45,6 +45,79 @@ async def test_orchestrator_formats_current_multicurrency_summary_contract():
     assert "Продукты" in response
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "message_text",
+    (
+        "Покажи траты за сегодня",
+        "Покажи все траты за эту неделю",
+        "Все траты за этот месяц напиши",
+    ),
+)
+async def test_spending_summary_accepts_natural_traty_periods(message_text: str) -> None:
+    household_id = uuid.uuid4()
+    summary = {
+        "currencies": {
+            "UAH": {
+                "total_expense": "48465.00",
+                "categories": {"Groceries": "48465.00"},
+            }
+        }
+    }
+
+    with (
+        patch.object(
+            FinanceTools,
+            "get_spending_summary",
+            new=AsyncMock(return_value=summary),
+        ) as get_summary,
+        patch(
+            "app.integrations.llm.provider.TerraReasoningProvider.generate_text",
+            new=AsyncMock(return_value="Старая разговорная сводка"),
+        ) as general_llm,
+    ):
+        response = await MainOrchestrator.process_user_message(
+            session=object(),
+            user_id=uuid.uuid4(),
+            household_id=household_id,
+            user_name="Denys",
+            message_text=message_text,
+        )
+
+    get_summary.assert_awaited_once()
+    general_llm.assert_not_awaited()
+    assert "48465.00 UAH" in response
+
+
+@pytest.mark.asyncio
+async def test_traty_with_amount_remains_an_expense_log_request() -> None:
+    household_id = uuid.uuid4()
+    transaction = {
+        "transaction_id": str(uuid.uuid4()),
+        "amount": "350.00",
+        "currency": "UAH",
+        "merchant": "продукты",
+        "category": "Groceries",
+        "status": "SUCCESS",
+    }
+
+    with patch.object(
+        FinanceAgent,
+        "categorize_and_log_transaction",
+        new=AsyncMock(return_value=transaction),
+    ) as log_transaction:
+        response = await MainOrchestrator.process_user_message(
+            session=object(),
+            user_id=uuid.uuid4(),
+            household_id=household_id,
+            user_name="Denys",
+            message_text="Добавь траты: продукты 350 грн",
+        )
+
+    log_transaction.assert_awaited_once()
+    assert "350.00" in response
+
+
 def test_current_month_bounds_respect_kyiv_calendar():
     date_from, date_to = MainOrchestrator.current_month_bounds(
         now=datetime(2026, 7, 26, 12, tzinfo=timezone.utc),

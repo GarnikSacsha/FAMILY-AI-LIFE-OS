@@ -1390,11 +1390,17 @@ class MainOrchestrator:
                     )
                 return f"💳 Нашёл в PostgreSQL за {period_label}:\n" + "\n".join(lines)
 
-            # Quick check if asking for spending summary
+            expenses = cls._extract_expenses(message_text)
+            normalized_message = message_text.lower()
+
+            # Quick check if asking for spending summary. Natural-language
+            # variants with "трат" are summaries only when they do not also
+            # contain a concrete expense amount to log.
             if (
-                "сколько" in message_text.lower()
-                or "расходы" in message_text.lower()
-                or message_text.lower().startswith("/budget")
+                "сколько" in normalized_message
+                or "расходы" in normalized_message
+                or normalized_message.startswith("/budget")
+                or ("трат" in normalized_message and not expenses)
             ):
                 date_from, date_to, period_label = cls.spending_period(
                     message_text,
@@ -1413,7 +1419,6 @@ class MainOrchestrator:
                     casual=casual,
                 )
 
-            expenses = cls._extract_expenses(message_text)
             if expenses:
                 if pending_actions_enabled and telegram_chat_id is not None:
                     confirmation = await ConfirmationTools.create_or_get(
