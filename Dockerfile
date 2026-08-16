@@ -1,4 +1,4 @@
-FROM python:3.12.13-slim-trixie@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de AS builder
+FROM python:3.14.7-slim-trixie@sha256:ce40764625a4ff50df3548277632e7f96c4e77fe75fa848aae9885476e7df5a4 AS builder
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1
@@ -8,7 +8,7 @@ COPY pyproject.toml README.md ./
 COPY app ./app
 RUN python -m pip wheel --wheel-dir /wheels .
 
-FROM python:3.12.13-slim-trixie@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de AS runner
+FROM python:3.14.7-slim-trixie@sha256:ce40764625a4ff50df3548277632e7f96c4e77fe75fa848aae9885476e7df5a4 AS runner
 
 ENV PATH=/home/appuser/.local/bin:$PATH \
     PYTHONUNBUFFERED=1 \
