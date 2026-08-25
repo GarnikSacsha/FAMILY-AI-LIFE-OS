@@ -1,0 +1,20 @@
+{
+  "status": "FIX_PROVEN",
+  "reason": "All three approved pet-label reproducers failed with Groceries before the fix and passed with Pets after the deterministic override; relevant and full suites also passed.",
+  "same_command": true,
+  "full_suite": "passed: 311 passed, 1 skipped",
+  "before": {
+    "command": ".venv\\Scripts\\python.exe -m pytest tests/test_llm_providers.py -k \"explicit_pet\" -p no:cacheprovider -q",
+    "exit_code": 1,
+    "timed_out": false,
+    "duration_ms": 2100,
+    "stdout": "3 failed, 25 deselected. Each case logged category Groceries instead of Pets: булка Долли, булка доли, корм собаке."
+  },
+  "after": {
+    "command": ".venv\\Scripts\\python.exe -m pytest tests/test_llm_providers.py -k \"explicit_pet\" -p no:cacheprovider -q",
+    "exit_code": 0,
+    "timed_out": false,
+    "duration_ms": 1930,
+    "stdout": "3 passed, 25 deselected, 1 third-party deprecation warning."
+  }
+}

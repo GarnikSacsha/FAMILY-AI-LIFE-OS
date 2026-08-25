@@ -310,6 +310,35 @@ async def test_explicit_monthly_payment_label_overrides_model_category(expense_l
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "expense_label",
+    [
+        "булка Долли",
+        "булка доли",
+        "корм собаке",
+    ],
+)
+async def test_explicit_pet_label_overrides_model_category(expense_label, monkeypatch):
+    generate_category = AsyncMock(return_value={"category": "Groceries"})
+    agent = FinanceAgent.__new__(FinanceAgent)
+    agent.provider = SimpleNamespace(generate_structured_json=generate_category)
+    log_transaction = AsyncMock(return_value={"status": "SUCCESS", "category": "Pets"})
+    monkeypatch.setattr(FinanceTools, "log_transaction", log_transaction)
+
+    await agent.categorize_and_log_transaction(
+        session=object(),
+        owner_type="household",
+        owner_id=object(),
+        amount=770,
+        merchant=expense_label,
+        description=f"770 грн — {expense_label}",
+    )
+
+    assert log_transaction.await_args.kwargs["category"] == "Pets"
+    generate_category.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_finance_agent_falls_back_when_categorization_fails(monkeypatch):
     agent = FinanceAgent.__new__(FinanceAgent)
     agent.provider = SimpleNamespace(

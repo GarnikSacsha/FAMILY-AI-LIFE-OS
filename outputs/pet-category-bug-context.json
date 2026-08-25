@@ -1,0 +1,76 @@
+{
+  "title": "Pet-brand expenses can be accepted as Groceries",
+  "project": "Family AI Life OS",
+  "generated_at": "2026-08-25",
+  "mode": "prove-fix",
+  "original_report": "A confirmed 770 UAH expense labeled 'булка Долли' appeared in the Products column instead of the Булка / Долли pet category.",
+  "discovery_scope": [
+    "FinanceAgent explicit, model-proposed, and fallback category selection",
+    "Google Sheets monthly category projection",
+    "Read-only inspection of the current hidden Google Sheets receipt ledger"
+  ],
+  "candidates": [],
+  "expected": "Explicit pet-brand and pet-purpose labels always log category Pets and project to Булка / Долли.",
+  "actual": "A valid but incorrect Gemini category such as Groceries overrode the deterministic pet fallback.",
+  "environment": "Windows, project virtual environment, Python 3.14, pytest 9",
+  "reproduction": "A focused async test supplies three explicit pet labels while the mocked provider proposes Groceries, then inspects the category passed to the real transaction tool boundary.",
+  "failure_signal": "All three cases passed category Groceries to FinanceTools.log_transaction instead of Pets.",
+  "root_cause": "Pet terms existed only in the fallback classifier. Any allowed Gemini category was accepted before fallback, even when the transaction text explicitly named the pet brand or animal food.",
+  "fix_summary": "Treat brand prefix 'булка дол' and explicit pet-purpose terms as deterministic Pets categories before invoking Gemini.",
+  "why_causal": "The explicit category branch has priority over model categorization, so recognized pet transactions can no longer be overridden by an allowed but semantically wrong provider response.",
+  "reproduction_files": [
+    {
+      "path": "C:/Users/Денис/Desktop/Всякое вайбкодинг/Просто тест всякое/FAMILY-AI-LIFE-OS/tests/test_llm_providers.py",
+      "line": 313,
+      "summary": "Approved parametrized regression for pet brand aliases and dog food."
+    }
+  ],
+  "fix_files": [
+    {
+      "path": "C:/Users/Денис/Desktop/Всякое вайбкодинг/Просто тест всякое/FAMILY-AI-LIFE-OS/app/agents/finance/agent.py",
+      "line": 26,
+      "summary": "Adds deterministic pet terms to the explicit-category path."
+    }
+  ],
+  "checks": [
+    {
+      "name": "Approved reproducer",
+      "status": "passed",
+      "detail": "Same command changed from 3 failed to 3 passed."
+    },
+    {
+      "name": "Finance, LLM, and Sheets tests",
+      "status": "passed",
+      "detail": "50 passed."
+    },
+    {
+      "name": "Full pytest",
+      "status": "passed",
+      "detail": "311 passed, 1 skipped."
+    },
+    {
+      "name": "Ruff",
+      "status": "passed",
+      "detail": "All checks passed for the changed production and test files."
+    },
+    {
+      "name": "Git diff check",
+      "status": "passed",
+      "detail": "No whitespace errors."
+    }
+  ],
+  "reproduce": [
+    ".venv\\Scripts\\python.exe -m pytest tests/test_llm_providers.py -k \"explicit_pet\" -p no:cacheprovider -q"
+  ],
+  "limitations": [
+    "Production PostgreSQL was intentionally not inspected because Railway authentication was unavailable in the active browser session.",
+    "The historical expense near 1,468 UAH was not found in the current August hidden Sheets ledger."
+  ],
+  "residual_risks": [
+    "The existing 770 UAH row remains categorized as Products until historical production data is deliberately corrected."
+  ],
+  "notes": [
+    "The Google Sheets mapping Pets to Булка / Долли already existed and did not require changes.",
+    "No migration, dependency, secret, or production data was changed."
+  ]
+}
