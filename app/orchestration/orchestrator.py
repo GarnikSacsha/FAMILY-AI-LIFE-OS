@@ -345,7 +345,9 @@ class MainOrchestrator:
         has_explicit_currency = cls._EXPENSE_AMOUNT.search(message_text) is not None
         expenses: list[tuple[float, str]] = []
         for line in lines:
-            line_match = cls._EXPENSE_LINE.match(line)
+            normalized_line = cls._EXPENSE_PREFIX.sub(" ", line)
+            normalized_line = " ".join(normalized_line.split())
+            line_match = cls._EXPENSE_LINE.match(normalized_line)
             if line_match is not None and (line_match.group("currency") or has_explicit_currency):
                 amount = float(line_match.group("amount").replace(",", "."))
                 merchant = cls._clean_expense_merchant(line_match.group("merchant"))

@@ -1,5 +1,5 @@
 import uuid
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -81,3 +81,56 @@ async def test_multiline_manual_expenses_are_logged_individually() -> None:
 
     assert [call.kwargs["amount"] for call in log_transaction.await_args_list] == amounts
     assert [call.kwargs["merchant"] for call in log_transaction.await_args_list] == merchants
+
+
+@pytest.mark.asyncio
+async def test_prefixed_multiline_expenses_create_one_confirmation_with_every_item() -> None:
+    create_confirmation = AsyncMock(
+        return_value=SimpleNamespace(
+            status="pending",
+            confirmation_code="FaBnUAG0",
+        )
+    )
+
+    with (
+        patch(
+            "app.orchestration.orchestrator.ConfirmationTools.create_or_get",
+            new=create_confirmation,
+        ),
+        patch(
+            "app.orchestration.orchestrator.SharedMemoryTools.get_pending_action",
+            new=AsyncMock(return_value=None),
+        ),
+        patch(
+            "app.orchestration.orchestrator.CalendarIntentInterpreter.interpret",
+            new=AsyncMock(return_value=None),
+        ),
+    ):
+        response = await MainOrchestrator.process_user_message(
+            session=object(),
+            user_id=uuid.uuid4(),
+            household_id=uuid.uuid4(),
+            user_name="Denys",
+            message_text="Запиши 130 отдых\n64 грн продукты",
+            telegram_chat_id=-100123,
+            telegram_message_id=511,
+            pending_actions_enabled=True,
+        )
+
+    create_confirmation.assert_awaited_once()
+    assert create_confirmation.await_args.kwargs["payload"]["expenses"] == [
+        {
+            "amount": 130,
+            "merchant": "отдых",
+            "description": "отдых",
+            "external_id": "telegram:-100123:511:expense:1",
+        },
+        {
+            "amount": 64,
+            "merchant": "продукты",
+            "description": "продукты",
+            "external_id": "telegram:-100123:511:expense:2",
+        },
+    ]
+    assert "130 грн — отдых" in response
+    assert "64 грн — продукты" in response

@@ -1,0 +1,84 @@
+{
+  "title": "Prefixed multiline expense is dropped and idle recaps repeat completed finance exchanges",
+  "project": "Family AI Life OS",
+  "generated_at": "2026-08-25",
+  "mode": "prove-fix",
+  "original_report": "Telegram accepted only one expense from 'Запиши 130 отдых\\n64 грн продукты', then sent an unnecessary and partly hallucinated conversation recap after 30 minutes.",
+  "discovery_scope": [
+    "Telegram orchestration expense parsing and confirmation payload construction",
+    "Shared conversation summary worker and existing shared-memory tests"
+  ],
+  "candidates": [],
+  "expected": "One confirmation contains both expenses, and no 30-minute conversation recap is created or delivered.",
+  "actual": "Only the explicit-currency line was confirmed, and the idle worker delivered a recap that reprocessed completed finance commands.",
+  "environment": "Windows, project virtual environment, Python 3.14, pytest 9",
+  "reproduction": "Focused async tests exercise the real orchestrator path with the screenshot input and the persisted shared-message delivery path after two idle hours.",
+  "failure_signal": "The confirmation payload had one item instead of two, and deliver_due_shared_summaries returned 1 instead of 0.",
+  "root_cause": "The optional-currency multiline pattern required each line to begin with an amount, so the 'Запиши' prefix hid the first item. Separately, the summary worker unconditionally created and delivered conversation-kind summaries after the idle threshold.",
+  "fix_summary": "Normalize known expense command prefixes before parsing each line, and restrict proactive summary delivery to daily summaries only.",
+  "why_causal": "Prefix normalization exposes the hidden first amount to the existing validated line parser. Removing conversation-kind summaries from the delivery path prevents both new and previously pending idle recaps from reaching Telegram.",
+  "reproduction_files": [
+    {
+      "path": "C:/Users/Денис/Desktop/Всякое вайбкодинг/Просто тест всякое/FAMILY-AI-LIFE-OS/tests/test_multiline_expenses.py",
+      "line": 84,
+      "summary": "Approved regression for one confirmation containing every line from the screenshot input."
+    },
+    {
+      "path": "C:/Users/Денис/Desktop/Всякое вайбкодинг/Просто тест всякое/FAMILY-AI-LIFE-OS/tests/test_shared_memory.py",
+      "line": 394,
+      "summary": "Approved regression preventing idle finance recap creation and delivery."
+    }
+  ],
+  "fix_files": [
+    {
+      "path": "C:/Users/Денис/Desktop/Всякое вайбкодинг/Просто тест всякое/FAMILY-AI-LIFE-OS/app/orchestration/orchestrator.py",
+      "line": 421,
+      "summary": "Normalizes expense command prefixes before per-line parsing."
+    },
+    {
+      "path": "C:/Users/Денис/Desktop/Всякое вайбкодинг/Просто тест всякое/FAMILY-AI-LIFE-OS/app/infrastructure/integrations/conversation_summary_worker.py",
+      "line": 353,
+      "summary": "Delivers daily summaries while excluding conversation-kind idle recaps."
+    }
+  ],
+  "checks": [
+    {
+      "name": "Approved reproducers",
+      "status": "passed",
+      "detail": "Same command changed from 2 failed to 2 passed."
+    },
+    {
+      "name": "Relevant modules",
+      "status": "passed",
+      "detail": "16 passed."
+    },
+    {
+      "name": "Full pytest",
+      "status": "passed",
+      "detail": "308 passed, 1 skipped."
+    },
+    {
+      "name": "Ruff",
+      "status": "passed",
+      "detail": "All checks passed for changed production and test files."
+    },
+    {
+      "name": "Git diff check",
+      "status": "passed",
+      "detail": "No whitespace errors."
+    }
+  ],
+  "reproduce": [
+    ".venv\\Scripts\\python.exe -m pytest tests/test_multiline_expenses.py tests/test_shared_memory.py -k \"prefixed_multiline_expenses or idle_finance_exchange\" -p no:cacheprovider -q"
+  ],
+  "limitations": [
+    "Currency omission is inferred only inside a multiline message that contains at least one explicit currency marker."
+  ],
+  "residual_risks": [
+    "Daily 21:00 summaries remain enabled by design and were not removed."
+  ],
+  "notes": [
+    "No dependency, migration, secret, or external API behavior changed.",
+    "Existing unrelated dirty worktree changes were preserved."
+  ]
+}

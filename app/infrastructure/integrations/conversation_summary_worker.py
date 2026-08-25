@@ -353,9 +353,12 @@ async def deliver_due_shared_summaries(
     if not settings.SHARED_CHAT_MEMORY_ENABLED:
         return 0
     async with AsyncSessionLocal() as session:
-        existing = await SharedMemoryTools.undelivered_summaries(session)
-    summaries = await create_idle_conversation_summaries(now=now, agent=agent)
-    summaries.extend(await create_daily_summaries(now=now, agent=agent))
+        existing = [
+            summary
+            for summary in await SharedMemoryTools.undelivered_summaries(session)
+            if summary.summary_kind == "daily"
+        ]
+    summaries = await create_daily_summaries(now=now, agent=agent)
     seen_ids = {summary.id for summary in existing}
     summaries = existing + [summary for summary in summaries if summary.id not in seen_ids]
     delivered = 0
@@ -366,7 +369,7 @@ async def deliver_due_shared_summaries(
 
 
 async def run_conversation_summary_worker(bot_instance: Bot) -> None:
-    """Generate recaps after inactivity and one shared evening digest."""
+    """Persist retried context messages and deliver one shared evening digest."""
     while True:
         try:
             await retry_due_shared_context_messages()

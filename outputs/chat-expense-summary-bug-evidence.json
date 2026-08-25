@@ -1,0 +1,20 @@
+{
+  "status": "FIX_PROVEN",
+  "reason": "Both approved reproducers failed for the reported reasons, then the identical targeted command passed after the causal production changes; the full suite and Ruff also passed.",
+  "same_command": true,
+  "full_suite": "passed: 308 passed, 1 skipped",
+  "before": {
+    "command": ".venv\\Scripts\\python.exe -m pytest tests/test_multiline_expenses.py tests/test_shared_memory.py -k \"prefixed_multiline_expenses or idle_finance_exchange\" -p no:cacheprovider -q",
+    "exit_code": 1,
+    "timed_out": false,
+    "duration_ms": 9390,
+    "stdout": "2 failed, 14 deselected. The expense payload contained only 64 UAH products instead of both 130 UAH leisure and 64 UAH products. The idle summary worker returned delivered == 1 instead of 0."
+  },
+  "after": {
+    "command": ".venv\\Scripts\\python.exe -m pytest tests/test_multiline_expenses.py tests/test_shared_memory.py -k \"prefixed_multiline_expenses or idle_finance_exchange\" -p no:cacheprovider -q",
+    "exit_code": 0,
+    "timed_out": false,
+    "duration_ms": 6540,
+    "stdout": "2 passed, 14 deselected, 1 third-party deprecation warning."
+  }
+}
