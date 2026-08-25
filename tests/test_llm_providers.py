@@ -291,9 +291,7 @@ async def test_finance_agent_uses_valid_category_or_deterministic_fallback(
 )
 async def test_explicit_monthly_payment_label_overrides_model_category(expense_label, monkeypatch):
     agent = FinanceAgent.__new__(FinanceAgent)
-    agent.provider = SimpleNamespace(
-        generate_structured_json=AsyncMock(return_value={"category": "Shopping"})
-    )
+    agent.provider = SimpleNamespace(generate_structured_json=AsyncMock(return_value={"category": "Shopping"}))
     log_transaction = AsyncMock(return_value={"status": "SUCCESS", "category": "Utilities"})
     monkeypatch.setattr(FinanceTools, "log_transaction", log_transaction)
 

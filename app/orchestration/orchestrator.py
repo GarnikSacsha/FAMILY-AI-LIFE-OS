@@ -189,10 +189,14 @@ class MainOrchestrator:
     @classmethod
     def _is_explicit_task_request(cls, message_text: str) -> bool:
         normalized = (message_text or "").lower().replace("ё", "е")
-        return cls._is_explicit_task_list_request(message_text) or re.search(
-            r"\b(?:созда\w*|добав\w*|запиш\w*)\s+задач\w*\b",
-            normalized,
-        ) is not None
+        return (
+            cls._is_explicit_task_list_request(message_text)
+            or re.search(
+                r"\b(?:созда\w*|добав\w*|запиш\w*)\s+задач\w*\b",
+                normalized,
+            )
+            is not None
+        )
 
     @staticmethod
     def domain_for_message(
