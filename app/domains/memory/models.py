@@ -269,7 +269,7 @@ class PendingConfirmation(Base, TimestampMixin):
     __tablename__ = "pending_confirmations"
     __table_args__ = (
         CheckConstraint(
-            "action_type IN ('finance_log', 'calendar_delete', 'memory_dismiss')",
+            "action_type IN ('finance_log', 'calendar_delete', 'memory_dismiss', 'health_history_delete')",
             name="ck_pending_confirmations_type",
         ),
         CheckConstraint(
