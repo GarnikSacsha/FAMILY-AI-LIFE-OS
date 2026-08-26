@@ -15,7 +15,7 @@ from aiogram.exceptions import TelegramConflictError
 from aiogram.filters import Command, CommandStart
 from aiogram.methods import GetUpdates, Response, TelegramMethod
 from aiogram.methods.base import TelegramType
-from aiogram.types import BotCommand
+from aiogram.types import BotCommand, CopyTextButton, InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.config.settings import settings
 from app.domains.identity.service import (
@@ -58,6 +58,26 @@ _TELEGRAM_COMMAND_TOKEN = re.compile(
     flags=re.DOTALL,
 )
 _telegram_bot_username: str | None = None
+_INLINE_CONFIRMATION_COMMAND = re.compile(
+    r"`(?P<command>подтвердить [A-Za-z0-9_-]{6,32})`",
+    re.IGNORECASE,
+)
+
+
+def _confirmation_copy_markup(response_text: str) -> InlineKeyboardMarkup | None:
+    match = _INLINE_CONFIRMATION_COMMAND.search(response_text)
+    if match is None:
+        return None
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Скопировать команду",
+                    copy_text=CopyTextButton(text=match.group("command")),
+                )
+            ]
+        ]
+    )
 
 
 def normalize_telegram_command(text: str, *, bot_username: str | None) -> tuple[str, bool]:
@@ -580,7 +600,15 @@ async def handle_user_message(message: types.Message) -> None:
         return
 
     # A success response is sent only after the Unit of Work has committed.
-    sent_message = await message.answer(response_text, parse_mode=ParseMode.MARKDOWN)
+    confirmation_markup = _confirmation_copy_markup(response_text)
+    if confirmation_markup is None:
+        sent_message = await message.answer(response_text, parse_mode=ParseMode.MARKDOWN)
+    else:
+        sent_message = await message.answer(
+            response_text,
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=confirmation_markup,
+        )
     if shared_response_coordinates is not None:
         household_id, chat_id = shared_response_coordinates
         try:
