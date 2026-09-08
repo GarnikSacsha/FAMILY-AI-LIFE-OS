@@ -151,6 +151,8 @@ class GoogleSheetsClient:
 
     @classmethod
     def monthly_budget_category(cls, category: str) -> str:
+        if category.strip() in MONTHLY_BUDGET_HEADERS:
+            return category.strip()
         return MONTHLY_CATEGORY_HEADERS.get(category.strip(), "Другое")
 
     @classmethod

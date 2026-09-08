@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -116,6 +117,67 @@ async def test_traty_with_amount_remains_an_expense_log_request() -> None:
 
     log_transaction.assert_awaited_once()
     assert "350.00" in response
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "message_text",
+    (
+        "Добавь, пожалуйста, 560 гривен в отдых еще, потому что потратили.",
+        "560 гривен в отдых",
+    ),
+)
+async def test_spoken_grivna_expense_reaches_confirmation_with_semantic_merchant(message_text: str) -> None:
+    create_confirmation = AsyncMock(
+        return_value=SimpleNamespace(
+            status="pending",
+            confirmation_code="Z0xVU0TU",
+        )
+    )
+    get_summary = AsyncMock(return_value={"currencies": {}})
+    general_llm = AsyncMock(return_value="Общий ответ вместо финансовой операции.")
+    create_confirmation.side_effect = lambda *args, **kwargs: SimpleNamespace(
+        status="pending", confirmation_code="Z0xVU0TU", payload=kwargs["payload"]
+    )
+
+    with (
+        patch(
+            "app.orchestration.orchestrator.ConfirmationTools.create_or_get",
+            new=create_confirmation,
+        ),
+        patch.object(FinanceTools, "get_spending_summary", new=get_summary),
+        patch(
+            "app.orchestration.orchestrator.SharedMemoryTools.get_pending_action",
+            new=AsyncMock(return_value=None),
+        ),
+        patch(
+            "app.orchestration.orchestrator.CalendarIntentInterpreter.interpret",
+            new=AsyncMock(return_value=None),
+        ),
+        patch(
+            "app.integrations.llm.provider.TerraReasoningProvider.generate_text",
+            new=general_llm,
+        ),
+    ):
+        response = await MainOrchestrator.process_user_message(
+            session=object(),
+            user_id=uuid.uuid4(),
+            household_id=uuid.uuid4(),
+            user_name="Denys",
+            message_text=message_text,
+            telegram_chat_id=-100123,
+            telegram_message_id=77,
+            pending_actions_enabled=True,
+        )
+
+    get_summary.assert_not_awaited()
+    general_llm.assert_not_awaited()
+    create_confirmation.assert_awaited_once()
+    expense = create_confirmation.await_args.kwargs["payload"]["expenses"][0]
+    assert expense["amount"] == 560
+    assert expense["merchant"].casefold() == "отдых"
+    assert "Выберите категорию" in response
+    assert "категория Z0xVU0TU 0" in response
 
 
 def test_current_month_bounds_respect_kyiv_calendar():

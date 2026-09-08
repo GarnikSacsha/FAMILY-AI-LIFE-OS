@@ -25,6 +25,7 @@ from app.domains.planning.reminder_parser import (
 from app.domains.planning.semantic_calendar import CalendarIntentInterpreter, SemanticCalendarPlan
 from app.orchestration.router import IntentRouter
 from app.tools.confirmation_tools import ConfirmationTools
+from app.tools.expense_selection import expense_timestamp, selection_prompt
 from app.tools.finance_tools import FinanceTools
 from app.tools.google_tools import GoogleWorkspaceError, GoogleWorkspaceTools
 from app.tools.health_tools import HealthIntegrationError, HealthTools
@@ -35,13 +36,15 @@ from app.tools.planner_tools import PlannerTools
 class MainOrchestrator:
     """Main Orchestrator Agent for Family AI Life OS."""
 
+    _EXPENSE_CURRENCY = r"(?:грн\.?|uah|₴|грив(?:на|ны|ен|ну|ня|ні|ень|ню))"
+    _EXPENSE_CURRENCY_END = r"(?=$|[\s,.;:!?…)\]}—-])"
     _EXPENSE_AMOUNT = re.compile(
-        r"(?P<amount>\d+(?:[.,]\d{1,2})?)\s*(?:грн(?:\.|ивен|ивні)?|uah|₴)\b",
+        rf"(?P<amount>\d+(?:[.,]\d{{1,2}})?)\s*{_EXPENSE_CURRENCY}{_EXPENSE_CURRENCY_END}",
         re.IGNORECASE,
     )
     _EXPENSE_LINE = re.compile(
         r"^\s*(?P<amount>\d+(?:[.,]\d{1,2})?)\s*"
-        r"(?:(?P<currency>грн(?:\.|ивен|ивні)?|uah|₴)(?=\s|$))?\s+"
+        rf"(?:(?P<currency>{_EXPENSE_CURRENCY}){_EXPENSE_CURRENCY_END})?\s+"
         r"(?P<merchant>.+?)\s*$",
         re.IGNORECASE,
     )
@@ -51,7 +54,11 @@ class MainOrchestrator:
         re.IGNORECASE,
     )
     _CONFIRMATION_REPLY = re.compile(
-        r"^\s*(?P<verb>подтвердить|отмена|отменить)\s+(?P<code>[A-Za-z0-9_-]{6,32})\s*$",
+        r"^\s*(?P<verb>подтвердить|отмена|отменить)\s+(?P<code>[A-Za-z0-9_-]{6,32})\s*[.!?]?\s*$",
+        re.IGNORECASE,
+    )
+    _NATURAL_CONFIRMATION_REPLY = re.compile(
+        r"^\s*(?:подтверждаю|підтверджую)\s*[.!?]?\s*$",
         re.IGNORECASE,
     )
     _CATEGORY_NAMES = {
@@ -93,22 +100,41 @@ class MainOrchestrator:
         message_text: str,
     ) -> str | None:
         parsed = cls._CONFIRMATION_REPLY.match(message_text)
-        if parsed is None:
+        natural_confirmation = cls._NATURAL_CONFIRMATION_REPLY.match(message_text)
+        if parsed is None and natural_confirmation is None:
             return None
-        confirmation = await ConfirmationTools.find_for_reply(
-            session,
-            household_id=household_id,
-            telegram_chat_id=telegram_chat_id,
-            initiated_by_user_id=user_id,
-            confirmation_code=parsed.group("code"),
-        )
-        if confirmation is None:
-            return "Не нашёл активного подтверждения с таким кодом."
-        if parsed.group("verb").lower() in {"отмена", "отменить"}:
+        if natural_confirmation is not None:
+            candidates = await ConfirmationTools.find_pending_for_natural_reply(
+                session,
+                household_id=household_id,
+                telegram_chat_id=telegram_chat_id,
+                initiated_by_user_id=user_id,
+            )
+            if not candidates:
+                return "Нет активной операции, которую можно подтвердить."
+            if len(candidates) > 1:
+                return (
+                    "Нашёл несколько активных операций. "
+                    "Напишите точную команду `подтвердить <код>`."
+                )
+            confirmation = candidates[0]
+        else:
+            confirmation = await ConfirmationTools.find_for_reply(
+                session,
+                household_id=household_id,
+                telegram_chat_id=telegram_chat_id,
+                initiated_by_user_id=user_id,
+                confirmation_code=parsed.group("code"),
+            )
+            if confirmation is None:
+                return "Не нашёл активного подтверждения с таким кодом."
+        if parsed is not None and parsed.group("verb").casefold() in {"отмена", "отменить"}:
             if await ConfirmationTools.cancel(confirmation):
                 await session.flush()
                 return "Операция отменена."
             return "Эта операция уже не ожидает подтверждения."
+        if confirmation.action_type == "finance_log" and confirmation.status == "pending":
+            return selection_prompt(confirmation)
         if not await ConfirmationTools.claim(session, confirmation):
             return "Эта операция уже не ожидает подтверждения или срок кода истёк."
 
@@ -209,6 +235,8 @@ class MainOrchestrator:
         normalized = (message_text or "").lower()
         if MainOrchestrator._is_explicit_task_request(message_text):
             return "planner"
+        if MainOrchestrator._EXPENSE_AMOUNT.search(message_text):
+            return "finance"
         if (
             "календар" in normalized
             or normalized.startswith("/calendar")
@@ -332,12 +360,26 @@ class MainOrchestrator:
         merchant_parts = [part.strip() for part in re.split(r"[,;:\n]", merchant_source) if part.strip()]
         merchant = merchant_parts[-1] if merchant_parts else merchant_source
         merchant = cls._clean_expense_merchant(merchant)
+        if not merchant:
+            merchant = cls._clean_expense_suffix(message_text[amount_match.end() :])
         return amount, merchant or "Расход"
 
     @classmethod
     def _clean_expense_merchant(cls, merchant: str) -> str:
         merchant = cls._EXPENSE_PREFIX.sub(" ", merchant)
         return " ".join(merchant.split()).strip(" \t\n,;:—-")
+
+    @staticmethod
+    def _clean_expense_suffix(suffix: str) -> str:
+        suffix = re.split(
+            r"[.,;:!?…\n]|\bпотому\s+что\b",
+            suffix,
+            maxsplit=1,
+            flags=re.IGNORECASE,
+        )[0]
+        suffix = re.sub(r"^\s*(?:в|на|за)\s+", "", suffix, count=1, flags=re.IGNORECASE)
+        suffix = re.sub(r"\s+(?:ещё|еще)\s*$", "", suffix, count=1, flags=re.IGNORECASE)
+        return " ".join(suffix.split()).strip(" \t\n,;:—-")
 
     @classmethod
     def _extract_expenses(cls, message_text: str) -> list[tuple[float, str]]:
@@ -355,6 +397,8 @@ class MainOrchestrator:
             if line_match is not None and (line_match.group("currency") or has_explicit_currency):
                 amount = float(line_match.group("amount").replace(",", "."))
                 merchant = cls._clean_expense_merchant(line_match.group("merchant"))
+                if line_match.group("currency"):
+                    merchant = cls._clean_expense_suffix(merchant)
                 if merchant:
                     expenses.append((amount, merchant))
                     continue
@@ -1290,11 +1334,14 @@ class MainOrchestrator:
                         f"Пришлю прямо в этот чат: {formatted_times}."
                     )
 
-        routing = IntentRouter.classify_intent(
-            cls._routing_text(message_text),
-            has_photo=has_photo,
-            has_document=has_doc,
-        )
+        if cls._EXPENSE_AMOUNT.search(message_text):
+            routing = {"intent": "FINANCIAL_QUERY_OR_LOG"}
+        else:
+            routing = IntentRouter.classify_intent(
+                cls._routing_text(message_text),
+                has_photo=has_photo,
+                has_document=has_doc,
+            )
         intent = routing["intent"]
 
         if intent == "HEALTH_BIOMETRICS_QUERY":
@@ -1427,6 +1474,17 @@ class MainOrchestrator:
 
             if expenses:
                 if pending_actions_enabled and telegram_chat_id is not None:
+                    expense_lines = [line for line in message_text.splitlines() if cls._extract_expenses(line)]
+                    try:
+                        timestamps = [
+                            expense_timestamp(
+                                expense_lines[index] if len(expense_lines) == len(expenses) else message_text,
+                                timezone_name,
+                            ).isoformat()
+                            for index in range(len(expenses))
+                        ]
+                    except ValueError:
+                        return "Некорректная дата расхода. Укажите дату в формате ДД.ММ или ДД.ММ.ГГГГ."
                     confirmation = await ConfirmationTools.create_or_get(
                         session,
                         household_id=household_id,
@@ -1439,9 +1497,13 @@ class MainOrchestrator:
                             action_type="finance_log",
                         ),
                         payload={
+                            "category_selection": True,
+                            "timezone": timezone_name,
+                            "next_expense": 0,
                             "expenses": [
                                 {
                                     "amount": amount,
+                                    "occurred_at": timestamps[line_number - 1],
                                     "merchant": merchant,
                                     "description": message_text if len(expenses) == 1 else merchant,
                                     "external_id": (
@@ -1455,11 +1517,7 @@ class MainOrchestrator:
                         },
                     )
                     if confirmation.status == "pending":
-                        preview = ", ".join(f"{amount:g} грн — {merchant}" for amount, merchant in expenses)
-                        return (
-                            f"💳 Подтвердите запись расхода: {preview}.\n"
-                            f"Напишите: `подтвердить {confirmation.confirmation_code}`"
-                        )
+                        return selection_prompt(confirmation)
                     return "Этот запрос на расход уже был обработан."
                 from app.agents.finance.agent import FinanceAgent
 

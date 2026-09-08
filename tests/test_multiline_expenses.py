@@ -92,6 +92,9 @@ async def test_prefixed_multiline_expenses_create_one_confirmation_with_every_it
         )
     )
 
+    create_confirmation.side_effect = lambda *args, **kwargs: SimpleNamespace(
+        status="pending", confirmation_code="FaBnUAG0", payload=kwargs["payload"]
+    )
     with (
         patch(
             "app.orchestration.orchestrator.ConfirmationTools.create_or_get",
@@ -118,7 +121,10 @@ async def test_prefixed_multiline_expenses_create_one_confirmation_with_every_it
         )
 
     create_confirmation.assert_awaited_once()
-    assert create_confirmation.await_args.kwargs["payload"]["expenses"] == [
+    payload = create_confirmation.await_args.kwargs["payload"]
+    assert payload["category_selection"] is True
+    assert all(item["occurred_at"] for item in payload["expenses"])
+    assert [{k: v for k, v in item.items() if k != "occurred_at"} for item in payload["expenses"]] == [
         {
             "amount": 130,
             "merchant": "отдых",
@@ -132,5 +138,6 @@ async def test_prefixed_multiline_expenses_create_one_confirmation_with_every_it
             "external_id": "telegram:-100123:511:expense:2",
         },
     ]
-    assert "130 грн — отдых" in response
-    assert "64 грн — продукты" in response
+    assert "130 грн" in response
+    assert "расход 1 из 2" in response
+    assert "Выберите категорию" in response

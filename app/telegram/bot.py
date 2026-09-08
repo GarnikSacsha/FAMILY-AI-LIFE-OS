@@ -5,7 +5,7 @@ import time
 import uuid
 from typing import Any, cast
 
-from aiogram import Bot, Dispatcher, types
+from aiogram import Bot, Dispatcher, F, types
 from aiogram.client.session.middlewares.base import (
     BaseRequestMiddleware,
     NextRequestMiddlewareType,
@@ -25,6 +25,7 @@ from app.domains.identity.service import (
 )
 from app.infrastructure.database.session import unit_of_work
 from app.integrations.google.oauth import GoogleOAuthClient
+from app.integrations.google.sheets import MONTHLY_BUDGET_HEADERS
 from app.integrations.openai.transcription import (
     AudioTranscriptionError,
     OpenAITranscriptionClient,
@@ -32,6 +33,7 @@ from app.integrations.openai.transcription import (
 from app.integrations.oura.client import OuraClient
 from app.orchestration.orchestrator import MainOrchestrator
 from app.security.oauth import OAuthStateManager
+from app.tools.expense_selection import select_expense_category
 from app.tools.google_tools import GoogleWorkspaceError, GoogleWorkspaceTools
 from app.tools.health_tools import HealthTools
 from app.tools.memory_tools import SharedMemoryTools
@@ -65,6 +67,13 @@ _INLINE_CONFIRMATION_COMMAND = re.compile(
 
 
 def _confirmation_copy_markup(response_text: str) -> InlineKeyboardMarkup | None:
+    selection = re.search(r"`категория ([A-Za-z0-9_-]{6,32}) (\d+)`", response_text)
+    if selection:
+        code, index = selection.groups()
+        return InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=category, callback_data=f"expense:{code}:{index}:{number}")]
+            for number, category in enumerate(MONTHLY_BUDGET_HEADERS)
+        ])
     match = _INLINE_CONFIRMATION_COMMAND.search(response_text)
     if match is None:
         return None
@@ -148,6 +157,44 @@ def _secret_value(value: Any) -> str:
 
 bot = Bot(token=_secret_value(settings.TELEGRAM_BOT_TOKEN))
 dp = Dispatcher()
+
+
+@dp.callback_query(F.data.startswith("expense:"))
+async def handle_expense_category(callback: types.CallbackQuery) -> None:
+    if not isinstance(callback.message, types.Message):
+        await callback.answer("Сообщение недоступно.")
+        return
+    match = re.fullmatch(r"expense:([A-Za-z0-9_-]{6,32}):(\d+):(\d+)", callback.data or "")
+    if match is None:
+        await callback.answer("Некорректная кнопка.")
+        return
+    await callback.answer()
+    try:
+        async with unit_of_work() as session:
+            actor = await IdentityService.resolve_actor(
+                session, telegram_user_id=callback.from_user.id,
+                chat_id=callback.message.chat.id,
+                chat_type=str(getattr(callback.message.chat.type, "value", callback.message.chat.type)),
+            )
+            IdentityService.validate_domain_access(actor, "finance")
+            response = await select_expense_category(
+                session, user_id=actor.user_id, household_id=actor.household_id,
+                telegram_chat_id=actor.chat_id, code=match.group(1),
+                index=int(match.group(2)), category_index=int(match.group(3)),
+            )
+    except PermissionDeniedError:
+        await _answer_access_denied(callback.message)
+        return
+    except Exception:
+        logger.error("Expense category selection failed before commit.")
+        await callback.message.answer("Не удалось сохранить расход. Нажмите категорию ещё раз.")
+        return
+    markup = _confirmation_copy_markup(response)
+    visible = re.sub(r"\n`категория [A-Za-z0-9_-]+ \d+`", "", response)
+    if response.startswith("💳 Расход сохранён"):
+        await callback.message.edit_text(visible, reply_markup=markup)
+    else:
+        await callback.message.answer(visible, reply_markup=markup)
 
 
 class _PollingHealthMiddleware(BaseRequestMiddleware):
@@ -601,6 +648,7 @@ async def handle_user_message(message: types.Message) -> None:
 
     # A success response is sent only after the Unit of Work has committed.
     confirmation_markup = _confirmation_copy_markup(response_text)
+    response_text = re.sub(r"\n`категория [A-Za-z0-9_-]+ \d+`", "", response_text)
     if confirmation_markup is None:
         sent_message = await message.answer(response_text, parse_mode=ParseMode.MARKDOWN)
     else:
