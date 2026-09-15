@@ -301,6 +301,7 @@ class HealthTools:
         detailed_sleep = HealthTools._main_sleep_record(payloads.get("sleep", {}), target_day)
         spo2 = HealthTools._day_record(payloads.get("daily_spo2", {}), target_day)
         stress = HealthTools._day_record(payloads.get("daily_stress", {}), target_day)
+        resilience = HealthTools._day_record(payloads.get("daily_resilience", {}), target_day)
 
         readiness_contributors: Mapping[str, Any] = {}
         if isinstance(readiness, Mapping):
@@ -329,6 +330,17 @@ class HealthTools:
             ),
             "awake_seconds": HealthTools._number(detailed_sleep.get("awake_time")) if detailed_sleep else None,
             "sleep_efficiency": (HealthTools._number(detailed_sleep.get("efficiency")) if detailed_sleep else None),
+            "sleep_latency_seconds": (HealthTools._number(detailed_sleep.get("latency")) if detailed_sleep else None),
+            "average_breath_per_minute": (
+                HealthTools._number(detailed_sleep.get("average_breath")) if detailed_sleep else None
+            ),
+            "average_heart_rate_bpm": (
+                HealthTools._number(detailed_sleep.get("average_heart_rate")) if detailed_sleep else None
+            ),
+            "light_sleep_seconds": (
+                HealthTools._number(detailed_sleep.get("light_sleep_duration")) if detailed_sleep else None
+            ),
+            "resilience_level": resilience.get("level") if resilience else None,
             "average_hrv_ms": (HealthTools._number(detailed_sleep.get("average_hrv")) if detailed_sleep else None),
             "lowest_heart_rate_bpm": (
                 HealthTools._number(detailed_sleep.get("lowest_heart_rate")) if detailed_sleep else None

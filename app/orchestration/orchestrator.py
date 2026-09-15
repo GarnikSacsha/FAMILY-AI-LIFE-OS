@@ -28,6 +28,7 @@ from app.tools.confirmation_tools import ConfirmationTools
 from app.tools.expense_selection import expense_timestamp, selection_prompt
 from app.tools.finance_tools import FinanceTools
 from app.tools.google_tools import GoogleWorkspaceError, GoogleWorkspaceTools
+from app.tools.health_archive import get_saved_daily_summary
 from app.tools.health_history import format_health_history, get_health_history
 from app.tools.health_tools import HealthIntegrationError, HealthTools
 from app.tools.memory_tools import SharedMemoryTools
@@ -199,6 +200,8 @@ class MainOrchestrator:
             "/shopping": "список покупок",
             "/tasks": "задача",
             "/health": "здоровье",
+            "/weekly_health": "здоровье",
+            "/monthly_health": "здоровье",
         }.get(command)
         if command_route:
             return command_route
@@ -1008,6 +1011,9 @@ class MainOrchestrator:
                 sleep_lines.append(f"• {label}: {duration}")
         if summary.get("sleep_efficiency") is not None:
             sleep_lines.append(f"• Эффективность: {value_text(summary['sleep_efficiency'], '%')}")
+        latency = cls._format_duration(summary.get("sleep_latency_seconds"))
+        if latency is not None:
+            sleep_lines.append(f"• Засыпание: {latency}")
 
         readiness_lines = [f"• Readiness: {value_text(summary.get('readiness_score'))}"]
         if summary.get("average_hrv_ms") is not None:
@@ -1019,6 +1025,8 @@ class MainOrchestrator:
             readiness_lines.append(f"• Температура: {temperature:+g}°C")
         if summary.get("spo2_average_percent") is not None:
             readiness_lines.append(f"• SpO₂: {value_text(summary['spo2_average_percent'], '%')}")
+        if summary.get("average_breath_per_minute") is not None:
+            readiness_lines.append(f"• Дыхание: {value_text(summary['average_breath_per_minute'], ' /мин')}")
 
         activity_values = (
             summary.get("activity_score"),
@@ -1078,6 +1086,8 @@ class MainOrchestrator:
         analysis = summary.get("analysis")
         if isinstance(analysis, str) and analysis:
             blocks.append(f"🤖 Анализ\n{analysis}")
+        if summary.get("archive_status"):
+            blocks.append(str(summary["archive_status"]))
         return "\n\n".join(blocks)
 
     @classmethod
@@ -1098,6 +1108,10 @@ class MainOrchestrator:
     ) -> str:
         """Processes incoming user input, delegates to deterministic tools, and returns response."""
         has_photo = photo_bytes is not None
+        message_text = {"/weekly_health": "/health week", "/monthly_health": "/health month"}.get(
+            message_text.strip().lower(),
+            message_text,
+        )
         has_doc = document_bytes is not None
         if pending_actions_enabled is None:
             pending_actions_enabled = shared_context_enabled
@@ -1377,7 +1391,7 @@ class MainOrchestrator:
                 return "💍 Oura Ring пока не подключена. Используйте команду /oura в личном чате."
 
             try:
-                summary = await HealthTools.get_oura_daily_summary(
+                summary = await get_saved_daily_summary(
                     session,
                     user_id=user_id,
                     timezone_name=timezone_name,

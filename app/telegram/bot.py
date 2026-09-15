@@ -53,9 +53,10 @@ TELEGRAM_COMMANDS = (
     ("tasks", "📋 Текущие задачи"),
     ("shopping", "🛒 Семейный список покупок"),
     ("budget", "💳 Расходы за месяц"),
-    ("health", "🥗 Сводка здоровья и питания"),
+    ("weekly_health", "📊 Weekly health — здоровье за неделю"),
+    ("monthly_health", "📈 Monthly health — здоровье за месяц"),
 )
-TELEGRAM_COMMAND_NAMES = frozenset(command for command, _ in TELEGRAM_COMMANDS)
+TELEGRAM_COMMAND_NAMES = frozenset(command for command, _ in TELEGRAM_COMMANDS) | {"health"}
 _TELEGRAM_COMMAND_TOKEN = re.compile(
     r"^(?P<command>/[A-Za-z0-9_]+)(?:@(?P<username>[A-Za-z0-9_]+))?(?P<rest>(?:\s|$).*)",
     flags=re.DOTALL,
@@ -355,8 +356,8 @@ async def cmd_help(message: types.Message) -> None:
         "• **/tasks** — задачи: завершение, название и срок\n"
         "• **/budget** — расходы текущего месяца\n"
         "• **/health** — личная сводка здоровья\n"
-        "• **/health week** — сравнение за 7 дней\n"
-        "• **/health month** — сравнение за 30 дней\n"
+        "• `/weekly_health` — история и динамика за 7 дней\n"
+        "• `/monthly_health` — история и динамика за 30 дней\n"
         "• напишите «напомни завтра в 10:00…» — пришлю напоминание прямо в этот чат\n"
         "• отправьте фото еды для приблизительной оценки состава",
         parse_mode=ParseMode.MARKDOWN,

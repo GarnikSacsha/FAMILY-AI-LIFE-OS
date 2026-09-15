@@ -161,12 +161,26 @@ docker-compose exec app alembic upgrade head
 - `/shopping` lists household purchases with **Куплено** buttons. Completed
   records remain in the database and disappear from the active list. Existing
   task and shopping creation messages still work.
-- `/health` retains the daily Oura summary. `/health week` and `/health month`
-  compare the last 7 or 30 completed local days with the preceding equal period.
-  These commands work only in a private chat. Means include available readings
-  only, with per-metric coverage counts; today is excluded. Partial provider
-  failures are labelled. History is fetched from Oura on request, not stored as
-  a new local health archive. No new OAuth scopes or migrations are required.
+- The menu has two health entries: `/weekly_health` and `/monthly_health`.
+  `/health` remains available by typing it; `/health week` and `/health month`
+  remain compatible aliases. All health commands require a private chat.
+- Health requests synchronize up to 90 completed days plus today, using seven
+  Oura collections: daily sleep, readiness, activity, detailed sleep, SpO2,
+  stress and resilience. Repeated requests within five minutes reuse a successful
+  sync. There is no automatic delivery or background polling.
+- The existing `oura_daily_metrics` table stores one row per user/day. Provider
+  snapshots and derived daily summaries are AES-GCM encrypted in `raw_json`,
+  bound to the user and date; the existing encryption key must remain available.
+  Historical rows are retained beyond the 90-day refresh window. Empty or failed
+  collections do not erase saved readings. A provider outage falls back to saved
+  history with a freshness warning. No new migrations or OAuth scopes are added.
+- Weekly/monthly comparisons exclude today, show coverage per metric, and use
+  at least 70% coverage in both periods for the short comparison text. Daily
+  commentary compares three consecutive days with the preceding 30-day baseline
+  (at least 14 available days). Watch flags use application heuristics: sleep
+  45 minutes shorter, minimum sleeping pulse 5 bpm higher, or HRV 20% lower.
+  These are descriptive, non-clinical rules, not diagnoses or medical cutoffs.
+  No health data is sent to an LLM for these summaries.
 
 ## 📄 Documentation sitemap
 

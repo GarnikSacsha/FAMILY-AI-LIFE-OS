@@ -28,6 +28,7 @@ class OuraClient:
             "daily_activity",
             "daily_spo2",
             "daily_stress",
+            "daily_resilience",
             "sleep",
         }
     )

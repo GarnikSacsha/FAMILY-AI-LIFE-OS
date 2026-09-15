@@ -3,16 +3,25 @@ from datetime import date
 from unittest.mock import AsyncMock, patch
 
 import pytest
+import pytest_asyncio
 
 from app.integrations.oura.client import OuraClient, OuraOAuthError
 from app.orchestration.orchestrator import MainOrchestrator
 from app.tools.health_history import format_health_history, get_health_history
 from app.tools.health_tools import HealthIntegrationError, HealthTools
+from tests.test_health_archive import archive_db  # noqa: F401
+
+
+@pytest_asyncio.fixture
+async def history_session(archive_db):  # noqa: F811
+    factory, _, user = archive_db
+    async with factory.begin() as session:
+        yield session, user
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("days", [7, 30])
-async def test_history_missing_days_duplicates_zero_and_today(days):
+async def test_history_missing_days_duplicates_zero_and_today(days, history_session):
     async def collection(name, **kwargs):
         if name == "daily_sleep":
             return {
@@ -27,8 +36,7 @@ async def test_history_missing_days_duplicates_zero_and_today(days):
             return {"data": [{"day": "2026-09-14", "steps": 0}]}
         return {"data": []}
 
-    user = uuid.uuid4()
-    session = object()
+    session, user = history_session
     with (
         patch.object(HealthTools, "get_valid_oura_access_token", AsyncMock(return_value="synthetic")) as token,
         patch.object(OuraClient, "get_collection_range", new=collection),
@@ -42,7 +50,9 @@ async def test_history_missing_days_duplicates_zero_and_today(days):
 
 
 @pytest.mark.asyncio
-async def test_history_comparison_and_main_sleep_selection():
+async def test_history_comparison_and_main_sleep_selection(history_session):
+    session, user = history_session
+
     async def collection(name, **kwargs):
         if name == "sleep":
             return {
@@ -58,7 +68,7 @@ async def test_history_comparison_and_main_sleep_selection():
         patch.object(HealthTools, "get_valid_oura_access_token", AsyncMock(return_value="synthetic")),
         patch.object(OuraClient, "get_collection_range", new=collection),
     ):
-        result = await get_health_history(object(), user_id=uuid.uuid4(), days=7, today=date(2026, 9, 15))
+        result = await get_health_history(session, user_id=user, days=7, today=date(2026, 9, 15))
     metric = result["metrics"]["total_sleep_seconds"]
     assert metric["current"]["mean"] == 480
     assert metric["previous"]["mean"] == 420
@@ -67,7 +77,8 @@ async def test_history_comparison_and_main_sleep_selection():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("status", [401, 503])
-async def test_history_provider_failure_is_not_empty_success(status):
+async def test_history_provider_failure_is_not_empty_success(status, history_session):
+    session, user = history_session
     with (
         patch.object(HealthTools, "get_valid_oura_access_token", AsyncMock(return_value="synthetic")),
         patch.object(
@@ -75,11 +86,13 @@ async def test_history_provider_failure_is_not_empty_success(status):
         ),
     ):
         with pytest.raises(HealthIntegrationError):
-            await get_health_history(object(), user_id=uuid.uuid4(), days=7)
+            await get_health_history(session, user_id=user, days=7)
 
 
 @pytest.mark.asyncio
-async def test_history_partial_provider_failure_is_labelled():
+async def test_history_partial_provider_failure_is_labelled(history_session):
+    session, user = history_session
+
     async def collection(name, **kwargs):
         if name == "sleep":
             raise OuraOAuthError("unavailable", status_code=403)
@@ -89,7 +102,7 @@ async def test_history_partial_provider_failure_is_labelled():
         patch.object(HealthTools, "get_valid_oura_access_token", AsyncMock(return_value="synthetic")),
         patch.object(OuraClient, "get_collection_range", new=collection),
     ):
-        result = await get_health_history(object(), user_id=uuid.uuid4(), days=7)
+        result = await get_health_history(session, user_id=user, days=7)
     assert result["partial"]
     assert "Сводка неполная" in format_health_history(result)
 
@@ -119,7 +132,10 @@ async def test_oura_range_loads_all_pages_and_rejects_token_loop():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("command,days", [("/health week", 7), ("/health month", 30), ("/health 7", 7)])
+@pytest.mark.parametrize(
+    "command,days",
+    [("/health week", 7), ("/health month", 30), ("/health 7", 7), ("/weekly_health", 7), ("/monthly_health", 30)],
+)
 async def test_period_command_routes_to_history(command, days):
     with (
         patch("app.orchestration.orchestrator.get_health_history", AsyncMock(return_value={})) as history,

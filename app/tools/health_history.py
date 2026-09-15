@@ -1,6 +1,5 @@
 """Descriptive Oura period statistics; missing readings are never treated as zero."""
 
-import asyncio
 import math
 import uuid
 from datetime import date, datetime, timedelta
@@ -9,8 +8,8 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.integrations.oura.client import OuraClient, OuraOAuthError
-from app.tools.health_tools import HealthIntegrationError, HealthTools
+from app.tools.health_archive import sync_and_load_health
+from app.tools.health_insights import period_insight
 
 METRICS = (
     ("sleep_score", "😴 Оценка сна", "балл", 1),
@@ -22,6 +21,14 @@ METRICS = (
     ("steps", "Шаги за день", "шаг", 1),
     ("spo2_average_percent", "SpO₂", "%", 1),
     ("stress_high", "Высокий стресс за день", "мин", 60),
+    ("deep_sleep_seconds", "Глубокий сон", "мин", 60),
+    ("rem_sleep_seconds", "REM-сон", "мин", 60),
+    ("sleep_efficiency", "Эффективность сна", "%", 1),
+    ("sleep_latency_seconds", "Засыпание", "мин", 60),
+    ("average_breath_per_minute", "Дыхание во сне", "вдох/мин", 1),
+    ("temperature_deviation_c", "Отклонение температуры кожи", "°C", 1),
+    ("recovery_high", "Восстановление за день", "мин", 60),
+    ("active_calories", "Активные калории", "ккал", 1),
 )
 
 
@@ -36,23 +43,14 @@ async def get_health_history(
     if days not in {7, 30}:
         raise ValueError("Health history supports 7 or 30 days.")
     today = today or datetime.now(ZoneInfo(timezone_name)).date()
+    archive = await sync_and_load_health(session, user_id=user_id, timezone_name=timezone_name, today=today)
+    return summarize_history(archive, days=days, today=today)
+
+
+def summarize_history(archive: dict[str, Any], *, days: int, today: date) -> dict[str, Any]:
     first = today - timedelta(days=2 * days)
-    token = await HealthTools.get_valid_oura_access_token(session, user_id=user_id)
-    collections = ("daily_sleep", "daily_readiness", "daily_activity", "sleep", "daily_spo2", "daily_stress")
-    results = await asyncio.gather(
-        *(
-            OuraClient.get_collection_range(name, access_token=token, start_date=first, end_date=today)
-            for name in collections
-        ),
-        return_exceptions=True,
-    )
-    if any(isinstance(result, OuraOAuthError) and result.status_code == 401 for result in results):
-        raise HealthIntegrationError("Oura connection must be renewed.")
-    payloads = {name: result for name, result in zip(collections, results, strict=True) if isinstance(result, dict)}
-    if not any(name in payloads for name in collections[:3]):
-        raise HealthIntegrationError("Oura history is temporarily unavailable.")
-    # Explicit local date bounds exclude the incomplete current day and deduplicate daily records.
-    summaries = [HealthTools.summarize_oura_day(payloads, first + timedelta(days=i)) for i in range(2 * days)]
+    by_date = {row["date"]: row for row in archive["summaries"]}
+    summaries = [by_date.get((first + timedelta(days=i)).isoformat(), {}) for i in range(2 * days)]
     metrics = {}
     for key, _, _, divisor in METRICS:
         periods = []
@@ -71,7 +69,8 @@ async def get_health_history(
         "previous_start": first.isoformat(),
         "previous_end": (today - timedelta(days=days + 1)).isoformat(),
         "metrics": metrics,
-        "partial": len(payloads) < len(collections),
+        "partial": archive["partial"],
+        "last_sync": archive.get("last_sync"),
     }
 
 
@@ -85,6 +84,7 @@ def format_health_history(history: dict[str, Any]) -> str:
         f"📊 Здоровье за {days} дней: {display_date(history['start'])}–{display_date(history['end'])}",
         f"Сравнение: {display_date(history['previous_start'])}–{display_date(history['previous_end'])}.",
         "Средние значения; в скобках — число дней с данными.",
+        "\n🤖 " + period_insight(history),
     ]
     any_data = False
     for key, label, unit, _ in METRICS:
@@ -106,4 +106,6 @@ def format_health_history(history: dict[str, Any]) -> str:
     if history["partial"]:
         lines.append("\nЧасть данных Oura сейчас недоступна. Сводка неполная; попробуйте позже.")
     lines.append("\nСегодняшний незавершённый день не включён. При пропусках сравнение может быть неточным.")
+    if history.get("last_sync"):
+        lines.append(f"Обновление архива: {history['last_sync']}.")
     return "\n".join(lines)
