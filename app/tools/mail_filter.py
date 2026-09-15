@@ -68,6 +68,7 @@ _SECURITY_TERMS = (
     "вход в аккаунт",
     "парол",
     "код подтвержд",
+    "сповіщення системи безпеки",
 )
 _PROMO_TERMS = (
     "% off",
@@ -123,7 +124,53 @@ _AUTOMATED_PREFIXES = (
 )
 # Match these mailbox names exactly (including optional plus-addressing), so
 # a person whose address merely starts with one of them is not excluded.
-_BULK_MAILBOXES = {"updates", "bonus", "newsletter", "newsletters"}
+_BULK_MAILBOXES = {"updates", "bonus", "newsletter", "newsletters", "notify"}
+_ACTIONABLE_MAIL_TERMS = (
+    "receipt",
+    "invoice",
+    "payment received",
+    "payment failed",
+    "payment declined",
+    "was charged",
+    "refund",
+    "квитанц",
+    "списан",
+    "оплата",
+    "платеж отклонен",
+    "security alert",
+    "new sign-in",
+    "login attempt",
+    "password reset",
+    "verification code",
+    "сповіщення системи безпеки",
+    "вход в аккаунт",
+    "код подтвержд",
+    "interview",
+    "recruiter",
+    "собесед",
+    "рекрутер",
+    "delivery",
+    "доставк",
+    "order confirmation",
+    "замовлен",
+    "apr changed",
+    "rate changed",
+)
+_FAILED_PAYMENT = re.compile(r"\bpayment\b.{0,120}\b(?:unsuccessful|failed|declined)\b")
+_DATA_LOSS_TERMS = ("will be deleted", "будут удалены", "буде видалено", "будуть видалені")
+
+
+def _has_distribution_headers(message: dict[str, Any]) -> bool:
+    raw = message.get("mail_headers")
+    if not isinstance(raw, dict):
+        return False
+    headers = {_normalize(str(key)): _normalize(str(value)) for key, value in raw.items() if value}
+    return bool(
+        headers.get("list-id")
+        or headers.get("list-unsubscribe")
+        or headers.get("precedence", "").split(";", 1)[0].strip() in {"bulk", "list", "junk"}
+        or headers.get("auto-submitted", "").split(";", 1)[0].strip() in {"auto-generated", "auto-replied"}
+    )
 
 
 def _normalize(value: str) -> str:
@@ -167,6 +214,10 @@ def classify_mail(message: dict[str, Any]) -> MailImportance | None:
     career_message = _contains_any(text, _CAREER_MESSAGE_TERMS)
     security = _contains_any(text, _SECURITY_TERMS)
     domain = _sender_domain(sender)
+    data_loss_warning = _contains_any(subject, _DATA_LOSS_TERMS)
+    actionable_notice = (
+        _contains_any(subject, _ACTIONABLE_MAIL_TERMS) or bool(_FAILED_PAYMENT.search(subject)) or data_loss_warning
+    )
 
     if "STARRED" in labels:
         return MailImportance("Важное", "Письмо отмечено звездой в Gmail")
@@ -174,8 +225,15 @@ def classify_mail(message: dict[str, Any]) -> MailImportance | None:
     # marks them IMPORTANT or their snippet mentions paid leave or benefits.
     if domain in {"linkedin.com", "linkedinmail.com"} and _LINKEDIN_JOB_ALERT.match(_sender_email(sender)):
         return None
+    # An unsubscribe link is a distribution signal, not proof of advertising.
+    # Keep actionable notices based on the subject; generic words in a digest's
+    # snippet must not promote that digest into finance or career mail.
+    if (_has_distribution_headers(message) or _looks_automated(sender)) and not actionable_notice:
+        return None
     if "IMPORTANT" in labels and not (promo or noise):
         return MailImportance("Важное", "Gmail пометил письмо как важное")
+    if data_loss_warning:
+        return MailImportance("Сервисы", "Предупреждение об удалении данных")
     if financial and not (
         promo and not _contains_any(text, ("receipt", "invoice", "payment", "оплат", "списан", "транзакц"))
     ):

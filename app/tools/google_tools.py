@@ -338,6 +338,11 @@ class GoogleWorkspaceTools:
                 "date": values.get("date", ""),
                 "snippet": str(payload.get("snippet", "")),
                 "label_ids": [str(label) for label in label_ids],
+                "mail_headers": {
+                    name: values[name]
+                    for name in ("list-id", "list-unsubscribe", "precedence", "auto-submitted")
+                    if name in values
+                },
             }
 
         ids = [str(item["id"]) for item in messages if isinstance(item, dict) and item.get("id")]
