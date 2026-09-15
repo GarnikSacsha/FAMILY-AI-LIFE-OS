@@ -201,20 +201,20 @@ class OuraClient:
         """Read all pages, failing rather than reporting a truncated period as complete."""
         rows: list[Any] = []
         seen: set[str] = set()
-        next_token = None
+        page_cursor = None
         for _ in range(20):
             payload = await cls.get_daily_collection(
                 collection,
                 access_token=access_token,
                 start_date=start_date,
                 end_date=end_date,
-                next_token=next_token,
+                next_token=page_cursor,
             )
             rows.extend(payload["data"])
-            next_token = payload.get("next_token")
-            if next_token is None or next_token == "":
+            page_cursor = payload.get("next_token")
+            if page_cursor is None or page_cursor == "":
                 return {"data": rows}
-            if not isinstance(next_token, str) or next_token in seen:
+            if not isinstance(page_cursor, str) or page_cursor in seen:
                 raise OuraOAuthError("Oura returned invalid pagination.")
-            seen.add(next_token)
+            seen.add(page_cursor)
         raise OuraOAuthError("Oura pagination limit exceeded.")
