@@ -84,6 +84,10 @@ _PROMO_TERMS = (
     "бесплатно",
     "бестселлер",
     "bestseller",
+    "зниж",
+    "розпродаж",
+    "у продажу",
+    "don't miss this",
 )
 _NOISE_TERMS = (
     "new shows",
@@ -98,9 +102,24 @@ _NOISE_TERMS = (
     "подборка",
     "рекомендац",
     "новинки",
+    "daily:",
+    "hiring trends",
+    "тенденции найма",
+    "тенденції найму",
 )
 _TRUSTED_SERVICE_DOMAINS = ("openai.com", "linkedin.com", "linkedinmail.com")
-_AUTOMATED_PREFIXES = ("no-reply", "noreply", "donotreply", "notifications", "notification", "mailer-daemon")
+_AUTOMATED_PREFIXES = (
+    "no-reply",
+    "noreply",
+    "donotreply",
+    "do-not-reply",
+    "notifications",
+    "notification",
+    "mailer-daemon",
+)
+# Match these mailbox names exactly (including optional plus-addressing), so
+# a person whose address merely starts with one of them is not excluded.
+_BULK_MAILBOXES = {"updates", "bonus", "newsletter", "newsletters"}
 
 
 def _normalize(value: str) -> str:
@@ -124,7 +143,7 @@ def _sender_domain(sender: str) -> str:
 def _looks_automated(sender: str) -> bool:
     email = _sender_email(sender)
     local_part = email.split("@", 1)[0]
-    return local_part.startswith(_AUTOMATED_PREFIXES)
+    return local_part.startswith(_AUTOMATED_PREFIXES) or local_part.split("+", 1)[0] in _BULK_MAILBOXES
 
 
 def classify_mail(message: dict[str, Any]) -> MailImportance | None:
@@ -133,7 +152,7 @@ def classify_mail(message: dict[str, Any]) -> MailImportance | None:
     snippet = _normalize(str(message.get("snippet", "")))
     text = f"{subject} {sender.lower()} {snippet}"
     labels = {str(label).upper() for label in message.get("label_ids", []) or []}
-    promo = _contains_any(text, _PROMO_TERMS)
+    promo = "CATEGORY_PROMOTIONS" in labels or _contains_any(text, _PROMO_TERMS)
     noise = _contains_any(text, _NOISE_TERMS)
     financial = _contains_any(text, _FINANCIAL_TRANSACTION_TERMS)
     career = _contains_any(text, _CAREER_TERMS)
@@ -158,5 +177,5 @@ def classify_mail(message: dict[str, Any]) -> MailImportance | None:
     if domain in _TRUSTED_SERVICE_DOMAINS and _contains_any(text, _SECURITY_TERMS + _FINANCIAL_TRANSACTION_TERMS):
         return MailImportance("Сервисы", "Важное уведомление от подключённого сервиса")
     if not promo and not noise and not _looks_automated(sender) and sender.strip():
-        return MailImportance("Личное", "Письмо от живого отправителя без рекламных признаков")
+        return MailImportance("Личное", "Не обнаружены признаки рекламы или автоматической рассылки")
     return None

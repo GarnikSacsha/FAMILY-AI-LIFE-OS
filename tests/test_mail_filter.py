@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 
 from app.tools.mail_filter import classify_mail
@@ -67,5 +69,105 @@ def test_mail_filter_keeps_finance_and_career_messages(
 ) -> None:
     result = classify_mail(message)
 
+    assert result is not None
+    assert result.category == category
+
+
+# Subjects visible in the supplied screenshot; senders are synthetic and the
+# unavailable snippets/labels are not inferred from the real mailbox.
+@pytest.mark.parametrize(
+    "subject",
+    [
+        "Осінній фестиваль знижок до -50%",
+        "Довгоочікувані гаджети від Apple у продажу з 25 вересня",
+        "Don't miss this 7-day saving plan",
+        "DOU Daily: повернення з Каліфорнії в український deftech",
+    ],
+    ids=["ukrainian-discount", "ukrainian-product-launch", "saving-plan-promo", "daily-newsletter"],
+)
+def test_screenshot_promotions_are_not_personal_mail(subject: str) -> None:
+    assert classify_mail({"subject": subject, "from": "Alex <alex@shop.example>", "snippet": ""}) is None
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        {
+            "subject": "Маркетинг є. Стратегії нема. Знайомо?",
+            "from": "Learning <info@learning.example>",
+            "label_ids": ["INBOX", "IMPORTANT", "CATEGORY_PROMOTIONS"],
+        },
+        {
+            "subject": "Просмотрите тенденции найма в компании Example",
+            "from": "LinkedIn <messages-noreply@linkedin.com>",
+            "label_ids": ["INBOX", "IMPORTANT"],
+        },
+    ],
+    ids=["gmail-promotion-with-important-label", "hiring-trends-not-recruiter-contact"],
+)
+def test_important_label_does_not_promote_marketing_or_digest(message: dict[str, Any]) -> None:
+    assert classify_mail(message) is None
+
+
+@pytest.mark.parametrize(
+    "sender",
+    ["Updates <updates@service.example>", "Offers <bonus@shop.example>", "Service <do-not-reply@service.example>"],
+    ids=["updates-address", "bonus-address", "do-not-reply-address"],
+)
+def test_automated_sender_is_not_evidence_of_personal_correspondence(sender: str) -> None:
+    assert classify_mail({"subject": "What's new this week", "from": sender}) is None
+
+
+@pytest.mark.parametrize(
+    ("message", "category"),
+    [
+        (
+            {"subject": "Обед завтра", "from": "Анна <anna@personal.example>", "snippet": "Встретимся в час?"},
+            "Личное",
+        ),
+        (
+            {"subject": "Project review tomorrow", "from": "Sam <sam@company.example>", "label_ids": ["IMPORTANT"]},
+            "Важное",
+        ),
+        (
+            {
+                "subject": "Your payment receipt",
+                "from": "Shop <updates@shop.example>",
+                "snippet": "Payment received: 34 UAH. Discount applied.",
+            },
+            "Деньги",
+        ),
+        (
+            {
+                "subject": "New sign-in",
+                "from": "Security <no-reply@accounts.example>",
+                "label_ids": ["CATEGORY_PROMOTIONS"],
+            },
+            "Безопасность",
+        ),
+        (
+            {"subject": "Recruiter wants to schedule an interview", "from": "Anna <anna@company.example>"},
+            "Карьера",
+        ),
+        (
+            {
+                "subject": "50% discount",
+                "from": "Shop <bonus@shop.example>",
+                "label_ids": ["STARRED", "CATEGORY_PROMOTIONS"],
+            },
+            "Важное",
+        ),
+    ],
+    ids=[
+        "personal-reply",
+        "important-work-mail",
+        "receipt-with-discount",
+        "security-mislabelled",
+        "direct-recruiter",
+        "explicit-user-star",
+    ],
+)
+def test_filter_preserves_useful_mail_while_removing_promotions(message: dict[str, Any], category: str) -> None:
+    result = classify_mail(message)
     assert result is not None
     assert result.category == category
