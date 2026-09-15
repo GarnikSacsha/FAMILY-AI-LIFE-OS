@@ -6,7 +6,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-family_os}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-family_life_os}
       REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379/0
-    command: ["alembic", "upgrade", "head"]
+    command: ["python", "-m", "app.infrastructure.database.prepare"]
     depends_on:
       postgres:
         condition: service_healthy

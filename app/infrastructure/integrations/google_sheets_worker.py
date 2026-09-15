@@ -209,6 +209,19 @@ async def _notify_failure(bot_instance: Bot, telegram_chat_id: int) -> bool:
 async def run_google_sheets_worker(bot_instance: Bot | None = None) -> None:
     """Synchronize committed finance rows without coupling Google to DB commits."""
     while True:
+        try:
+            await _run_google_sheets_cycles(bot_instance)
+        except asyncio.CancelledError:
+            raise
+        except Exception as error:
+            # Includes DB failures while claiming, acknowledging or recording
+            # an error. Durable leases recover unfinished rows on the next cycle.
+            logger.error("Google Sheets worker cycle failed (%s).", type(error).__name__)
+            await asyncio.sleep(GOOGLE_SHEETS_POLL_SECONDS)
+
+
+async def _run_google_sheets_cycles(bot_instance: Bot | None = None) -> None:
+    while True:
         if not GoogleSheetsClient.is_configured():
             await asyncio.sleep(60)
             continue

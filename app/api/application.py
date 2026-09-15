@@ -149,6 +149,15 @@ def create_application(*, start_telegram: bool = True) -> FastAPI:
                 "status": "error",
                 "database": "unavailable",
             }
+        for task_name, worker_name in (
+            ("google_sheets_task", "google_sheets_worker"),
+            ("reminder_task", "reminder_worker"),
+            ("summary_task", "summary_worker"),
+        ):
+            task = getattr(application.state, task_name, None)
+            if task is not None and task.done():
+                response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+                return {"status": "error", worker_name: "stopped"}
         return {"status": "ok"}
 
     return application

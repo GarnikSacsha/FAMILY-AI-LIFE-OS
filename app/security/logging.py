@@ -4,7 +4,7 @@ from typing import Any
 
 REDACTED = "[REDACTED]"
 _SENSITIVE_PAIR = re.compile(
-    r"(?i)\b(token|secret|authorization|code|password|api[_-]?key)\b"
+    r"(?i)\b((?:access_|refresh_)?token|secret|authorization|code|state|password|api[_-]?key)\b"
     r"(\s*[:=]\s*)([^\s,;]+)"
 )
 _BEARER = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+")
@@ -41,3 +41,9 @@ def configure_logging(level: str = "INFO") -> None:
     handler.addFilter(RedactingFilter())
     handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
     logging.basicConfig(level=level.upper(), handlers=[handler], force=True)
+    # Uvicorn owns handlers separate from the application's root handler.
+    # Filter the records before those handlers can log OAuth query parameters.
+    for name in ("uvicorn.access", "uvicorn.error"):
+        logger = logging.getLogger(name)
+        if not any(isinstance(item, RedactingFilter) for item in logger.filters):
+            logger.addFilter(RedactingFilter())

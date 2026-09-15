@@ -20,6 +20,8 @@ class PlannerTools:
         title: str,
         assignee_id: uuid.UUID | None = None,
         due_date: datetime | None = None,
+        *,
+        created_at: datetime | None = None,
     ) -> dict[str, Any]:
         """Creates a new task in PostgreSQL."""
         task = Task(
@@ -30,6 +32,8 @@ class PlannerTools:
             title=title,
             due_date=due_date,
         )
+        if created_at is not None:
+            task.created_at = created_at
         session.add(task)
         await session.flush()
 

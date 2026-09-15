@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domains.identity.models import OAuthToken
+from app.domains.identity.service import ActorContext, IdentityService, PermissionDeniedError
 from app.integrations.google.oauth import GoogleOAuthClient, GoogleOAuthError
 from app.security.token_cipher import TokenCipher, get_token_cipher
 from app.tools.mail_filter import classify_mail
@@ -26,6 +27,15 @@ class GoogleWorkspaceError(Exception):
 
 
 class GoogleWorkspaceTools:
+    @staticmethod
+    def _validate_actor(session: AsyncSession, *, user_id: uuid.UUID, domain: str) -> None:
+        session_info = getattr(session, "info", None)
+        actor = session_info.get("actor_context") if isinstance(session_info, dict) else None
+        if isinstance(actor, ActorContext):
+            IdentityService.validate_domain_access(actor, domain)
+            if actor.user_id != user_id:
+                raise PermissionDeniedError("Access denied.")
+
     @staticmethod
     async def is_google_connected(
         session: AsyncSession,
@@ -439,19 +449,46 @@ class GoogleWorkspaceTools:
         timezone_name: str,
         recurrence: list[str] | None = None,
     ) -> dict[str, str]:
+        GoogleWorkspaceTools._validate_actor(session, user_id=user_id, domain="calendar")
         await GoogleWorkspaceTools._require_calendar_scope(session, user_id=user_id)
         access_token = await GoogleWorkspaceTools.get_valid_access_token(session, user_id=user_id)
-        payload = await GoogleWorkspaceTools._calendar_request(
-            "POST",
-            "https://www.googleapis.com/calendar/v3/calendars/primary/events",
-            access_token=access_token,
-            json_body={
-                "summary": summary,
-                "start": {"dateTime": start_at.isoformat(), "timeZone": timezone_name},
-                "end": {"dateTime": end_at.isoformat(), "timeZone": timezone_name},
-                **({"recurrence": recurrence} if recurrence else {}),
-            },
+        session_info = getattr(session, "info", None)
+        request_key = session_info.get("telegram_request_key") if isinstance(session_info, dict) else None
+        event_id = (
+            uuid.uuid5(uuid.NAMESPACE_URL, f"family-ai-life-os:{user_id}:{request_key}:calendar").hex
+            if isinstance(request_key, str) and request_key
+            else None
         )
+        events_url = "https://www.googleapis.com/calendar/v3/calendars/primary/events"
+        body: dict[str, Any] = {
+            "summary": summary,
+            "start": {"dateTime": start_at.isoformat(), "timeZone": timezone_name},
+            "end": {"dateTime": end_at.isoformat(), "timeZone": timezone_name},
+            **({"recurrence": recurrence} if recurrence else {}),
+            **({"id": event_id} if event_id else {}),
+        }
+        try:
+            payload = await GoogleWorkspaceTools._calendar_request(
+                "POST",
+                events_url,
+                access_token=access_token,
+                json_body=body,
+            )
+        except GoogleWorkspaceError as error:
+            if event_id is None or error.error_code not in {"GOOGLE_HTTP_409", "GOOGLE_CALENDAR_UNAVAILABLE"}:
+                raise
+            # Google may have created the event before a timeout or DB rollback.
+            # Recover only this exact request's event, never match by its title.
+            try:
+                payload = await GoogleWorkspaceTools._calendar_request(
+                    "GET",
+                    f"{events_url}/{event_id}",
+                    access_token=access_token,
+                )
+            except GoogleWorkspaceError:
+                raise error from None
+            if payload.get("id") != event_id or payload.get("status") == "cancelled":
+                raise error
         return {
             "id": str(payload.get("id", "")),
             "summary": str(payload.get("summary", summary)),
@@ -465,6 +502,7 @@ class GoogleWorkspaceTools:
         user_id: uuid.UUID,
         event_id: str,
     ) -> None:
+        GoogleWorkspaceTools._validate_actor(session, user_id=user_id, domain="calendar")
         await GoogleWorkspaceTools._require_calendar_scope(session, user_id=user_id)
         access_token = await GoogleWorkspaceTools.get_valid_access_token(session, user_id=user_id)
         await GoogleWorkspaceTools._calendar_request(

@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domains.identity.models import User
-from app.domains.memory.models import PendingSharedAction
+from app.domains.memory.models import PendingConfirmation, PendingSharedAction
 from app.domains.planning.calendar_parser import (
     calendar_clock,
     daily_recurrence,
@@ -103,6 +103,7 @@ class MainOrchestrator:
         natural_confirmation = cls._NATURAL_CONFIRMATION_REPLY.match(message_text)
         if parsed is None and natural_confirmation is None:
             return None
+        confirmation: PendingConfirmation | None
         if natural_confirmation is not None:
             candidates = await ConfirmationTools.find_pending_for_natural_reply(
                 session,
@@ -113,10 +114,7 @@ class MainOrchestrator:
             if not candidates:
                 return "Нет активной операции, которую можно подтвердить."
             if len(candidates) > 1:
-                return (
-                    "Нашёл несколько активных операций. "
-                    "Напишите точную команду `подтвердить <код>`."
-                )
+                return "Нашёл несколько активных операций. Напишите точную команду `подтвердить <код>`."
             confirmation = candidates[0]
         else:
             confirmation = await ConfirmationTools.find_for_reply(
@@ -124,7 +122,7 @@ class MainOrchestrator:
                 household_id=household_id,
                 telegram_chat_id=telegram_chat_id,
                 initiated_by_user_id=user_id,
-                confirmation_code=parsed.group("code"),
+                confirmation_code=cast(re.Match[str], parsed).group("code"),
             )
             if confirmation is None:
                 return "Не нашёл активного подтверждения с таким кодом."
@@ -1513,7 +1511,7 @@ class MainOrchestrator:
                                     ),
                                 }
                                 for line_number, (amount, merchant) in enumerate(expenses, start=1)
-                            ]
+                            ],
                         },
                     )
                     if confirmation.status == "pending":
@@ -1615,7 +1613,8 @@ class MainOrchestrator:
                 if not titles:
                     return "📋 Укажите хотя бы одну задачу отдельной строкой."
                 results = []
-                for title in titles:
+                batch_created_at = datetime.now(timezone.utc)
+                for position, title in enumerate(titles):
                     results.append(
                         await PlannerTools.create_task(
                             session,
@@ -1625,6 +1624,7 @@ class MainOrchestrator:
                             assignee_id=assignee_id,
                             due_date=due_date,
                             title=title,
+                            created_at=batch_created_at + timedelta(microseconds=position),
                         )
                     )
                 if len(results) == 1:

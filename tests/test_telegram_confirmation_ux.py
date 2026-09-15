@@ -72,8 +72,11 @@ async def test_finance_confirmation_has_mobile_copy_button_with_exact_command() 
 async def test_expense_selection_displays_template_categories_without_internal_marker():
     message = _ExpenseMessage()
     actor = ActorContext(
-        user_id=uuid.uuid4(), telegram_id=message.from_user.id,
-        household_id=uuid.uuid4(), chat_id=message.chat.id, chat_type="private",
+        user_id=uuid.uuid4(),
+        telegram_id=message.from_user.id,
+        household_id=uuid.uuid4(),
+        chat_id=message.chat.id,
+        chat_type="private",
     )
     committed = False
 
@@ -102,15 +105,24 @@ async def test_expense_selection_displays_template_categories_without_internal_m
 @pytest.mark.parametrize("fail_commit", [False, True])
 async def test_category_callback_uses_clicking_user_and_only_reports_success_after_commit(fail_commit):
     message = Message(
-        message_id=102, date=datetime.now(timezone.utc), chat=Chat(id=-100, type="supergroup"),
+        message_id=102,
+        date=datetime.now(timezone.utc),
+        chat=Chat(id=-100, type="supergroup"),
         from_user=User(id=999, is_bot=True, first_name="Bot"),
     )
     callback = CallbackQuery(
-        id="selection", from_user=User(id=123, is_bot=False, first_name="One"),
-        chat_instance="instance", message=message, data="expense:Z0xVU0TU:0:7",
+        id="selection",
+        from_user=User(id=123, is_bot=False, first_name="One"),
+        chat_instance="instance",
+        message=message,
+        data="expense:Z0xVU0TU:0:7",
     )
     actor = ActorContext(
-        user_id=uuid.uuid4(), telegram_id=123, household_id=uuid.uuid4(), chat_id=-100, chat_type="supergroup",
+        user_id=uuid.uuid4(),
+        telegram_id=123,
+        household_id=uuid.uuid4(),
+        chat_id=-100,
+        chat_type="supergroup",
     )
     committed = False
 

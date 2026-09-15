@@ -70,10 +70,12 @@ def _confirmation_copy_markup(response_text: str) -> InlineKeyboardMarkup | None
     selection = re.search(r"`категория ([A-Za-z0-9_-]{6,32}) (\d+)`", response_text)
     if selection:
         code, index = selection.groups()
-        return InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=category, callback_data=f"expense:{code}:{index}:{number}")]
-            for number, category in enumerate(MONTHLY_BUDGET_HEADERS)
-        ])
+        return InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text=category, callback_data=f"expense:{code}:{index}:{number}")]
+                for number, category in enumerate(MONTHLY_BUDGET_HEADERS)
+            ]
+        )
     match = _INLINE_CONFIRMATION_COMMAND.search(response_text)
     if match is None:
         return None
@@ -172,15 +174,20 @@ async def handle_expense_category(callback: types.CallbackQuery) -> None:
     try:
         async with unit_of_work() as session:
             actor = await IdentityService.resolve_actor(
-                session, telegram_user_id=callback.from_user.id,
+                session,
+                telegram_user_id=callback.from_user.id,
                 chat_id=callback.message.chat.id,
                 chat_type=str(getattr(callback.message.chat.type, "value", callback.message.chat.type)),
             )
             IdentityService.validate_domain_access(actor, "finance")
             response = await select_expense_category(
-                session, user_id=actor.user_id, household_id=actor.household_id,
-                telegram_chat_id=actor.chat_id, code=match.group(1),
-                index=int(match.group(2)), category_index=int(match.group(3)),
+                session,
+                user_id=actor.user_id,
+                household_id=actor.household_id,
+                telegram_chat_id=actor.chat_id,
+                code=match.group(1),
+                index=int(match.group(2)),
+                category_index=int(match.group(3)),
             )
     except PermissionDeniedError:
         await _answer_access_denied(callback.message)
@@ -249,12 +256,21 @@ def _message_coordinates(message: types.Message) -> tuple[int, int, str]:
 
 async def _resolve_actor(session: Any, message: types.Message) -> ActorContext:
     telegram_id, chat_id, chat_type = _message_coordinates(message)
-    return await IdentityService.resolve_actor(
+    actor = await IdentityService.resolve_actor(
         session,
         telegram_user_id=telegram_id,
         chat_id=chat_id,
         chat_type=chat_type,
     )
+    # Keep the authenticated actor at the tool boundary as well as the router.
+    # The session is scoped to this update; no process-global user state exists.
+    session_info = getattr(session, "info", None)
+    if isinstance(session_info, dict):
+        session_info["actor_context"] = actor
+        message_id = getattr(message, "message_id", None)
+        if isinstance(message_id, int):
+            session_info["telegram_request_key"] = f"telegram:{actor.chat_id}:{message_id}"
+    return actor
 
 
 async def _answer_access_denied(message: types.Message) -> None:
