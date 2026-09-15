@@ -290,6 +290,11 @@ class HealthTools:
             first_error = next((result for result in results if isinstance(result, Exception)), None)
             raise HealthIntegrationError("Oura data is temporarily unavailable.") from first_error
 
+        return HealthTools.summarize_oura_day(payloads, target_day)
+
+    @staticmethod
+    def summarize_oura_day(payloads: Mapping[str, Mapping[str, Any]], target_day: date) -> dict[str, Any]:
+        """Use the same metric extraction for today's view and historical summaries."""
         daily_sleep = HealthTools._day_record(payloads.get("daily_sleep", {}), target_day)
         readiness = HealthTools._day_record(payloads.get("daily_readiness", {}), target_day)
         activity = HealthTools._day_record(payloads.get("daily_activity", {}), target_day)

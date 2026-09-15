@@ -33,6 +33,7 @@ from app.integrations.openai.transcription import (
 from app.integrations.oura.client import OuraClient
 from app.orchestration.orchestrator import MainOrchestrator
 from app.security.oauth import OAuthStateManager
+from app.telegram.planner import register_planner_handlers
 from app.tools.expense_selection import select_expense_category
 from app.tools.google_tools import GoogleWorkspaceError, GoogleWorkspaceTools
 from app.tools.health_tools import HealthTools
@@ -350,10 +351,12 @@ async def cmd_help(message: types.Message) -> None:
         "• **/google** — подключение личных Gmail и Calendar\n"
         "• **/mail** — последние письма в личном чате\n"
         "• **/calendar** — ближайшие события в личном чате\n"
-        "• **/shopping** — семейный список покупок\n"
-        "• **/tasks** — текущие задачи\n"
+        "• **/shopping** — покупки и кнопки «Куплено»\n"
+        "• **/tasks** — задачи: завершение, название и срок\n"
         "• **/budget** — расходы текущего месяца\n"
         "• **/health** — личная сводка здоровья\n"
+        "• **/health week** — сравнение за 7 дней\n"
+        "• **/health month** — сравнение за 30 дней\n"
         "• напишите «напомни завтра в 10:00…» — пришлю напоминание прямо в этот чат\n"
         "• отправьте фото еды для приблизительной оценки состава",
         parse_mode=ParseMode.MARKDOWN,
@@ -524,6 +527,9 @@ async def cmd_calendar(message: types.Message) -> None:
         return
     lines = [f"{index}. {item['summary']}\nНачало: {item['start']}" for index, item in enumerate(events, start=1)]
     await message.answer("📅 Ближайшие события:\n\n" + "\n\n".join(lines))
+
+
+register_planner_handlers(dp)
 
 
 @dp.message()

@@ -12,6 +12,71 @@ class PlannerTools:
     """Deterministic planning tools for tasks, shopping items, and reminders."""
 
     @staticmethod
+    async def update_task(
+        session: AsyncSession,
+        *,
+        household_id: uuid.UUID,
+        task_id: uuid.UUID,
+        title: str | None = None,
+        due_date: datetime | None = None,
+        change_due_date: bool = False,
+        complete: bool = False,
+    ) -> bool:
+        """Update only an active household task inside the caller's transaction."""
+        if title is not None:
+            title = " ".join(title.split())
+            if not title or len(title) > 255:
+                raise ValueError("Название должно содержать от 1 до 255 символов.")
+        if due_date is not None and due_date.utcoffset() is None:
+            raise ValueError("Укажите часовой пояс срока задачи.")
+        task = (
+            await session.execute(
+                select(Task)
+                .where(
+                    Task.id == task_id,
+                    Task.owner_type == "household",
+                    Task.owner_id == household_id,
+                    Task.is_completed.is_(False),
+                )
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if task is None:
+            return False
+        if title is not None:
+            task.title = title
+        if change_due_date:
+            task.due_date = due_date.astimezone(timezone.utc) if due_date is not None else None
+        if complete:
+            task.is_completed = True
+        await session.flush()
+        return True
+
+    @staticmethod
+    async def complete_shopping_item(
+        session: AsyncSession,
+        *,
+        household_id: uuid.UUID,
+        item_id: uuid.UUID,
+    ) -> bool:
+        item = (
+            await session.execute(
+                select(ShoppingItem)
+                .where(
+                    ShoppingItem.id == item_id,
+                    ShoppingItem.household_id == household_id,
+                    ShoppingItem.is_purchased.is_(False),
+                )
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if item is None:
+            return False
+        item.is_purchased = True
+        await session.flush()
+        return True
+
+    @staticmethod
     async def create_task(
         session: AsyncSession,
         creator_id: uuid.UUID,
@@ -49,16 +114,19 @@ class PlannerTools:
         *,
         owner_id: uuid.UUID,
         limit: int = 50,
+        offset: int = 0,
     ) -> list[dict[str, Any]]:
         """Return unfinished tasks from PostgreSQL in due-date order."""
         stmt = (
             select(Task)
             .where(
                 Task.owner_id == owner_id,
+                Task.owner_type == "household",
                 Task.is_completed.is_(False),
             )
             .order_by(Task.due_date.asc().nullslast(), Task.created_at, Task.id)
             .limit(limit)
+            .offset(offset)
         )
         result = await session.execute(stmt)
         return [
@@ -126,12 +194,21 @@ class PlannerTools:
         }
 
     @staticmethod
-    async def get_active_shopping_list(session: AsyncSession, household_id: uuid.UUID) -> list[dict[str, Any]]:
+    async def get_active_shopping_list(
+        session: AsyncSession,
+        household_id: uuid.UUID,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
         """Retrieves non-purchased shopping items for a household."""
         stmt = select(ShoppingItem).where(
             ShoppingItem.household_id == household_id,
             ShoppingItem.is_purchased.is_(False),
         )
+        stmt = stmt.order_by(ShoppingItem.created_at, ShoppingItem.id).offset(offset)
+        if limit is not None:
+            stmt = stmt.limit(limit)
         result = await session.execute(stmt)
         items = result.scalars().all()
 

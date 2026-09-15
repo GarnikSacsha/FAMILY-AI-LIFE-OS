@@ -152,6 +152,22 @@ docker-compose up -d --build
 docker-compose exec app alembic upgrade head
 ```
 
+## Planner controls and health history
+
+- `/tasks` lists active household tasks in pages of eight. Use ✓ to complete,
+  ✏️ to rename, or 📅 to change the due date. For edits, use Telegram's **Reply**
+  on the bot's prompt and send the new value. Dates use `DD.MM.YYYY HH:MM` in
+  your account timezone; `-` removes the due date. The prompt has a Cancel button.
+- `/shopping` lists household purchases with **Куплено** buttons. Completed
+  records remain in the database and disappear from the active list. Existing
+  task and shopping creation messages still work.
+- `/health` retains the daily Oura summary. `/health week` and `/health month`
+  compare the last 7 or 30 completed local days with the preceding equal period.
+  These commands work only in a private chat. Means include available readings
+  only, with per-metric coverage counts; today is excluded. Partial provider
+  failures are labelled. History is fetched from Oura on request, not stored as
+  a new local health archive. No new OAuth scopes or migrations are required.
+
 ## 📄 Documentation sitemap
 
 - [AGENTS.md](./AGENTS.md): domain and agent contracts.

@@ -144,6 +144,7 @@ class OuraClient:
         access_token: str,
         start_date: date,
         end_date: date,
+        next_token: str | None = None,
     ) -> dict[str, Any]:
         """Read one allowlisted date-based Oura V2 collection without leaking responses."""
         if collection not in cls.DATE_COLLECTIONS:
@@ -160,6 +161,8 @@ class OuraClient:
             "end_date": end_date.isoformat(),
         }
         headers = {"Authorization": f"Bearer {access_token.strip()}"}
+        if next_token is not None:
+            params["next_token"] = next_token
         try:
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.get(
@@ -184,3 +187,33 @@ class OuraClient:
         if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
             raise OuraOAuthError("Oura returned an invalid data response.")
         return payload
+
+    @classmethod
+    async def get_collection_range(
+        cls,
+        collection: str,
+        *,
+        access_token: str,
+        start_date: date,
+        end_date: date,
+    ) -> dict[str, Any]:
+        """Read all pages, failing rather than reporting a truncated period as complete."""
+        rows: list[Any] = []
+        seen: set[str] = set()
+        next_token = None
+        for _ in range(20):
+            payload = await cls.get_daily_collection(
+                collection,
+                access_token=access_token,
+                start_date=start_date,
+                end_date=end_date,
+                next_token=next_token,
+            )
+            rows.extend(payload["data"])
+            next_token = payload.get("next_token")
+            if next_token is None or next_token == "":
+                return {"data": rows}
+            if not isinstance(next_token, str) or next_token in seen:
+                raise OuraOAuthError("Oura returned invalid pagination.")
+            seen.add(next_token)
+        raise OuraOAuthError("Oura pagination limit exceeded.")

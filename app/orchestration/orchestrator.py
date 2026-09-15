@@ -28,6 +28,7 @@ from app.tools.confirmation_tools import ConfirmationTools
 from app.tools.expense_selection import expense_timestamp, selection_prompt
 from app.tools.finance_tools import FinanceTools
 from app.tools.google_tools import GoogleWorkspaceError, GoogleWorkspaceTools
+from app.tools.health_history import format_health_history, get_health_history
 from app.tools.health_tools import HealthIntegrationError, HealthTools
 from app.tools.memory_tools import SharedMemoryTools
 from app.tools.planner_tools import PlannerTools
@@ -1344,6 +1345,21 @@ class MainOrchestrator:
 
         if intent == "HEALTH_BIOMETRICS_QUERY":
             normalized = message_text.lower()
+            period = normalized.strip().split(maxsplit=1)
+            days = None
+            if len(period) == 2 and period[0] == "/health":
+                days = {"week": 7, "7": 7, "неделя": 7, "month": 30, "30": 30, "месяц": 30}.get(period[1].strip())
+                if days is None:
+                    return "Используйте /health — сегодня, /health week — 7 дней, /health month — 30 дней."
+            if days is not None:
+                try:
+                    history = await get_health_history(session, user_id=user_id, days=days, timezone_name=timezone_name)
+                except HealthIntegrationError:
+                    return (
+                        "Не удалось загрузить историю Oura. Попробуйте позже; "
+                        "если доступ истёк, переподключитесь через /oura."
+                    )
+                return format_health_history(history)
             status_terms = (
                 "подключ",
                 "работает ли",
