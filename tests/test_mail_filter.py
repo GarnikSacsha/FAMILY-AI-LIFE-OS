@@ -171,3 +171,99 @@ def test_filter_preserves_useful_mail_while_removing_promotions(message: dict[st
     result = classify_mail(message)
     assert result is not None
     assert result.category == category
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        {"subject": "Насолоджуйтесь APR до 7%!", "from": "Binance <do_not_reply@mailer2.binance.com>"},
+        {"subject": "Enjoy APR up to 7%!", "from": "Offers <info@exchange.example>", "label_ids": ["IMPORTANT"]},
+        {
+            "subject": "Маркетинг є. Стратегії нема. Знайомо? 🤔",
+            "from": "Genius.Space <info@genius.space>",
+            "label_ids": ["IMPORTANT"],
+        },
+        {"subject": "What's new this week", "from": "Service <do_not_reply@service.example>"},
+        {
+            "subject": "Python Engineer, New Grad в компании Jobright.ai",
+            "from": "Оповещения о вакансиях LinkedIn <jobalerts-noreply@linkedin.com>",
+            "label_ids": ["IMPORTANT"],
+        },
+        {
+            "subject": "Senior Business Analyst в компании Avenga",
+            "from": "Оповещения о вакансиях LinkedIn <jobalerts-noreply@linkedin.com>",
+        },
+        {
+            "subject": "New job matches",
+            "from": "LinkedIn <jobalerts-noreply@linkedin.com>",
+            "snippet": "Paid leave and competitive compensation",
+            "label_ids": ["IMPORTANT"],
+        },
+    ],
+    ids=[
+        "apr-ukrainian",
+        "apr-important",
+        "marketing-without-promotion-label",
+        "underscore-no-reply",
+        "linkedin-important-job-alert",
+        "linkedin-job-alert",
+        "job-alert-with-financial-word",
+    ],
+)
+def test_followup_screenshot_noise_is_excluded_without_assumed_promotion_labels(message: dict[str, Any]) -> None:
+    assert classify_mail(message) is None
+
+
+@pytest.mark.parametrize(
+    ("message", "category"),
+    [
+        (
+            {
+                "subject": "Action Required! Some recordings will be deleted in 14 days",
+                "from": "Service <no-reply@recordings.example>",
+                "label_ids": ["IMPORTANT"],
+            },
+            "Важное",
+        ),
+        (
+            {
+                "subject": "Сповіщення системи безпеки",
+                "from": "Google <no-reply@accounts.google.com>",
+                "label_ids": ["IMPORTANT"],
+            },
+            "Важное",
+        ),
+        ({"subject": "Payment received", "from": "Exchange <do_not_reply@exchange.example>"}, "Деньги"),
+        (
+            {
+                "subject": "Your account APR changed to 7%",
+                "from": "Bank <no_reply@bank.example>",
+                "label_ids": ["IMPORTANT"],
+            },
+            "Важное",
+        ),
+        ({"subject": "A recruiter sent you a message", "from": "LinkedIn <messages-noreply@linkedin.com>"}, "Карьера"),
+        ({"subject": "Interview invitation", "from": "Anna <anna@genius.space>"}, "Карьера"),
+        (
+            {
+                "subject": "Новые вакансии",
+                "from": "LinkedIn <jobalerts-noreply@linkedin.com>",
+                "label_ids": ["STARRED", "IMPORTANT"],
+            },
+            "Важное",
+        ),
+    ],
+    ids=[
+        "deletion-warning",
+        "security-warning",
+        "automated-receipt",
+        "apr-account-notice",
+        "direct-linkedin-contact",
+        "no-domain-blacklist",
+        "starred-job-alert",
+    ],
+)
+def test_followup_fix_preserves_direct_contacts_and_service_notices(message: dict[str, Any], category: str) -> None:
+    result = classify_mail(message)
+    assert result is not None
+    assert result.category == category

@@ -88,7 +88,11 @@ _PROMO_TERMS = (
     "розпродаж",
     "у продажу",
     "don't miss this",
+    "маркетинг є. стратегії нема. знайомо",
 )
+_APR_PROMO_RATE = re.compile(r"\bapr\b[^.!?\n]{0,40}\d+(?:[.,]\d+)?\s*%")
+_APR_PROMO_CALL = re.compile(r"\b(?:enjoy|earn)\b|насолодж|заробля|отримайте|получите")
+_LINKEDIN_JOB_ALERT = re.compile(r"^job[-_]?alerts?(?:[-_.+]|$)")
 _NOISE_TERMS = (
     "new shows",
     "movies to watch",
@@ -142,7 +146,7 @@ def _sender_domain(sender: str) -> str:
 
 def _looks_automated(sender: str) -> bool:
     email = _sender_email(sender)
-    local_part = email.split("@", 1)[0]
+    local_part = email.split("@", 1)[0].replace("_", "-")
     return local_part.startswith(_AUTOMATED_PREFIXES) or local_part.split("+", 1)[0] in _BULK_MAILBOXES
 
 
@@ -152,7 +156,11 @@ def classify_mail(message: dict[str, Any]) -> MailImportance | None:
     snippet = _normalize(str(message.get("snippet", "")))
     text = f"{subject} {sender.lower()} {snippet}"
     labels = {str(label).upper() for label in message.get("label_ids", []) or []}
-    promo = "CATEGORY_PROMOTIONS" in labels or _contains_any(text, _PROMO_TERMS)
+    promo = (
+        "CATEGORY_PROMOTIONS" in labels
+        or _contains_any(text, _PROMO_TERMS)
+        or bool(_APR_PROMO_RATE.search(subject) and _APR_PROMO_CALL.search(subject))
+    )
     noise = _contains_any(text, _NOISE_TERMS)
     financial = _contains_any(text, _FINANCIAL_TRANSACTION_TERMS)
     career = _contains_any(text, _CAREER_TERMS)
@@ -162,6 +170,10 @@ def classify_mail(message: dict[str, Any]) -> MailImportance | None:
 
     if "STARRED" in labels:
         return MailImportance("Важное", "Письмо отмечено звездой в Gmail")
+    # Job matching broadcasts are not direct recruiter contacts, even if Gmail
+    # marks them IMPORTANT or their snippet mentions paid leave or benefits.
+    if domain in {"linkedin.com", "linkedinmail.com"} and _LINKEDIN_JOB_ALERT.match(_sender_email(sender)):
+        return None
     if "IMPORTANT" in labels and not (promo or noise):
         return MailImportance("Важное", "Gmail пометил письмо как важное")
     if financial and not (
