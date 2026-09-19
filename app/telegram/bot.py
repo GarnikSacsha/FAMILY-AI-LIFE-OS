@@ -610,6 +610,12 @@ async def handle_user_message(message: types.Message) -> None:
                 # group may be analyzed, but it is not added to personal health
                 # history or used as private context.
                 domain = "general"
+            if domain == "calendar" and actor.chat_type != "private":
+                await message.answer(
+                    "📅 Запись в личный Google Calendar доступна в личном чате с ботом. "
+                    "Отправьте эту просьбу мне в личку. Событие пока не создано."
+                )
+                return
             IdentityService.validate_domain_access(actor, domain)
             if shared_context_enabled:
                 if transcript is not None:

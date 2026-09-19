@@ -22,7 +22,11 @@ from app.domains.planning.reminder_parser import (
     parse_reminder_request,
     reminder_title,
 )
-from app.domains.planning.semantic_calendar import CalendarIntentInterpreter, SemanticCalendarPlan
+from app.domains.planning.semantic_calendar import (
+    CalendarIntentInterpreter,
+    SemanticCalendarPlan,
+    is_day_or_birthday_request,
+)
 from app.orchestration.router import IntentRouter
 from app.tools.confirmation_tools import ConfirmationTools
 from app.tools.expense_selection import expense_timestamp, selection_prompt
@@ -642,6 +646,8 @@ class MainOrchestrator:
         normalized = (message_text or "").lower().replace("ё", "е")
         if MainOrchestrator._is_recurring_calendar_request(message_text):
             return False
+        if is_day_or_birthday_request(message_text) and "список покупок" not in normalized:
+            return True
         has_action = any(marker in normalized for marker in ("добав", "созда", "постав", "запиш", "записать"))
         has_date_or_calendar = any(
             marker in normalized
@@ -1349,6 +1355,8 @@ class MainOrchestrator:
 
         if cls._EXPENSE_AMOUNT.search(message_text):
             routing = {"intent": "FINANCIAL_QUERY_OR_LOG"}
+        elif is_day_or_birthday_request(message_text) and not cls._is_explicit_task_request(message_text):
+            routing = {"intent": "PLANNING_OR_REMINDER"}
         else:
             routing = IntentRouter.classify_intent(
                 cls._routing_text(message_text),
