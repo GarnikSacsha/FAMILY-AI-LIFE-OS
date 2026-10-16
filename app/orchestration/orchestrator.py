@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domains.identity.models import User
-from app.domains.memory.models import PendingSharedAction
+from app.domains.memory.models import PendingConfirmation, PendingSharedAction
 from app.domains.planning.calendar_parser import (
     calendar_clock,
     daily_recurrence,
@@ -38,18 +38,22 @@ class MainOrchestrator:
 
     _EXPENSE_CURRENCY = r"(?:грн\.?|uah|₴|грив(?:на|ны|ен|ну|ня|ні|ень|ню))"
     _EXPENSE_CURRENCY_END = r"(?=$|[\s,.;:!?…)\]}—-])"
+    _EXPENSE_NUMBER = (
+        r"(?:\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|"
+        r"\d{1,3}(?:[ \u00a0\u202f]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)"
+    )
     _EXPENSE_AMOUNT = re.compile(
-        rf"(?P<amount>\d+(?:[.,]\d{{1,2}})?)\s*{_EXPENSE_CURRENCY}{_EXPENSE_CURRENCY_END}",
+        rf"(?<![\d.,])(?P<amount>[-−]?\s*{_EXPENSE_NUMBER})\s*{_EXPENSE_CURRENCY}{_EXPENSE_CURRENCY_END}",
         re.IGNORECASE,
     )
     _EXPENSE_LINE = re.compile(
-        r"^\s*(?P<amount>\d+(?:[.,]\d{1,2})?)\s*"
+        rf"^\s*(?P<amount>[-−]?\s*{_EXPENSE_NUMBER})\s*"
         rf"(?:(?P<currency>{_EXPENSE_CURRENCY}){_EXPENSE_CURRENCY_END})?\s+"
         r"(?P<merchant>.+?)\s*$",
         re.IGNORECASE,
     )
     _EXPENSE_PREFIX = re.compile(
-        r"\b(?:запиши|записать|добавь|добавить|пожалуйста|"
+        r"\b(?:(?:I|we)\s+(?:spent|paid)|spent|paid|запиши|записать|добавь|добавить|пожалуйста|"
         r"мои|наши|траты|расходы|сегодняшние|сегодня|за)\b",
         re.IGNORECASE,
     )
@@ -101,8 +105,7 @@ class MainOrchestrator:
     ) -> str | None:
         parsed = cls._CONFIRMATION_REPLY.match(message_text)
         natural_confirmation = cls._NATURAL_CONFIRMATION_REPLY.match(message_text)
-        if parsed is None and natural_confirmation is None:
-            return None
+        confirmation: PendingConfirmation | None
         if natural_confirmation is not None:
             candidates = await ConfirmationTools.find_pending_for_natural_reply(
                 session,
@@ -118,7 +121,7 @@ class MainOrchestrator:
                     "Напишите точную команду `подтвердить <код>`."
                 )
             confirmation = candidates[0]
-        else:
+        elif parsed is not None:
             confirmation = await ConfirmationTools.find_for_reply(
                 session,
                 household_id=household_id,
@@ -128,6 +131,8 @@ class MainOrchestrator:
             )
             if confirmation is None:
                 return "Не нашёл активного подтверждения с таким кодом."
+        else:
+            return None
         if parsed is not None and parsed.group("verb").casefold() in {"отмена", "отменить"}:
             if await ConfirmationTools.cancel(confirmation):
                 await session.flush()
@@ -349,13 +354,24 @@ class MainOrchestrator:
 
         return f"💳 {greeting}за {period_label} вы потратили:\n\n" + "\n\n".join(sections)
 
+    @staticmethod
+    def _expense_amount(value: str) -> float:
+        value = "".join(value.split())
+        if value.startswith(("-", "−")):
+            raise ValueError("Negative expenses are not supported; enter a positive amount.")
+        if re.fullmatch(r"\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?", value):
+            value = value.replace(",", "")
+        else:
+            value = value.replace(",", ".")
+        return float(value)
+
     @classmethod
     def _extract_expense(cls, message_text: str) -> tuple[float, str] | None:
         amount_match = cls._EXPENSE_AMOUNT.search(message_text)
         if amount_match is None:
             return None
 
-        amount = float(amount_match.group("amount").replace(",", "."))
+        amount = cls._expense_amount(amount_match.group("amount"))
         merchant_source = message_text[: amount_match.start()].strip(" \t\n,;:—-")
         merchant_parts = [part.strip() for part in re.split(r"[,;:\n]", merchant_source) if part.strip()]
         merchant = merchant_parts[-1] if merchant_parts else merchant_source
@@ -377,8 +393,10 @@ class MainOrchestrator:
             maxsplit=1,
             flags=re.IGNORECASE,
         )[0]
-        suffix = re.sub(r"^\s*(?:в|на|за)\s+", "", suffix, count=1, flags=re.IGNORECASE)
-        suffix = re.sub(r"\s+(?:ещё|еще)\s*$", "", suffix, count=1, flags=re.IGNORECASE)
+        suffix = re.sub(r"^\s*(?:on|at|for|в|на|за)\s+", "", suffix, count=1, flags=re.IGNORECASE)
+        suffix = re.sub(
+            r"\s+(?:day before yesterday|yesterday|today|ещё|еще)\s*$", "", suffix, count=1, flags=re.IGNORECASE
+        )
         return " ".join(suffix.split()).strip(" \t\n,;:—-")
 
     @classmethod
@@ -395,7 +413,7 @@ class MainOrchestrator:
             normalized_line = " ".join(normalized_line.split())
             line_match = cls._EXPENSE_LINE.match(normalized_line)
             if line_match is not None and (line_match.group("currency") or has_explicit_currency):
-                amount = float(line_match.group("amount").replace(",", "."))
+                amount = cls._expense_amount(line_match.group("amount"))
                 merchant = cls._clean_expense_merchant(line_match.group("merchant"))
                 if line_match.group("currency"):
                     merchant = cls._clean_expense_suffix(merchant)
@@ -1098,6 +1116,12 @@ class MainOrchestrator:
         pending_actions_enabled: bool | None = None,
     ) -> str:
         """Processes incoming user input, delegates to deterministic tools, and returns response."""
+        if cls._EXPENSE_AMOUNT.search(message_text) and not cls._is_explicit_task_request(message_text):
+            try:
+                cls._extract_expenses(message_text)
+                expense_timestamp(message_text, timezone_name)
+            except ValueError as exc:
+                return str(exc)
         has_photo = photo_bytes is not None
         has_doc = document_bytes is not None
         if pending_actions_enabled is None:
@@ -1134,7 +1158,7 @@ class MainOrchestrator:
                     else "незавершённое напоминание"
                 )
                 return f"Хорошо, отменил {action_name}."
-            if not cls._is_explicit_task_request(message_text):
+            if not cls._is_explicit_task_request(message_text) and not cls._EXPENSE_AMOUNT.search(message_text):
                 semantic_plan = await CalendarIntentInterpreter().interpret(
                     message_text=message_text,
                     local_now=datetime.now(timezone.utc).astimezone(ZoneInfo(timezone_name)),

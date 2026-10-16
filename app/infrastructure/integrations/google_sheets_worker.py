@@ -35,8 +35,12 @@ class TransactionSyncItem:
     telegram_chat_id: int | None = None
 
     def as_sheet_row(self) -> list[str]:
+        # SQLite returns naive timestamps for values persisted as UTC.
+        occurred_at = self.occurred_at
+        if occurred_at.tzinfo is None:
+            occurred_at = occurred_at.replace(tzinfo=timezone.utc)
         return [
-            self.occurred_at.astimezone(timezone.utc).isoformat(),
+            occurred_at.astimezone(timezone.utc).isoformat(),
             self.merchant,
             self.category,
             self.amount,
