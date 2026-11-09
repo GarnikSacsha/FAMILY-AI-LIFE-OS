@@ -136,11 +136,14 @@ class GeminiFinanceProvider(LLMProvider):
 
 
 class TerraReasoningProvider(LLMProvider):
-    def __init__(self, model_name: str = "gpt-5.6-terra"):
+    def __init__(self, model_name: str = "gpt-5.6-terra", *, strict_json: bool = False):
+        self.strict_json = strict_json
         self.model_name = settings.TERRA_MODEL_NAME or settings.OPENAI_REASONING_MODEL or model_name
         self.api_key = _secret_value(settings.OPENAI_API_KEY).strip()
 
-    async def generate_text(self, prompt: str, system_instruction: str | None = None) -> str:
+    async def generate_text(
+        self, prompt: str, system_instruction: str | None = None, *, response_schema: Any = None
+    ) -> str:
         if not self.api_key:
             raise LLMProviderError(
                 "Reasoning service is temporarily unavailable.",
@@ -157,6 +160,15 @@ class TerraReasoningProvider(LLMProvider):
         }
         if system_instruction:
             payload["instructions"] = system_instruction
+        if response_schema is not None:
+            payload["text"] = {
+                "format": {
+                    "type": "json_schema",
+                    "name": "health_explanation",
+                    "strict": True,
+                    "schema": response_schema,
+                }
+            }
         timeout = aiohttp.ClientTimeout(total=float(getattr(settings, "OPENAI_TIMEOUT_SECONDS", 20.0)))
 
         try:
@@ -172,6 +184,15 @@ class TerraReasoningProvider(LLMProvider):
                             error_code=f"OPENAI_HTTP_{response.status}",
                         )
                     data = await response.json()
+            if response_schema is not None:
+                if data.get("status") != "completed":
+                    raise LLMProviderError("Response not completed.", error_code="OPENAI_RESPONSE_INCOMPLETE")
+                if any(
+                    content.get("type") == "refusal"
+                    for item in data.get("output", [])
+                    for content in item.get("content", [])
+                ):
+                    raise LLMProviderError("Response refused.", error_code="OPENAI_RESPONSE_REFUSED")
             for item in data.get("output", []):
                 if item.get("type") != "message":
                     continue
@@ -198,9 +219,11 @@ class TerraReasoningProvider(LLMProvider):
             ) from exc
 
     async def generate_structured_json(self, prompt: str, schema: Any) -> dict[str, Any]:
+        options = {"response_schema": schema} if getattr(self, "strict_json", False) else {}
         raw_text = await self.generate_text(
             prompt=prompt,
             system_instruction="Return strict JSON matching the requested schema.",
+            **options,
         )
         try:
             result = json.loads(raw_text)

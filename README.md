@@ -2,6 +2,14 @@
 
 > **Security-focused family assistant prototype for Denys & Oleksandra**
 
+Объединённая локальная версия от 2026-11-09:
+`agent/consolidate-family-life-os-20261109`.
+[Состав, происхождение и результаты проверок](docs/operations/CONSOLIDATION.md),
+[карта источников](docs/operations/PROJECT.md),
+[смена месяца Sheets](docs/operations/MONTHLY_SHEETS.md),
+[порядок выпуска](docs/operations/RELEASE.md).
+Эта версия подготовлена для ревью; рабочий сервис Railway ею не обновлялся.
+
 [![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-blue.svg)](https://www.python.org/)
 [![Telegram](https://img.shields.io/badge/Telegram-aiogram%203-blue)](https://docs.aiogram.dev/)
 [![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL-blue)](https://www.postgresql.org/)

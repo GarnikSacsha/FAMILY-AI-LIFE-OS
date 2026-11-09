@@ -248,6 +248,63 @@ async def test_terra_rejects_missing_key(monkeypatch):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("strict", [False, True])
+async def test_terra_strict_schema_is_opt_in_and_reaches_api(monkeypatch, strict):
+    from app.tools.health_explanation import HealthExplanation
+
+    monkeypatch.setattr(settings, "OPENAI_API_KEY", SecretStr("test-key"))
+    schema = HealthExplanation.model_json_schema()
+    FakeSession.response_context = ResponseContext(
+        FakeResponse(
+            payload={
+                "status": "completed",
+                "output": [{"type": "message", "content": [{"type": "output_text", "text": '{"ok": true}'}]}],
+            }
+        )
+    )
+    session = FakeSession(timeout=None)
+    monkeypatch.setattr(aiohttp, "ClientSession", lambda **kwargs: session)
+    provider = TerraReasoningProvider(strict_json=strict)
+    assert await provider.generate_structured_json("synthetic", schema) == {"ok": True}
+    payload = session.post_args[1]["json"]
+    assert payload["store"] is False
+    if strict:
+        assert payload["text"]["format"] == {
+            "type": "json_schema",
+            "name": "health_explanation",
+            "strict": True,
+            "schema": schema,
+        }
+    else:
+        assert "text" not in payload
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "status,content,code",
+    [
+        ("incomplete", {"type": "output_text", "text": "{}"}, "OPENAI_RESPONSE_INCOMPLETE"),
+        ("completed", {"type": "refusal", "refusal": "PRIVATE"}, "OPENAI_RESPONSE_REFUSED"),
+    ],
+)
+async def test_strict_provider_rejects_incomplete_and_refused_response(monkeypatch, status, content, code):
+    monkeypatch.setattr(settings, "OPENAI_API_KEY", SecretStr("test-key"))
+    FakeSession.response_context = ResponseContext(
+        FakeResponse(
+            payload={
+                "status": status,
+                "output": [{"type": "message", "content": [content]}],
+            }
+        )
+    )
+    monkeypatch.setattr(aiohttp, "ClientSession", FakeSession)
+    with pytest.raises(LLMProviderError) as caught:
+        await TerraReasoningProvider(strict_json=True).generate_structured_json("synthetic", {})
+    assert caught.value.error_code == code
+    assert "PRIVATE" not in str(caught.value)
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("provider_result", "expected_category"),
     [
