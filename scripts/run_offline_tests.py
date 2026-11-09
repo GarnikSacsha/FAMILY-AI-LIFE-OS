@@ -42,6 +42,8 @@ def deny_network(sock, address):
 temporary = ROOT / "outputs" / "consolidation" / ("pytest-" + uuid.uuid4().hex)
 assert temporary.resolve().is_relative_to(ROOT.resolve())
 assert not temporary.exists()
+temporary.parent.mkdir(parents=True, exist_ok=True)
+os.environ["COVERAGE_FILE"] = str(temporary.parent / ".coverage")
 with (
     patch.object(DotEnvSettingsSource, "_read_env_files", return_value={}),
     patch.object(socket, "socketpair", local_socketpair),
