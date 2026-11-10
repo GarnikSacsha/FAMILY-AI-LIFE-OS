@@ -21,6 +21,7 @@ class ActorContext(BaseModel):
     household_id: uuid.UUID
     chat_id: int
     chat_type: Literal["private", "group", "supergroup"]
+    timezone: str = "Europe/Kyiv"
     is_admin: bool = False
 
 
@@ -70,6 +71,7 @@ class IdentityService:
             household_id=household_id,
             chat_id=chat_id,
             chat_type=chat_type,  # type: ignore
+            timezone=user.timezone or "Europe/Kyiv",
             is_admin=user.is_admin,
         )
 

@@ -70,6 +70,10 @@ async def test_successful_telegram_write_commits_before_success_reply():
             "app.telegram.bot.IdentityService.resolve_actor",
             new=AsyncMock(return_value=actor),
         ),
+        patch(
+            "app.telegram.bot.SharedMemoryTools.get_pending_action",
+            new=AsyncMock(return_value=None),
+        ),
     ):
         await handle_user_message(message)
 

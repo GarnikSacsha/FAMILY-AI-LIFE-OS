@@ -1,130 +1,179 @@
-# 🌿 Family AI Life OS
+# Family AI Life OS
 
-> **Production-Ready Multi-Agent Family Ecosystem for Denys & Oleksandra**
+A Telegram assistant for a small, allowlisted household: shared tasks, expenses,
+reminders, Google Workspace, and private Oura health summaries.
 
-[![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-blue.svg)](https://www.python.org/)
-[![aiogram 3](https://img.shields.io/badge/Telegram-aiogram%203-blue)](https://docs.aiogram.dev/)
-[![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL%20%2B%20pgvector-blue)](https://www.postgresql.org/)
-[![Architecture](https://img.shields.io/badge/Architecture-Modular%20Monolith-green)](./CONTEXT.md)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+This is a working prototype, not a public sign-up service. The repository is
+public; household records and deployment credentials belong outside Git.
 
----
+## Release status
 
-## 📌 Overview
+The consolidated candidate is under review in [draft PR #30](https://github.com/GarnikSacsha/FAMILY-AI-LIFE-OS/pull/30).
+It has **not been deployed** to the working bot. GitHub CI passed for candidate
+`57d6a33` on 2026-11-10; later edits require their own checks.
 
-**Family AI Life OS** is an intelligent, multi-agent assistant designed for **Denys** and **Oleksandra**. Instead of forcing users to manage separate apps, fill out complex spreadsheets, or toggle between specialized bots, **Family AI Life OS** provides a single natural Telegram interface.
+See [validation and limitations](docs/operations/RELEASE_VALIDATION.md),
+[consolidated changes](docs/operations/CONSOLIDATION.md), and
+[release procedure](docs/operations/RELEASE.md). Older feature matrices describe
+historical snapshots, not live production status.
 
-Users simply write messages, upload photos of food or receipts, forward PDF lab reports, or record voice notes. The system automatically:
+## Capabilities
 
-1. **Identifies the sender** (Denys or Oleksandra) and permission scope.
-2. **Understands intent** via the **Main Orchestrator Agent**.
-3. **Delegates tasks** to specialized agents (Health, Finance, Planner, Memory, Document, Notification).
-4. **Executes deterministic tools** (PostgreSQL logging, Oura API sync, Google Sheets sync, S3 file storage).
-5. **Enforces privacy rules** (personal data isolation vs. shared household space).
-6. **Returns clear, actionable answers** in Telegram.
+| Area | Implemented behavior |
+| --- | --- |
+| Planning | Tasks and shopping lists; completion, renaming, due dates, reminders, and calendar follow-ups |
+| Finance | Expense parsing, categories, confirmation, deduplication, PostgreSQL persistence, and Google Sheets projection |
+| Google | OAuth connection and recovery; Gmail and Calendar tools in private chats |
+| Health | Private Oura daily, weekly, and monthly reports; encrypted saved provider history; explanations with fallback |
+| Input | Text, OpenAI voice transcription, and Gemini food-image analysis |
+| Shared context | PostgreSQL-backed recent conversation context, structured facts, daily summaries, and retry delivery |
 
----
+Provider-backed features require credentials and permissions. PostgreSQL is the
+primary financial store; Google Sheets is a projection. Vector retrieval/RAG,
+a complete S3 document pipeline, bank-statement ingestion, and independent
+domain-agent services are not finished features.
 
-## 🏗 System Architecture
+## Architecture and Telegram flow
 
-```text
-Telegram (Personal Chats & Family Group)
-   │
-   ▼
-API Gateway / Telegram Webhook (aiogram 3)
-   │
-   ▼
-Identity & Permission Layer (Access Guard & Privacy Matrix)
-   │
-   ▼
-Main Orchestrator Agent (Intent Recognition & Tool Router)
-   │
-   ├──────► Health Agent (Oura OAuth2 + Food Vision + Lab Metrics)
-   ├──────► Finance Agent (Receipt OCR + Bank Statements + Google Sheets Sync)
-   ├──────► Planner Agent (Tasks + Shopping Lists + Reminders + Calendar)
-   ├──────► Memory Agent (Long-Term Semantic Vector Memory + Facts)
-   ├──────► Document Agent (Medical & Financial File Parsing + S3 Metadata)
-   └──────► Notification Agent (Digest Schedules + Personal Alerting)
-   │
-   ▼
-Deterministic Tool Layer (Pydantic validated Python tools)
-   │
-   ├──────► PostgreSQL 16 + pgvector (Single Source of Truth)
-   ├──────► Redis Queue & Outbox Worker (Async Tasks & Events)
-   └──────► External Integrations (Oura API V2, Gemini API, Google Sheets API, S3)
+```mermaid
+flowchart TD
+    T[Telegram message] --> G[Identity and chat-scope checks]
+    G --> O[Orchestrator: intent and conversation state]
+    O --> C{Confirmation required?}
+    C -->|Yes| A[Ask user and validate confirmation]
+    C -->|No| D[Validated domain tools]
+    A --> D
+    D --> P[(PostgreSQL)]
+    D --> E[Google / Oura / AI providers]
+    P --> W[Workers: reminders, summaries, Sheets retries]
+    D --> R[Reply in the permitted chat]
+    W --> R
 ```
 
----
+The application is a Python modular monolith. FastAPI serves HTTP and OAuth
+callbacks, aiogram handles Telegram polling, SQLAlchemy/Alembic manage data,
+and workers handle scheduled or retried work. Redis is part of the deployment
+stack. Domain responsibilities live in tools and orchestration code; `AGENTS.md`
+also describes target architecture.
 
-## 🤖 Specialized Agents Overview
+### Example interaction
 
-Detailed specifications for each agent are available in [AGENTS.md](./AGENTS.md).
+![Illustrative task conversation using invented data](docs/images/telegram-demo.png)
 
-- **Main Orchestrator**: Central routing coordinator. Parses intent, builds execution plans, invokes domain tools, and synthesizes answers.
-- **Health Agent**: Manages personal Oura Ring OAuth2 integrations (Denys & Oleksandra), sleep/readiness/HRV trends, Gemini food photo macro analysis, and lab test tracking.
-- **Finance Agent**: Processes expense receipts, bank statement exports, transaction categorization, household budget tracking, and real-time synchronization with Google Sheets.
-- **Planner Agent**: Manages personal and shared tasks, shopping lists, calendar events, reminders, and travel preparation checklists.
-- **Memory Agent**: Controls short-term conversational context and long-term semantic memory (pgvector), ensuring privacy and user data deletion requests ("forget this").
-- **Document Agent**: Ingests PDFs, images, receipts, and medical reports. Extracts structured data, computes checksums, and uploads files to S3-compatible storage.
-- **Notification Agent**: Handles scheduled personal reminders, shared household notifications, morning/evening digests, and quiet-hour compliance.
+This is a synthetic illustration, **not a screenshot of a real conversation**.
+It contains no account identifiers, transactions, or health measurements.
+Actual Telegram rendering and wording can differ.
 
----
+Commands include `/tasks`, `/shopping`, `/google`, `/google reconnect`, `/health`,
+`/weekly_health`, and `/monthly_health`. Health and account connection commands
+belong in private chats. Tasks support inline controls; editing prompts use
+Telegram Reply. Expenses may require confirmation before being saved.
 
-## 🛡 Security & Privacy Model
+## Privacy and data processing
 
-- **Data Isolation**: Denys cannot view Oleksandra's personal health metrics or medical reports without explicit authorization (`shared_with_partner` or `household` scope).
-- **Group Chat Protection**: Sensitive personal information is never posted into the shared Telegram group without explicit consent.
-- **OAuth2 Token Encryption**: All Oura OAuth access & refresh tokens are encrypted at rest using AES-256 GCM.
-- **Audit Logging**: Every tool execution, state change, and permissions check is recorded in `audit_logs`.
+- Access is limited to two configured Telegram identities and an optional family
+  group. User-owned and household-owned records have different scopes.
+- OAuth tokens and Oura provider snapshots use authenticated encryption.
+  Preserve the configured encryption key during upgrades and recovery.
+- Voice, food images, and other AI-assisted workflows send relevant input to
+  their configured provider. **Health explanations send allowlisted numerical
+  Oura aggregates and coverage information to the configured OpenAI provider.**
+  This path excludes user identifiers, raw provider payloads, and free-text
+  records; the measurements are still sensitive health information. Missing
+  credentials or provider failures use a deterministic explanation fallback.
+- Health summaries are descriptive wellness information, not medical diagnoses.
+- Do not publish real chats, exported tables, logs, database copies, OAuth
+  payloads, or credentials. A passing secret scan does not prove the absence of
+  personal data. Ignoring a path does not untrack committed files; deleting a
+  file does not erase Git history.
 
----
+See [SECURITY.md](SECURITY.md) for additional controls and limitations.
 
-## 🛠 Tech Stack
+## Run a separate development instance
 
-- **Core**: Python 3.12+, FastAPI, `aiogram` 3.x
-- **Database**: PostgreSQL 16 with `pgvector`, SQLAlchemy 2.0 (Async), Alembic
-- **Caching & Queue**: Redis, Outbox Worker Pattern
-- **AI / LLM**: Provider Abstraction (`LLMProvider` for OpenAI & Google Gemini)
-- **Integrations**: Oura API V2 (OAuth2), Google Sheets API, S3 Object Storage
-- **Testing & Quality**: Pytest, Asyncio Test Suite, Ruff, Mypy
+Prerequisites: Git and Docker with Compose v2. The checked Docker runtime uses
+Python 3.12. Use a **separate development Telegram bot**, accounts, databases,
+and integration resources. A second polling process using the production token
+can disrupt the working bot.
 
----
+1. Copy the template locally in PowerShell:
 
-## 🚀 Quick Start
+   ```powershell
+   Copy-Item .env.example .env
+   ```
 
-### 1. Environment Setup
-Copy the example environment configuration:
-```bash
-cp .env.example .env
+2. Fill configuration privately. Important values include `POSTGRES_PASSWORD`,
+   `REDIS_PASSWORD`, `TELEGRAM_BOT_TOKEN`, `SECRET_KEY`, `TOKEN_ENCRYPTION_KEY`,
+   `DENYS_TELEGRAM_ID`, and `OLEKSANDRA_TELEGRAM_ID`. The two historically named
+   ID settings select the two allowed users. Configure `FAMILY_GROUP_CHAT_ID`
+   only for the intended development group. The encryption key must encode
+   32 random bytes in Base64. Add provider credentials and callback URLs for
+   enabled integrations; see [settings](app/config/settings.py). Never commit `.env`.
+
+3. Build and start the isolated stack:
+
+   ```powershell
+   docker compose up -d --build
+   docker compose ps
+   ```
+
+   Compose runs `migrate` before `app` to prepare the schema and identities.
+   Do not downgrade a live database. The checked Compose file does not publish
+   an HTTP port; OAuth needs separately configured, reachable callback URLs
+   matching the provider registration.
+
+4. Stop development services while preserving their volumes:
+
+   ```powershell
+   docker compose stop
+   ```
+
+`/live` checks HTTP liveness; `/health` checks readiness. Neither proves that
+Telegram and all external integrations work end to end.
+
+## Tests and quality
+
+Use Python 3.12 and a separate virtual environment:
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install ".[dev]"
+.\.venv\Scripts\python.exe -B scripts/run_offline_tests.py -q
+.\.venv\Scripts\python.exe -m ruff check .
+.\.venv\Scripts\python.exe -m ruff format --check .
+.\.venv\Scripts\python.exe -m mypy app
 ```
-Fill in your credentials:
-- `TELEGRAM_BOT_TOKEN`: From [@BotFather](https://t.me/BotFather)
-- `GEMINI_API_KEY`: From Google AI Studio
-- `DATABASE_URL`: PostgreSQL connection string (`postgresql+asyncpg://...`)
-- `OURA_CLIENT_ID` & `OURA_CLIENT_SECRET`: From Oura Developer Portal
 
-### 2. Run with Docker Compose
-```bash
-docker-compose up -d --build
-```
+The offline runner disables dotenv loading and outbound socket connections;
+it does not validate live providers or replace PostgreSQL migration checks.
+[CI](.github/workflows/ci.yml) runs formatting, lint, types, PostgreSQL migrations,
+pytest with an 80% coverage threshold, Bandit, dependency auditing, Docker/Trivy,
+and Gitleaks.
 
-### 3. Run Database Migrations
-```bash
-docker-compose exec app alembic upgrade head
-```
+After the task-negation fix, the local offline suite recorded **561 tests passed,
+one skipped**. The earlier container artifact recorded 558 passed, one skipped,
+and **82.69%** branch-inclusive coverage; its separate PostgreSQL migration module
+passed all three tests. These results describe different validation runs. See the
+[validation report](docs/operations/RELEASE_VALIDATION.md) for versions and scoped
+scanner exceptions. Dependency ranges are not a lockfile: rebuilds need fresh checks.
 
----
+## Repository guide
 
-## 📄 Documentation Sitemap
+- `app/telegram/`, `app/orchestration/`, `app/tools/`: interaction and domain behavior.
+- `app/integrations/`: Google, Oura, Gemini, OpenAI, and LLM adapters.
+- `app/domains/`, `alembic/`: models and schema migrations.
+- `tests/`: regression and integration tests.
+- `docs/operations/`: provenance, validation, Sheets operations, and releases.
+- [Repository maintenance status](docs/operations/REPOSITORY_STATUS.md): remaining
+  pull requests, release dependencies, and historical privacy limitations.
+- [CONTEXT.md](CONTEXT.md), [REQ.md](REQ.md), [STATE.md](STATE.md),
+  [STATUS.md](STATUS.md): product vision and historical implementation records.
 
-- [AGENTS.md](./AGENTS.md): Comprehensive Agent Specifications & Tool Schemas.
-- [CONTEXT.md](./CONTEXT.md): System Vision, Household Domain Model & Product Context.
-- [REQ.md](./REQ.md): Functional, Technical & Security Requirements.
-- [STATE.md](./STATE.md): Implementation State & Component Progress Tracking.
-- [STATUS.md](./STATUS.md): High-Level Milestone Dashboard & Roadmap.
+Production uses a single Telegram polling instance. Railway is connected to
+`main`; changing it can trigger deployment. Review, merge, and rollout are
+distinct decisions. Preserve the existing deployment for rollback and validate
+provider behavior after an authorized release.
 
----
+## License
 
-## 📜 License
-
-Distributed under the MIT License. See [LICENSE](./LICENSE) for details.
+[MIT](LICENSE).

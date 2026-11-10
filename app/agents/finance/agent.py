@@ -9,7 +9,9 @@ from app.tools.finance_tools import FinanceTools
 
 
 class CategorySchema(BaseModel):
-    category: str = Field(description="Expense category e.g. Restaurants, Groceries, Transport, Health, Utilities")
+    category: str = Field(
+        description="Expense category e.g. Restaurants, Groceries, Transport, Health, Utilities, Sports"
+    )
     subcategory: str | None = Field(description="Specific subcategory")
     confidence: float = Field(description="Confidence rating from 0.0 to 1.0")
 
@@ -20,6 +22,67 @@ class FinanceAgent:
     def __init__(self):
         self.provider = GeminiFinanceProvider()
 
+    @staticmethod
+    def _explicit_category(description: str, merchant: str) -> str | None:
+        normalized = f"{merchant} {description}".lower()
+        monthly_payment_terms = (
+            "квартир",
+            "ежемесячн",
+            "щомісячн",
+            "подписк",
+            "підписк",
+        )
+        if any(term in normalized for term in monthly_payment_terms):
+            return "Utilities"
+        pet_terms = (
+            "булка дол",
+            "корм",
+            "ветеринар",
+            "зоомагаз",
+            "кот",
+            "собак",
+        )
+        if any(term in normalized for term in pet_terms):
+            return "Pets"
+        return None
+
+    @staticmethod
+    def _fallback_category(description: str, merchant: str) -> str:
+        normalized = f"{merchant} {description}".lower()
+        rules = (
+            ("Pets", ("корм", "ветеринар", "зоомагаз", "кот", "собак")),
+            ("Entertainment", ("відпочинок", "отдых", "кино", "ігр", "игр", "развлеч", "концерт")),
+            ("Groceries", ("продукт", "супермаркет", "ринок", "рынок", "базар", "їжа", "еда")),
+            ("Restaurants", ("кафе", "ресторан", "доставка", "кофе", "пицц")),
+            ("Transport", ("транспорт", "таксі", "такси", "бензин", "паливо", "топливо", "проїзд", "проезд", "парков")),
+            ("Health", ("здоров", "аптек", "лікар", "врач", "лекар", "аналіз", "анализ")),
+            (
+                "Utilities",
+                (
+                    "рахунк",
+                    "коммун",
+                    "комун",
+                    "моб",
+                    "світ",
+                    "свет",
+                    "газ",
+                    "вод",
+                    "інтернет",
+                    "интернет",
+                    "квартир",
+                    "ежемесячн",
+                    "щомісячн",
+                    "подписк",
+                    "підписк",
+                ),
+            ),
+            ("Sports", ("спорт", "тренув", "тренир", "фітнес", "фитнес", "gym", "зал")),
+        )
+        for category, terms in rules:
+            if any(term in normalized for term in terms):
+                return category
+        return "Uncategorized"
+
     async def categorize_and_log_transaction(
         self,
         session: AsyncSession,
@@ -28,6 +91,8 @@ class FinanceAgent:
         amount: float,
         merchant: str,
         description: str = "",
+        external_id: str | None = None,
+        telegram_chat_id: int | None = None,
     ) -> dict[str, Any]:
         """Uses Gemini to intelligently categorize an expense, then logs it via FinanceTools."""
         prompt = (
@@ -38,11 +103,28 @@ class FinanceAgent:
             f"Return the exact category and subcategory."
         )
 
-        try:
-            categorization = await self.provider.generate_structured_json(prompt, CategorySchema)
-            category = categorization.get("category", "Uncategorized")
-        except Exception:
-            category = "Uncategorized"
+        explicit_category = self._explicit_category(description, merchant)
+        fallback_category = self._fallback_category(description, merchant)
+        allowed_categories = {
+            "Entertainment",
+            "Groceries",
+            "Health",
+            "Pets",
+            "Restaurants",
+            "Shopping",
+            "Sports",
+            "Transport",
+            "Utilities",
+        }
+        if explicit_category is not None:
+            category = explicit_category
+        else:
+            try:
+                categorization = await self.provider.generate_structured_json(prompt, CategorySchema)
+                proposed_category = str(categorization.get("category", "")).strip()
+                category = proposed_category if proposed_category in allowed_categories else fallback_category
+            except Exception:
+                category = fallback_category
 
         result = await FinanceTools.log_transaction(
             session=session,
@@ -52,6 +134,8 @@ class FinanceAgent:
             merchant=merchant,
             category=category,
             description=description,
+            external_id=external_id,
+            telegram_chat_id=telegram_chat_id,
         )
 
         return result

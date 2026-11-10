@@ -7,12 +7,17 @@ from fastapi import FastAPI, Response, status
 from sqlalchemy import select
 
 from app.api.oauth import router as oauth_router
+from app.api.public_pages import router as public_pages_router
 from app.config.settings import settings
 from app.domains.identity.models import User
 from app.infrastructure.database.session import engine
+from app.infrastructure.integrations.conversation_summary_worker import (
+    run_conversation_summary_worker,
+)
 from app.infrastructure.integrations.google_sheets_worker import (
     run_google_sheets_worker,
 )
+from app.infrastructure.integrations.reminder_worker import run_reminder_worker
 from app.integrations.google.sheets import GoogleSheetsClient
 from app.telegram.bot import bot, polling_health, start_bot
 
@@ -70,6 +75,8 @@ def create_application(*, start_telegram: bool = True) -> FastAPI:
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         telegram_task: asyncio.Task[None] | None = None
         sheets_task: asyncio.Task[None] | None = None
+        reminder_task: asyncio.Task[None] | None = None
+        summary_task: asyncio.Task[None] | None = None
         polling_health.reset(enabled=start_telegram)
         if start_telegram:
             telegram_task = asyncio.create_task(
@@ -77,16 +84,34 @@ def create_application(*, start_telegram: bool = True) -> FastAPI:
                 name="telegram-polling-supervisor",
             )
             application.state.telegram_task = telegram_task
+            reminder_task = asyncio.create_task(
+                run_reminder_worker(bot),
+                name="telegram-reminder-delivery",
+            )
+            application.state.reminder_task = reminder_task
+            if settings.SHARED_CHAT_MEMORY_ENABLED:
+                summary_task = asyncio.create_task(
+                    run_conversation_summary_worker(bot),
+                    name="shared-conversation-summaries",
+                )
+                application.state.summary_task = summary_task
         if GoogleSheetsClient.is_configured():
             sheets_task = asyncio.create_task(
-                run_google_sheets_worker(),
+                run_google_sheets_worker(bot if start_telegram else None),
                 name="google-sheets-sync",
             )
             application.state.google_sheets_task = sheets_task
-
         try:
             yield
         finally:
+            if summary_task is not None:
+                summary_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await summary_task
+            if reminder_task is not None:
+                reminder_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await reminder_task
             if sheets_task is not None:
                 sheets_task.cancel()
                 with suppress(asyncio.CancelledError):
@@ -104,6 +129,7 @@ def create_application(*, start_telegram: bool = True) -> FastAPI:
         lifespan=lifespan,
     )
     application.include_router(oauth_router)
+    application.include_router(public_pages_router)
 
     @application.get("/live", tags=["System"])
     async def live() -> dict[str, str]:
@@ -125,6 +151,15 @@ def create_application(*, start_telegram: bool = True) -> FastAPI:
                 "status": "error",
                 "database": "unavailable",
             }
+        for task_name, worker_name in (
+            ("google_sheets_task", "google_sheets_worker"),
+            ("reminder_task", "reminder_worker"),
+            ("summary_task", "summary_worker"),
+        ):
+            task = getattr(application.state, task_name, None)
+            if task is not None and task.done():
+                response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+                return {"status": "error", worker_name: "stopped"}
         return {"status": "ok"}
 
     return application
