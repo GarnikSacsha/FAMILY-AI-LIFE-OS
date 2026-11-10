@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import uuid
 from datetime import date, datetime, timedelta, timezone
@@ -195,3 +196,118 @@ async def test_today_does_not_substitute_yesterday():
     with patch("app.tools.health_archive.sync_and_load_health", AsyncMock(return_value=archive)):
         result = await get_saved_daily_summary(object(), user_id=uuid.uuid4())
     assert result["date"] == "2026-09-15" and result.get("sleep_score") is None
+
+
+@pytest.mark.asyncio
+async def test_daily_request_does_not_download_history_or_cache_it(archive_db):
+    factory, _, user = archive_db
+    ranges = []
+
+    async def fetch(name, **kwargs):
+        ranges.append((kwargs["start_date"], kwargs["end_date"]))
+        if name == "daily_sleep":
+            return {"data": [{"day": kwargs["end_date"].isoformat(), "score": 80}]}
+        return {"data": []}
+
+    with (
+        patch.object(HealthTools, "get_valid_oura_access_token", AsyncMock(return_value="synthetic")),
+        patch.object(OuraClient, "get_collection_range", side_effect=fetch),
+    ):
+        async with factory.begin() as session:
+            summary = await get_saved_daily_summary(session, user_id=user)
+        assert summary["sleep_score"] == 80
+        assert all(start == end for start, end in ranges)
+        ranges.clear()
+        async with factory.begin() as session:
+            await sync_and_load_health(session, user_id=user)
+        assert any((end - start).days == 90 for start, end in ranges)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [401, 403, 429, 503])
+async def test_provider_failure_is_visible_even_with_legacy_archive(archive_db, status, caplog):
+    factory, _, user = archive_db
+    async with factory.begin() as session:
+        session.add(OuraDailyMetric(user_id=user, metric_date=date(2026, 9, 14)))
+    with (
+        patch.object(HealthTools, "get_valid_oura_access_token", AsyncMock(return_value="synthetic")),
+        patch.object(
+            OuraClient,
+            "get_collection_range",
+            AsyncMock(side_effect=OuraOAuthError("PRIVATE_BODY", status_code=status)),
+        ),
+    ):
+        async with factory.begin() as session:
+            result = await sync_and_load_health(session, user_id=user, today=date(2026, 9, 15))
+    assert str(status) in result["sync_error"]
+    assert str(status) in caplog.text
+    assert "PRIVATE_BODY" not in caplog.text
+    from app.tools.health_history import format_health_history, summarize_history
+
+    report = format_health_history(summarize_history(result, days=7, today=date(2026, 9, 15)))
+    assert str(status) in report
+    assert "Проверьте синхронизацию кольца" not in report
+
+
+@pytest.mark.asyncio
+async def test_timeout_preserves_completed_collections(archive_db):
+    factory, _, user = archive_db
+    original_timeout = asyncio.timeout
+
+    async def fetch(name, **kwargs):
+        if name == "daily_sleep":
+            return {"data": [{"day": "2026-09-14", "score": 80}]}
+        await asyncio.Event().wait()
+
+    with (
+        patch.object(HealthTools, "get_valid_oura_access_token", AsyncMock(return_value="synthetic")),
+        patch.object(OuraClient, "get_collection_range", side_effect=fetch),
+        patch("app.tools.health_archive.asyncio.timeout", side_effect=lambda _: original_timeout(0.1)),
+    ):
+        async with factory.begin() as session:
+            result = await sync_and_load_health(session, user_id=user, today=date(2026, 9, 15))
+    assert result["summaries"][0]["sleep_score"] == 80
+    assert result["partial"]
+    assert "не ответила вовремя" in result["sync_error"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("command", ["/health", "/weekly_health", "/monthly_health"])
+async def test_command_displays_safe_provider_error(command):
+    from app.orchestration.orchestrator import MainOrchestrator
+
+    message = "Oura запретила чтение данных (403)."
+    target = "get_saved_daily_summary" if command == "/health" else "get_health_history"
+    with patch(
+        f"app.orchestration.orchestrator.{target}",
+        AsyncMock(side_effect=HealthIntegrationError("PRIVATE_BODY", user_message=message)),
+    ):
+        response = await MainOrchestrator.process_user_message(
+            session=object(),
+            user_id=uuid.uuid4(),
+            household_id=uuid.uuid4(),
+            user_name="Test",
+            message_text=command,
+        )
+    assert message in response
+    assert "PRIVATE_BODY" not in response
+    assert "синхронизируйте" not in response
+
+
+@pytest.mark.asyncio
+async def test_daily_empty_partial_archive_does_not_blame_ring():
+    from app.orchestration.orchestrator import MainOrchestrator
+
+    with patch(
+        "app.orchestration.orchestrator.get_saved_daily_summary",
+        AsyncMock(return_value={"date": "2026-09-29", "sync_error": "Oura не ответила вовремя."}),
+    ):
+        response = await MainOrchestrator.process_user_message(
+            session=object(),
+            user_id=uuid.uuid4(),
+            household_id=uuid.uuid4(),
+            user_name="Test",
+            message_text="/health",
+        )
+    assert "не ответила вовремя" in response
+    assert "синхронизируйте" not in response

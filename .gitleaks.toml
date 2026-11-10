@@ -7,3 +7,15 @@ regexes = [
   '''MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=''',
   '''123456789:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA''',
 ]
+
+# Generated inventories contain source-file SHA-256 values, including paths
+# with "token" in their names. Keep the exception limited to complete hash rows.
+[[rules]]
+id = "generic-api-key"
+
+[[rules.allowlists]]
+description = "Verified source-file digests in the three generated inventories."
+condition = "AND"
+paths = ['''(^|/)docs/operations/(deployed-source-manifest|integration-manifest|workspace-inventory)\.json$''']
+regexTarget = "line"
+regexes = ['''^\s*"(?:(?:app|alembic|scripts|tests)/[^"\r\n]+\.py|Dockerfile|pyproject\.toml|alembic\.ini|main\.py|railway\.toml|README\.md|\.dockerignore|\.github/workflows/ci\.yml|\.gitleaks\.toml|\.vex/pip\.openvex\.json)"\s*:\s*"[a-f0-9]{64}",?\s*$''']

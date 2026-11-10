@@ -141,7 +141,7 @@ class GoogleWorkspaceTools:
         )
         record = result.scalar_one_or_none()
         if record is None:
-            raise GoogleWorkspaceError("Google account is not connected.")
+            raise GoogleWorkspaceError("Google account is not connected.", error_code="GOOGLE_NOT_CONNECTED")
 
         now = datetime.now(timezone.utc)
         expires_at = record.expires_at
@@ -156,7 +156,7 @@ class GoogleWorkspaceTools:
             )
 
         if not record.refresh_token_encrypted:
-            raise GoogleWorkspaceError("Google account must be reconnected.")
+            raise GoogleWorkspaceError("Google account must be reconnected.", error_code="GOOGLE_RECONNECT_REQUIRED")
         refresh_token = token_cipher.decrypt(
             record.refresh_token_encrypted,
             user_id=user_id,
@@ -166,7 +166,7 @@ class GoogleWorkspaceTools:
         try:
             refreshed = await GoogleOAuthClient.refresh_access_token(refresh_token)
         except GoogleOAuthError as exc:
-            raise GoogleWorkspaceError("Google account must be reconnected.") from exc
+            raise GoogleWorkspaceError("Google authorization failed.", error_code=exc.error_code) from exc
         await GoogleWorkspaceTools.save_google_tokens(
             session,
             user_id=user_id,

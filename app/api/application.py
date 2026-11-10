@@ -7,6 +7,7 @@ from fastapi import FastAPI, Response, status
 from sqlalchemy import select
 
 from app.api.oauth import router as oauth_router
+from app.api.public_pages import router as public_pages_router
 from app.config.settings import settings
 from app.domains.identity.models import User
 from app.infrastructure.database.session import engine
@@ -128,6 +129,7 @@ def create_application(*, start_telegram: bool = True) -> FastAPI:
         lifespan=lifespan,
     )
     application.include_router(oauth_router)
+    application.include_router(public_pages_router)
 
     @application.get("/live", tags=["System"])
     async def live() -> dict[str, str]:

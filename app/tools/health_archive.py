@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 import math
 import uuid
 from datetime import date, datetime, timedelta, timezone
@@ -28,6 +29,32 @@ COLLECTIONS = (
     "daily_resilience",
 )
 ARCHIVE_DAYS = 90
+logger = logging.getLogger(__name__)
+
+
+def _failure_message(error: BaseException, collection: str) -> str:
+    """Only classify errors; never log tokens, URLs, bodies, or exception text."""
+    cause = error.__cause__ if isinstance(error, HealthIntegrationError) and error.__cause__ else error
+    status = cause.status_code if isinstance(cause, OuraOAuthError) else None
+    timed_out = isinstance(cause, TimeoutError) or isinstance(cause.__cause__, TimeoutError)
+    category = "timeout" if timed_out else "unavailable"
+    logger.warning("Oura read failed collection=%s status=%s category=%s", collection, status, category)
+    if collection == "daily_resilience" and status in {401, 403}:
+        return (
+            f"Oura не разрешила чтение дополнительного показателя устойчивости к стрессу ({status}). "
+            "Это не означает, что всё подключение потеряно; остальные показатели загружены, если доступны."
+        )
+    if status == 401:
+        return "Oura отклонила доступ (401). Используйте /oura reconnect в личном чате."
+    if status == 403:
+        return "Oura запретила чтение данных (403). Проверьте разрешения подключения и статус подписки Oura."
+    if status == 429:
+        return "Oura ограничила частоту запросов (429). Попробуйте позже."
+    if status is not None:
+        return f"Запрос к Oura завершился ошибкой ({status}). Попробуйте позже."
+    if timed_out:
+        return "Oura не ответила вовремя. Попробуйте позже."
+    return "Не удалось загрузить данные Oura. Попробуйте позже."
 
 
 def _decode(row: OuraDailyMetric) -> dict[str, Any]:
@@ -63,6 +90,7 @@ async def sync_and_load_health(
     user_id: uuid.UUID,
     timezone_name: str = "Europe/Kyiv",
     today: date | None = None,
+    daily_only: bool = False,
 ) -> dict[str, Any]:
     actor = session.info.get("actor_context")
     if actor is not None:
@@ -103,40 +131,44 @@ async def sync_and_load_health(
     if last_sync is not None and last_sync.tzinfo is None:
         last_sync = last_sync.replace(tzinfo=timezone.utc)
     partial = bool(connection and connection.last_error_code)
-    cached = last_sync is not None and now - last_sync < timedelta(minutes=5) and not partial
+    cached = not daily_only and last_sync is not None and now - last_sync < timedelta(minutes=5) and not partial
+    failures: list[str] = []
     if not cached:
         payloads: dict[str, dict[str, Any]] = {}
         try:
             token = await HealthTools.get_valid_oura_access_token(session, user_id=user_id)
             semaphore = asyncio.Semaphore(3)
 
-            async def fetch(name: str) -> dict[str, Any]:
+            async def fetch(name: str) -> None:
                 async with semaphore:
-                    return await OuraClient.get_collection_range(
-                        name, access_token=token, start_date=first, end_date=today
-                    )
+                    try:
+                        payloads[name] = await OuraClient.get_collection_range(
+                            name, access_token=token, start_date=today if daily_only else first, end_date=today
+                        )
+                    except Exception as exc:
+                        failures.append(_failure_message(exc, name))
 
             async with asyncio.timeout(45):
-                results = await asyncio.gather(*(fetch(name) for name in COLLECTIONS), return_exceptions=True)
-            if any(isinstance(result, OuraOAuthError) and result.status_code == 401 for result in results):
-                raise HealthIntegrationError("Oura connection must be renewed.")
-            payloads = {
-                name: result for name, result in zip(COLLECTIONS, results, strict=True) if isinstance(result, dict)
-            }
+                await asyncio.gather(*(fetch(name) for name in COLLECTIONS))
             partial = len(payloads) != len(COLLECTIONS)
-        except (HealthIntegrationError, TimeoutError):
+        except (HealthIntegrationError, TimeoutError) as exc:
+            failures.append(_failure_message(exc, "sync"))
             partial = True
         if not payloads and not snapshots:
-            raise HealthIntegrationError("No saved Oura data is available.")
-        if connection is None:
-            connection = HealthProviderConnection(user_id=user_id, provider="oura", status="connected")
-            session.add(connection)
-        connection.last_sync_started_at = now
-        connection.last_error_code = "OURA_PARTIAL_OR_UNAVAILABLE" if partial else None
-        connection.status = "error" if partial else "connected"
-        if payloads:
-            connection.last_sync_succeeded_at = now
-            last_sync = now
+            raise HealthIntegrationError(
+                "No saved Oura data is available.", user_message=" ".join(dict.fromkeys(failures)) or None
+            )
+        # A successful one-day fetch must not mark the entire history as freshly synced.
+        if not daily_only:
+            if connection is None:
+                connection = HealthProviderConnection(user_id=user_id, provider="oura", status="connected")
+                session.add(connection)
+            connection.last_sync_started_at = now
+            connection.last_error_code = "OURA_PARTIAL_OR_UNAVAILABLE" if partial else None
+            connection.status = "error" if partial else "connected"
+            if payloads:
+                connection.last_sync_succeeded_at = now
+                last_sync = now
         # Only records actually returned by Oura replace saved collections. An empty
         # or failed collection cannot erase earlier readings or fabricate a zero.
         grouped: dict[date, dict[str, list[dict[str, Any]]]] = {}
@@ -194,6 +226,7 @@ async def sync_and_load_health(
         "summaries": summaries,
         "last_sync": max(refreshed) if refreshed else None,
         "partial": partial,
+        "sync_error": " ".join(dict.fromkeys(failures)),
         "today": today.isoformat(),
     }
 
@@ -204,15 +237,18 @@ async def get_saved_daily_summary(
     user_id: uuid.UUID,
     timezone_name: str = "Europe/Kyiv",
 ) -> dict[str, Any]:
-    archive = await sync_and_load_health(session, user_id=user_id, timezone_name=timezone_name)
+    archive = await sync_and_load_health(session, user_id=user_id, timezone_name=timezone_name, daily_only=True)
     today = archive["today"]
     summary = next((dict(row) for row in archive["summaries"] if row["date"] == today), {"date": today})
-    from app.tools.health_insights import daily_insight
+    from app.tools.health_explanation import daily_context, explain_health
 
-    summary["analysis"] = daily_insight(summary, archive["summaries"])
+    summary["sync_error"] = archive.get("sync_error") or (
+        "Не удалось загрузить часть данных Oura. Попробуйте позже." if archive["partial"] else ""
+    )
+    summary["analysis"] = await explain_health(daily_context(summary, archive["summaries"]))
     summary["archive_status"] = (
         f"Обновление показателей дня: {summary.get('archive_updated_at') or 'нет сохранённых данных'}."
-        + (" Часть данных Oura сейчас недоступна." if archive["partial"] else "")
+        + (" " + summary["sync_error"] if summary["sync_error"] else "")
         + " Некоторые показатели могут быть сохранены ранее."
     )
     return summary
