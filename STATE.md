@@ -2,6 +2,10 @@
 
 Last reviewed: 2026-08-11
 
+> This is the historical feature matrix. The integration snapshot dated
+> 2026-11-09, its 555 passing offline tests and remaining deployment/migration
+> limits are recorded in [CONSOLIDATION.md](docs/operations/CONSOLIDATION.md).
+
 ## Current system state
 
 ```text

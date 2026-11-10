@@ -15,13 +15,21 @@ def expense_timestamp(text: str, timezone_name: str, *, now: datetime | None = N
     local = (now or datetime.now(timezone.utc)).astimezone(ZoneInfo(timezone_name))
     # Remove monetary tokens before looking for dates (7.50 грн is an amount).
     date_text = re.sub(r"\d+(?:[.,]\d{1,2})?\s*(?:грн\.?|uah|₴|грив\w*)", "", text, flags=re.I)
+    if re.search(
+        r"\b(?:tomorrow|last\s+(?:week|month|year)|next\s+(?:week|month|year)|"
+        r"\w+\s+days?\s+ago|on\s+(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday))\b"
+        r"|\b\d{4}-\d{2}-\d{2}\b",
+        date_text,
+        re.I,
+    ):
+        raise ValueError("Unsupported expense date. Use today, yesterday, day before yesterday, or DD.MM.YYYY.")
     match = re.search(r"(?<![\d.])(\d{1,2})\.(\d{2})(?:\.(\d{4}))?(?!\d)(?!\.\d)", date_text)
     if match:
         day, month, year = match.groups()
         target = local.date().replace(day=int(day), month=int(month), year=int(year or local.year))
-    elif re.search(r"\b(?:позавчера|позавчора)\b", text, re.I):
+    elif re.search(r"\b(?:day before yesterday|позавчера|позавчора)\b", text, re.I):
         target = local.date() - timedelta(days=2)
-    elif re.search(r"\b(?:вчера|вчора)\b", text, re.I):
+    elif re.search(r"\b(?:yesterday|вчера|вчора)\b", text, re.I):
         target = local.date() - timedelta(days=1)
     else:
         return local.astimezone(timezone.utc)

@@ -461,12 +461,18 @@ class GoogleSheetsClient:
             verified_range = existing.get("range")
             return str(verified_range) if verified_range else range_name
 
+        # Keep date/amount interpretation and trusted monthly formulas unchanged.
+        # USER_ENTERED treats a leading apostrophe as a literal-text marker.
+        literal_values = list(values)
+        for index in (1, 2, 4, 5, 6, 7, 8):
+            if literal_values[index].lstrip().startswith(("=", "+", "-", "@")):
+                literal_values[index] = "'" + literal_values[index]
         append_url = f"{values_url}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS"
         appended = await cls._request(
             "POST",
             append_url,
             access_token=access_token,
-            json_body={"majorDimension": "ROWS", "values": [values]},
+            json_body={"majorDimension": "ROWS", "values": [literal_values]},
         )
         updates = appended.get("updates")
         if (

@@ -1,22 +1,25 @@
 # 🧠 Product Context & Vision: Family AI Life OS
 
+This document describes product intent, including planned workflows. For current
+capabilities and release status, use [README.md](README.md).
+
 ## 🎯 Product Purpose
 
-**Family AI Life OS** is built specifically for **Denys** and **Oleksandra**. It replaces fragmented apps (notion, spreadsheets, separate habit trackers, generic chat bots) with a single intelligent assistant living inside Telegram.
+**Family AI Life OS** is built specifically for two configured household members. It replaces fragmented apps (notion, spreadsheets, separate habit trackers, generic chat bots) with a single intelligent assistant living inside Telegram.
 
 ---
 
 ## 👥 Users & Household Domain Model
 
 ```text
-Household: Denys & Oleksandra
-├── User 1: Denys (Telegram ID, Timezone, Oura Connection, Personal Data)
-└── User 2: Oleksandra (Telegram ID, Timezone, Oura Connection, Personal Data)
+Household: two configured household members
+├── User 1: Member A (Telegram ID, Timezone, Oura Connection, Personal Data)
+└── User 2: Member B (Telegram ID, Timezone, Oura Connection, Personal Data)
 ```
 
 ### Data Ownership Rules
 Every entity stored in PostgreSQL belongs to either:
-1. `owner_type: user`, `owner_id: user_id` (Private to Denys or Oleksandra)
+1. `owner_type: user`, `owner_id: user_id` (Private to the owning user)
 2. `owner_type: household`, `owner_id: household_id` (Shared family space)
 
 ---

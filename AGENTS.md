@@ -38,7 +38,7 @@ Manages personal biometrics, Oura Ring synchronization, food nutrition vision, a
 
 ### Boundaries & Safeguards
 - **Medical Disclaimer**: Does not provide medical diagnoses or alter prescribed treatment plans.
-- **Data Isolation**: Maintains strictly separated Oura OAuth2 tokens for Denys and Oleksandra.
+- **Data Isolation**: Maintains strictly separated Oura OAuth2 tokens for the two household members.
 - **Nutrition Estimation**: Food photo vision provides realistic caloric/macro ranges, not false precision.
 
 ### Key Tools

@@ -44,18 +44,22 @@ class MainOrchestrator:
 
     _EXPENSE_CURRENCY = r"(?:грн\.?|uah|₴|грив(?:на|ны|ен|ну|ня|ні|ень|ню))"
     _EXPENSE_CURRENCY_END = r"(?=$|[\s,.;:!?…)\]}—-])"
+    _EXPENSE_NUMBER = (
+        r"(?:\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|"
+        r"\d{1,3}(?:[ \u00a0\u202f]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)"
+    )
     _EXPENSE_AMOUNT = re.compile(
-        rf"(?P<amount>\d+(?:[.,]\d{{1,2}})?)\s*{_EXPENSE_CURRENCY}{_EXPENSE_CURRENCY_END}",
+        rf"(?<![\d.,])(?P<amount>[-−]?\s*{_EXPENSE_NUMBER})\s*{_EXPENSE_CURRENCY}{_EXPENSE_CURRENCY_END}",
         re.IGNORECASE,
     )
     _EXPENSE_LINE = re.compile(
-        r"^\s*(?P<amount>\d+(?:[.,]\d{1,2})?)\s*"
+        rf"^\s*(?P<amount>[-−]?\s*{_EXPENSE_NUMBER})\s*"
         rf"(?:(?P<currency>{_EXPENSE_CURRENCY}){_EXPENSE_CURRENCY_END})?\s+"
         r"(?P<merchant>.+?)\s*$",
         re.IGNORECASE,
     )
     _EXPENSE_PREFIX = re.compile(
-        r"\b(?:запиши|записать|добавь|добавить|пожалуйста|"
+        r"\b(?:(?:I|we)\s+(?:spent|paid)|spent|paid|запиши|записать|добавь|добавить|пожалуйста|"
         r"мои|наши|траты|расходы|сегодняшние|сегодня|за)\b",
         re.IGNORECASE,
     )
@@ -122,16 +126,18 @@ class MainOrchestrator:
             if len(candidates) > 1:
                 return "Нашёл несколько активных операций. Напишите точную команду `подтвердить <код>`."
             confirmation = candidates[0]
-        else:
+        elif parsed is not None:
             confirmation = await ConfirmationTools.find_for_reply(
                 session,
                 household_id=household_id,
                 telegram_chat_id=telegram_chat_id,
                 initiated_by_user_id=user_id,
-                confirmation_code=cast(re.Match[str], parsed).group("code"),
+                confirmation_code=parsed.group("code"),
             )
             if confirmation is None:
                 return "Не нашёл активного подтверждения с таким кодом."
+        else:
+            return None
         if parsed is not None and parsed.group("verb").casefold() in {"отмена", "отменить"}:
             if await ConfirmationTools.cancel(confirmation):
                 await session.flush()
@@ -231,6 +237,40 @@ class MainOrchestrator:
         )
 
     @staticmethod
+    def _is_task_completion_request(message_text: str) -> bool:
+        normalized = (message_text or "").lower().replace("ё", "е")
+        words = set(re.findall(r"[а-яa-z]+", normalized))
+        completion_markers = (
+            "сделал",
+            "сделано",
+            "готово",
+            "выполнил",
+            "выполнено",
+            "купил",
+            "купила",
+            "купили",
+            "положил",
+            "положила",
+            "положили",
+            "разобрал",
+            "разобрала",
+            "разобрали",
+            "постирал",
+            "постирала",
+            "постирали",
+            "набрал",
+            "набрала",
+            "набрали",
+            "занялся",
+            "занялась",
+            "занялись",
+            "подключил",
+            "подключила",
+            "подключили",
+        )
+        return any(marker in words for marker in completion_markers)
+
+    @staticmethod
     def domain_for_message(
         message_text: str,
         *,
@@ -243,6 +283,8 @@ class MainOrchestrator:
             return "planner"
         if MainOrchestrator._EXPENSE_AMOUNT.search(message_text):
             return "finance"
+        if MainOrchestrator._is_task_completion_request(message_text):
+            return "planner"
         if (
             "календар" in normalized
             or normalized.startswith("/calendar")
@@ -355,13 +397,24 @@ class MainOrchestrator:
 
         return f"💳 {greeting}за {period_label} вы потратили:\n\n" + "\n\n".join(sections)
 
+    @staticmethod
+    def _expense_amount(value: str) -> float:
+        value = "".join(value.split())
+        if value.startswith(("-", "−")):
+            raise ValueError("Negative expenses are not supported; enter a positive amount.")
+        if re.fullmatch(r"\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?", value):
+            value = value.replace(",", "")
+        else:
+            value = value.replace(",", ".")
+        return float(value)
+
     @classmethod
     def _extract_expense(cls, message_text: str) -> tuple[float, str] | None:
         amount_match = cls._EXPENSE_AMOUNT.search(message_text)
         if amount_match is None:
             return None
 
-        amount = float(amount_match.group("amount").replace(",", "."))
+        amount = cls._expense_amount(amount_match.group("amount"))
         merchant_source = message_text[: amount_match.start()].strip(" \t\n,;:—-")
         merchant_parts = [part.strip() for part in re.split(r"[,;:\n]", merchant_source) if part.strip()]
         merchant = merchant_parts[-1] if merchant_parts else merchant_source
@@ -383,8 +436,10 @@ class MainOrchestrator:
             maxsplit=1,
             flags=re.IGNORECASE,
         )[0]
-        suffix = re.sub(r"^\s*(?:в|на|за)\s+", "", suffix, count=1, flags=re.IGNORECASE)
-        suffix = re.sub(r"\s+(?:ещё|еще)\s*$", "", suffix, count=1, flags=re.IGNORECASE)
+        suffix = re.sub(r"^\s*(?:on|at|for|в|на|за)\s+", "", suffix, count=1, flags=re.IGNORECASE)
+        suffix = re.sub(
+            r"\s+(?:day before yesterday|yesterday|today|ещё|еще)\s*$", "", suffix, count=1, flags=re.IGNORECASE
+        )
         return " ".join(suffix.split()).strip(" \t\n,;:—-")
 
     @classmethod
@@ -401,7 +456,7 @@ class MainOrchestrator:
             normalized_line = " ".join(normalized_line.split())
             line_match = cls._EXPENSE_LINE.match(normalized_line)
             if line_match is not None and (line_match.group("currency") or has_explicit_currency):
-                amount = float(line_match.group("amount").replace(",", "."))
+                amount = cls._expense_amount(line_match.group("amount"))
                 merchant = cls._clean_expense_merchant(line_match.group("merchant"))
                 if line_match.group("currency"):
                     merchant = cls._clean_expense_suffix(merchant)
@@ -1002,14 +1057,16 @@ class MainOrchestrator:
                 return "нет данных"
             if isinstance(value, float) and value.is_integer():
                 value = int(value)
+            elif isinstance(value, float):
+                value = round(value, 1)
             return f"{value}{suffix}"
 
-        sleep_lines = [f"• Score: {value_text(summary.get('sleep_score'))}"]
+        sleep_lines = [f"• Оценка сна: {value_text(summary.get('sleep_score'))}/100"]
         sleep_fields = (
             ("Спал", "total_sleep_seconds"),
-            ("Deep", "deep_sleep_seconds"),
-            ("REM", "rem_sleep_seconds"),
-            ("Awake", "awake_seconds"),
+            ("Глубокий сон", "deep_sleep_seconds"),
+            ("Быстрый сон (REM)", "rem_sleep_seconds"),
+            ("Бодрствование ночью", "awake_seconds"),
         )
         for label, key in sleep_fields:
             duration = cls._format_duration(summary.get(key))
@@ -1021,14 +1078,16 @@ class MainOrchestrator:
         if latency is not None:
             sleep_lines.append(f"• Засыпание: {latency}")
 
-        readiness_lines = [f"• Readiness: {value_text(summary.get('readiness_score'))}"]
+        readiness_lines = [f"• Оценка восстановления: {value_text(summary.get('readiness_score'))}/100"]
         if summary.get("average_hrv_ms") is not None:
-            readiness_lines.append(f"• HRV: {value_text(summary['average_hrv_ms'], ' ms')}")
+            readiness_lines.append(f"• Вариабельность пульса (HRV): {value_text(summary['average_hrv_ms'], ' мс')}")
         if summary.get("lowest_heart_rate_bpm") is not None:
-            readiness_lines.append(f"• Min HR: {value_text(summary['lowest_heart_rate_bpm'], ' bpm')}")
+            readiness_lines.append(
+                f"• Минимальный пульс во сне: {value_text(summary['lowest_heart_rate_bpm'], ' уд/мин')}"
+            )
         temperature = summary.get("temperature_deviation_c")
         if isinstance(temperature, (int, float)) and not isinstance(temperature, bool):
-            readiness_lines.append(f"• Температура: {temperature:+g}°C")
+            readiness_lines.append(f"• Отклонение температуры кожи: {temperature:+.1f}°C")
         if summary.get("spo2_average_percent") is not None:
             readiness_lines.append(f"• SpO₂: {value_text(summary['spo2_average_percent'], '%')}")
         if summary.get("average_breath_per_minute") is not None:
@@ -1044,7 +1103,7 @@ class MainOrchestrator:
         )
         activity_lines: list[str] = []
         if any(value is not None for value in activity_values):
-            activity_lines.append(f"• Score: {value_text(summary.get('activity_score'))}")
+            activity_lines.append(f"• Оценка активности: {value_text(summary.get('activity_score'))}/100")
             if summary.get("steps") is not None:
                 activity_lines.append(f"• Шаги: {value_text(summary['steps'])}")
             if summary.get("total_calories") is not None:
@@ -1091,7 +1150,7 @@ class MainOrchestrator:
 
         analysis = summary.get("analysis")
         if isinstance(analysis, str) and analysis:
-            blocks.append(f"🤖 Анализ\n{analysis}")
+            blocks.insert(1, f"🤖 Анализ\n{analysis}")
         if summary.get("archive_status"):
             blocks.append(str(summary["archive_status"]))
         return "\n\n".join(blocks)
@@ -1113,6 +1172,12 @@ class MainOrchestrator:
         pending_actions_enabled: bool | None = None,
     ) -> str:
         """Processes incoming user input, delegates to deterministic tools, and returns response."""
+        if cls._EXPENSE_AMOUNT.search(message_text) and not cls._is_explicit_task_request(message_text):
+            try:
+                cls._extract_expenses(message_text)
+                expense_timestamp(message_text, timezone_name)
+            except ValueError as exc:
+                return str(exc)
         has_photo = photo_bytes is not None
         message_text = {"/weekly_health": "/health week", "/monthly_health": "/health month"}.get(
             message_text.strip().lower(),
@@ -1153,7 +1218,11 @@ class MainOrchestrator:
                     else "незавершённое напоминание"
                 )
                 return f"Хорошо, отменил {action_name}."
-            if not cls._is_explicit_task_request(message_text):
+            if (
+                not cls._is_explicit_task_request(message_text)
+                and not cls._EXPENSE_AMOUNT.search(message_text)
+                and (pending_action is not None or not cls._is_task_completion_request(message_text))
+            ):
                 semantic_plan = await CalendarIntentInterpreter().interpret(
                     message_text=message_text,
                     local_now=datetime.now(timezone.utc).astimezone(ZoneInfo(timezone_name)),
@@ -1355,6 +1424,8 @@ class MainOrchestrator:
 
         if cls._EXPENSE_AMOUNT.search(message_text):
             routing = {"intent": "FINANCIAL_QUERY_OR_LOG"}
+        elif cls._is_task_completion_request(message_text):
+            routing = {"intent": "PLANNING_OR_REMINDER"}
         elif is_day_or_birthday_request(message_text) and not cls._is_explicit_task_request(message_text):
             routing = {"intent": "PLANNING_OR_REMINDER"}
         else:
@@ -1376,11 +1447,8 @@ class MainOrchestrator:
             if days is not None:
                 try:
                     history = await get_health_history(session, user_id=user_id, days=days, timezone_name=timezone_name)
-                except HealthIntegrationError:
-                    return (
-                        "Не удалось загрузить историю Oura. Попробуйте позже; "
-                        "если доступ истёк, переподключитесь через /oura."
-                    )
+                except HealthIntegrationError as exc:
+                    return exc.user_message
                 return format_health_history(history)
             status_terms = (
                 "подключ",
@@ -1404,13 +1472,12 @@ class MainOrchestrator:
                     user_id=user_id,
                     timezone_name=timezone_name,
                 )
-            except HealthIntegrationError:
-                return (
-                    "💍 Не удалось получить данные Oura. Если кольцо ещё не подключено "
-                    "или доступ был отозван, используйте /oura reconnect в личном чате."
-                )
+            except HealthIntegrationError as exc:
+                return "💍 " + exc.user_message
 
             if all(summary.get(key) is None for key in ("sleep_score", "readiness_score", "activity_score")):
+                if summary.get("sync_error"):
+                    return "💍 " + summary["sync_error"]
                 return (
                     f"💍 Oura подключена, но за {summary['date']} данных пока нет. "
                     "Откройте приложение Oura и синхронизируйте кольцо."
@@ -1628,6 +1695,20 @@ class MainOrchestrator:
 
         # Case 3: Shopping List & Planning
         if intent == "PLANNING_OR_REMINDER":
+            if cls._is_task_completion_request(message_text):
+                completed_titles = await PlannerTools.complete_tasks_from_text(
+                    session,
+                    owner_id=household_id,
+                    assignee_id=user_id,
+                    message_text=message_text,
+                )
+                if not completed_titles:
+                    return (
+                        "📋 Не смог однозначно определить, какие задачи уже выполнены. Напишите названия задач точнее."
+                    )
+                completed_lines = "\n".join(f"• {cls._escape_markdown(title)}" for title in completed_titles)
+                return f"✅ Отметил выполненными:\n{completed_lines}"
+
             if message_text.lower().startswith("/tasks"):
                 tasks = await PlannerTools.get_active_tasks(
                     session,

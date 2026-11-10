@@ -24,3 +24,6 @@ google_credentials*.json
 credentials*.json
 *.bak
 *.dump
+
+# Local verification artifacts; durable reports belong in docs/operations.
+/outputs/
