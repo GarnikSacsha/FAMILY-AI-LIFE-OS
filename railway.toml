@@ -1,0 +1,9 @@
+[deploy]
+numReplicas = 1
+preDeployCommand = ["python -m app.infrastructure.database.prepare"]
+healthcheckPath = "/live"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+overlapSeconds = 0
+drainingSeconds = 10

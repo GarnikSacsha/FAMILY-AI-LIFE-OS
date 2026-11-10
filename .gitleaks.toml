@@ -1,0 +1,9 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Deterministic test-only credentials required by validation and SDK parsers."
+regexes = [
+  '''MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=''',
+  '''123456789:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA''',
+]

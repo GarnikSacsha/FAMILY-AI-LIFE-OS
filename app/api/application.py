@@ -3,14 +3,68 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response, status
+from sqlalchemy import select
 
 from app.api.oauth import router as oauth_router
 from app.config.settings import settings
+from app.domains.identity.models import User
 from app.infrastructure.database.session import engine
-from app.telegram.bot import bot, start_bot
+from app.infrastructure.integrations.conversation_summary_worker import (
+    run_conversation_summary_worker,
+)
+from app.infrastructure.integrations.google_sheets_worker import (
+    run_google_sheets_worker,
+)
+from app.infrastructure.integrations.reminder_worker import run_reminder_worker
+from app.integrations.google.sheets import GoogleSheetsClient
+from app.telegram.bot import bot, polling_health, start_bot
 
 logger = logging.getLogger(__name__)
+
+TELEGRAM_RETRY_INITIAL_SECONDS = 1.0
+TELEGRAM_RETRY_MAX_SECONDS = 30.0
+
+
+async def _database_is_ready() -> bool:
+    try:
+        async with engine.connect() as connection:
+            await connection.execute(select(User.id).limit(1))
+    except Exception as error:
+        logger.error(
+            "Database readiness failed (%s).",
+            type(error).__name__,
+        )
+        return False
+    return True
+
+
+async def _supervise_telegram_polling(application: FastAPI) -> None:
+    """Keep Telegram polling alive and expose failures through application state."""
+    retry_delay = TELEGRAM_RETRY_INITIAL_SECONDS
+
+    while True:
+        try:
+            await start_bot()
+        except asyncio.CancelledError:
+            polling_health.mark_stopped()
+            raise
+        except Exception as error:
+            polling_health.mark_failure()
+            logger.error(
+                "Telegram polling failed (%s); retrying in %.1f seconds.",
+                type(error).__name__,
+                retry_delay,
+            )
+        else:
+            polling_health.mark_stopped()
+            logger.error(
+                "Telegram polling stopped unexpectedly; retrying in %.1f seconds.",
+                retry_delay,
+            )
+
+        await asyncio.sleep(retry_delay)
+        retry_delay = min(retry_delay * 2, TELEGRAM_RETRY_MAX_SECONDS)
 
 
 def create_application(*, start_telegram: bool = True) -> FastAPI:
@@ -19,16 +73,48 @@ def create_application(*, start_telegram: bool = True) -> FastAPI:
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         telegram_task: asyncio.Task[None] | None = None
+        sheets_task: asyncio.Task[None] | None = None
+        reminder_task: asyncio.Task[None] | None = None
+        summary_task: asyncio.Task[None] | None = None
+        polling_health.reset(enabled=start_telegram)
         if start_telegram:
             telegram_task = asyncio.create_task(
-                start_bot(),
-                name="telegram-polling",
+                _supervise_telegram_polling(application),
+                name="telegram-polling-supervisor",
             )
             application.state.telegram_task = telegram_task
-
+            reminder_task = asyncio.create_task(
+                run_reminder_worker(bot),
+                name="telegram-reminder-delivery",
+            )
+            application.state.reminder_task = reminder_task
+            if settings.SHARED_CHAT_MEMORY_ENABLED:
+                summary_task = asyncio.create_task(
+                    run_conversation_summary_worker(bot),
+                    name="shared-conversation-summaries",
+                )
+                application.state.summary_task = summary_task
+        if GoogleSheetsClient.is_configured():
+            sheets_task = asyncio.create_task(
+                run_google_sheets_worker(bot if start_telegram else None),
+                name="google-sheets-sync",
+            )
+            application.state.google_sheets_task = sheets_task
         try:
             yield
         finally:
+            if summary_task is not None:
+                summary_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await summary_task
+            if reminder_task is not None:
+                reminder_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await reminder_task
+            if sheets_task is not None:
+                sheets_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await sheets_task
             if telegram_task is not None:
                 telegram_task.cancel()
                 with suppress(asyncio.CancelledError):
@@ -43,8 +129,35 @@ def create_application(*, start_telegram: bool = True) -> FastAPI:
     )
     application.include_router(oauth_router)
 
+    @application.get("/live", tags=["System"])
+    async def live() -> dict[str, str]:
+        """Report HTTP process readiness without blocking singleton handover."""
+        return {"status": "ok"}
+
     @application.get("/health", tags=["System"])
-    async def health() -> dict[str, str]:
+    async def health(response: Response) -> dict[str, str]:
+        telegram_polling = polling_health.current_status()
+        if start_telegram and telegram_polling != "running":
+            response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+            return {
+                "status": "error",
+                "telegram_polling": telegram_polling,
+            }
+        if not await _database_is_ready():
+            response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+            return {
+                "status": "error",
+                "database": "unavailable",
+            }
+        for task_name, worker_name in (
+            ("google_sheets_task", "google_sheets_worker"),
+            ("reminder_task", "reminder_worker"),
+            ("summary_task", "summary_worker"),
+        ):
+            task = getattr(application.state, task_name, None)
+            if task is not None and task.done():
+                response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+                return {"status": "error", worker_name: "stopped"}
         return {"status": "ok"}
 
     return application

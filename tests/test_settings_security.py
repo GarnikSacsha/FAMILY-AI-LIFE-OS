@@ -15,6 +15,7 @@ def production_settings(**overrides):
         "TELEGRAM_BOT_TOKEN": "987654321:production-token-value",
         "DENYS_TELEGRAM_ID": 1001,
         "OLEKSANDRA_TELEGRAM_ID": 1002,
+        "DATABASE_URL": ("postgresql+asyncpg://family:password@postgres.railway.internal:5432/railway"),
         "OURA_CLIENT_ID": "oura-client",
         "OURA_CLIENT_SECRET": "oura-client-secret",
         "OURA_REDIRECT_URI": "https://family.example.com/oauth/oura/callback",
@@ -24,11 +25,21 @@ def production_settings(**overrides):
     return Settings(_env_file=None, **values)
 
 
-def test_development_settings_are_usable_without_production_secrets():
+def test_development_settings_are_usable_without_production_secrets(monkeypatch):
+    monkeypatch.delenv("TOKEN_ENCRYPTION_KEY", raising=False)
     configured = Settings(ENVIRONMENT="development", _env_file=None)
 
     assert configured.TOKEN_ENCRYPTION_KEY is None
     assert configured.HTTP_PORT == 8000
+
+
+def test_railway_port_alias_is_supported(monkeypatch):
+    monkeypatch.delenv("HTTP_PORT", raising=False)
+    monkeypatch.setenv("PORT", "54321")
+
+    configured = Settings(ENVIRONMENT="test", _env_file=None)
+
+    assert configured.HTTP_PORT == 54321
 
 
 def test_production_requires_token_encryption_key():
@@ -75,3 +86,67 @@ def test_unsupported_oura_scope_is_rejected():
             OURA_SCOPES="daily stress",
             _env_file=None,
         )
+
+
+def test_database_url_rejects_concatenated_connection_strings():
+    malformed_url = (
+        "postgresql+asyncpg://family:password@postgres.railway.internal:5432/"
+        "railwaypostgresql+asyncpg://postgres:postgres@localhost:5432/family"
+    )
+
+    with pytest.raises(ValidationError, match="concatenated connection strings"):
+        Settings(
+            ENVIRONMENT="test",
+            DATABASE_URL=malformed_url,
+            _env_file=None,
+        )
+
+
+def test_production_database_cannot_target_localhost():
+    with pytest.raises(ValidationError, match="cannot target localhost"):
+        production_settings(DATABASE_URL=("postgresql+asyncpg://postgres:postgres@localhost:5432/family_life_os"))
+
+
+def test_google_oauth_requires_complete_https_configuration_in_production():
+    with pytest.raises(ValidationError, match="GOOGLE_OAUTH_CLIENT_SECRET"):
+        production_settings(GOOGLE_OAUTH_CLIENT_ID="client-id")
+
+    with pytest.raises(ValidationError, match="GOOGLE_OAUTH_REDIRECT_URI"):
+        production_settings(
+            GOOGLE_OAUTH_CLIENT_ID="client-id",
+            GOOGLE_OAUTH_CLIENT_SECRET="client-secret",
+            GOOGLE_OAUTH_REDIRECT_URI="http://localhost/oauth/google/callback",
+        )
+
+    configured = production_settings(
+        GOOGLE_OAUTH_CLIENT_ID="client-id",
+        GOOGLE_OAUTH_CLIENT_SECRET="client-secret",
+        GOOGLE_OAUTH_REDIRECT_URI="https://family.example.com/oauth/google/callback",
+    )
+    assert str(configured.GOOGLE_OAUTH_CLIENT_SECRET) == "**********"
+
+
+def test_monthly_sheets_layout_requires_a_canonical_period():
+    with pytest.raises(ValidationError, match="GOOGLE_SHEETS_PERIOD"):
+        Settings(
+            ENVIRONMENT="test",
+            GOOGLE_SHEETS_LAYOUT="monthly_budget",
+            GOOGLE_SHEETS_PERIOD=None,
+            _env_file=None,
+        )
+
+    with pytest.raises(ValidationError, match="YYYY-MM"):
+        Settings(
+            ENVIRONMENT="test",
+            GOOGLE_SHEETS_LAYOUT="monthly_budget",
+            GOOGLE_SHEETS_PERIOD="2026-8",
+            _env_file=None,
+        )
+
+    configured = Settings(
+        ENVIRONMENT="test",
+        GOOGLE_SHEETS_LAYOUT="monthly_budget",
+        GOOGLE_SHEETS_PERIOD="2026-08",
+        _env_file=None,
+    )
+    assert configured.GOOGLE_SHEETS_PERIOD == "2026-08"

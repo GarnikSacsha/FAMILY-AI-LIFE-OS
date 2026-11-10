@@ -150,17 +150,19 @@ class TerraReasoningProvider(LLMProvider):
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
-        messages: list[dict[str, str]] = []
+        payload: dict[str, Any] = {
+            "model": self.model_name,
+            "input": prompt,
+            "store": False,
+        }
         if system_instruction:
-            messages.append({"role": "system", "content": system_instruction})
-        messages.append({"role": "user", "content": prompt})
-        payload = {"model": self.model_name, "messages": messages, "temperature": 0.7}
+            payload["instructions"] = system_instruction
         timeout = aiohttp.ClientTimeout(total=float(getattr(settings, "OPENAI_TIMEOUT_SECONDS", 20.0)))
 
         try:
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.post(
-                    "https://api.openai.com/v1/chat/completions",
+                    "https://api.openai.com/v1/responses",
                     headers=headers,
                     json=payload,
                 ) as response:
@@ -170,10 +172,21 @@ class TerraReasoningProvider(LLMProvider):
                             error_code=f"OPENAI_HTTP_{response.status}",
                         )
                     data = await response.json()
-            return data["choices"][0]["message"]["content"]
+            for item in data.get("output", []):
+                if item.get("type") != "message":
+                    continue
+                for content in item.get("content", []):
+                    if content.get("type") == "output_text":
+                        text = content.get("text")
+                        if isinstance(text, str) and text.strip():
+                            return text.strip()
+            raise LLMProviderError(
+                "Reasoning service returned an empty response.",
+                error_code="OPENAI_RESPONSE_INVALID",
+            )
         except LLMProviderError:
             raise
-        except (TimeoutError, aiohttp.ClientError, KeyError, TypeError, ValueError) as exc:
+        except (TimeoutError, aiohttp.ClientError, AttributeError, KeyError, TypeError, ValueError) as exc:
             logger.warning(
                 "Reasoning provider request failed (%s)",
                 type(exc).__name__,

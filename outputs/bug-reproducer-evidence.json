@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "status": "FIX_PROVEN",
+  "reason": "The same screenshot-derived regression test changed from failing to passing, and the full project suite passed.",
+  "reproduction": "confirmed",
+  "full_suite": "passed",
+  "same_command": true,
+  "before": {
+    "command": [
+      ".\\.venv\\Scripts\\python.exe",
+      "-m",
+      "pytest",
+      "tests/test_calendar_followups.py",
+      "-k",
+      "complete_quoted_calendar_request_supersedes_stale_pending_action",
+      "-q"
+    ],
+    "exit_code": 1,
+    "timed_out": false,
+    "duration_ms": 9401,
+    "stdout": "FAILED tests/test_calendar_followups.py::test_complete_quoted_calendar_request_supersedes_stale_pending_action - AssertionError: Google Calendar received the stale pending title instead of 'изучение python'.",
+    "stderr": ""
+  },
+  "after": {
+    "command": [
+      ".\\.venv\\Scripts\\python.exe",
+      "-m",
+      "pytest",
+      "tests/test_calendar_followups.py",
+      "-k",
+      "complete_quoted_calendar_request_supersedes_stale_pending_action",
+      "-q"
+    ],
+    "exit_code": 0,
+    "timed_out": false,
+    "duration_ms": 8827,
+    "stdout": "1 passed, 5 deselected, 1 warning in 6.95s",
+    "stderr": ""
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "status": "FIX_PROVEN",
+  "reason": "The approved task-list reproducer failed before the fix and passes after it; the relevant suite and full suite also pass.",
+  "same_command": true,
+  "full_suite": "passed",
+  "before": {
+    "command": [".venv\\Scripts\\python.exe", "-m", "pytest", "-q", "tests/test_task_list_routing_regression.py"],
+    "exit_code": 1,
+    "timed_out": false,
+    "duration_ms": 5600,
+    "stdout": "F                                                                        [100%]\nFAILED tests/test_task_list_routing_regression.py::test_explicit_task_marker_has_priority_over_calendar_domain - AssertionError: assert 'calendar' == 'planner'\n1 failed, 1 warning in 3.46s",
+    "stderr": ""
+  },
+  "after": {
+    "command": [".venv\\Scripts\\python.exe", "-m", "pytest", "-q", "tests/test_task_list_routing_regression.py"],
+    "exit_code": 0,
+    "timed_out": false,
+    "duration_ms": 8297.0,
+    "stdout": "...                                                                      [100%]\n3 passed, 1 warning in 6.33s",
+    "stderr": ""
+  },
+  "captured_runs": [
+    "outputs/task-list-fixed.json",
+    "outputs/task-list-full.json"
+  ],
+  "relevant_suite": {
+    "command": [".venv\\Scripts\\python.exe", "-m", "pytest", "-q", "tests/test_task_list_routing_regression.py", "tests/test_shared_memory.py", "tests/test_natural_language_planning.py", "tests/test_calendar_followups.py", "tests/test_reminders.py", "tests/test_security_regressions.py", "tests/test_orchestrator_agent_regressions.py"],
+    "exit_code": 0,
+    "result": "51 passed, 1 warning"
+  },
+  "full_suite_result": {
+    "command": [".venv\\Scripts\\python.exe", "-m", "pytest", "-q"],
+    "exit_code": 0,
+    "result": "276 passed, 1 skipped, 1 warning"
+  },
+  "ruff": {
+    "command": [".venv\\Scripts\\python.exe", "-m", "ruff", "check", "app/orchestration/orchestrator.py", "tests/test_task_list_routing_regression.py"],
+    "exit_code": 0,
+    "result": "All checks passed"
+  }
+}
