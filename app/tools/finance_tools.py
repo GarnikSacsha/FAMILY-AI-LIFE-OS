@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -60,6 +60,7 @@ class FinanceTools:
         external_id: str | None = None,
         account_id: str = "default",
         occurred_at: datetime | None = None,
+        telegram_chat_id: int | None = None,
     ) -> dict[str, Any]:
         """Log a transaction, atomically deduplicating imported records on PostgreSQL."""
         normalized_owner_type = owner_type.strip().lower()
@@ -83,6 +84,8 @@ class FinanceTools:
         normalized_description = description.strip() if description else None
         if normalized_description and len(normalized_description) > 500:
             raise ValueError("Description exceeds the maximum length of 500.")
+        if telegram_chat_id is not None and not isinstance(telegram_chat_id, int):
+            raise ValueError("telegram_chat_id must be an integer when provided.")
 
         timestamp = occurred_at or datetime.now(timezone.utc)
         if timestamp.tzinfo is None or timestamp.utcoffset() is None:
@@ -103,6 +106,7 @@ class FinanceTools:
             "source": normalized_source,
             "account_id": normalized_account_id,
             "external_id": normalized_external_id,
+            "telegram_chat_id": telegram_chat_id,
         }
 
         if normalized_external_id and session.get_bind().dialect.name == "postgresql":
@@ -219,3 +223,129 @@ class FinanceTools:
             currency_summary["total_expense"] = str(currency_summary["total_expense"].quantize(MONEY_QUANTUM))
 
         return {"currencies": summary_by_currency}
+
+    @staticmethod
+    async def find_expenses(
+        session: AsyncSession,
+        *,
+        owner_id: uuid.UUID,
+        query: str,
+        date_from: datetime,
+        date_to: datetime,
+        limit: int = 10,
+    ) -> list[dict[str, str]]:
+        """Find confirmed PostgreSQL expense rows for a named follow-up."""
+        if not isinstance(owner_id, uuid.UUID):
+            raise ValueError("owner_id must be an internal UUID.")
+        if date_from.tzinfo is None or date_from.utcoffset() is None:
+            raise ValueError("date_from must be timezone-aware.")
+        if date_to.tzinfo is None or date_to.utcoffset() is None:
+            raise ValueError("date_to must be timezone-aware.")
+        normalized_query = " ".join(query.strip().split())
+        if not normalized_query:
+            raise ValueError("Expense query cannot be empty.")
+        pattern = f"%{normalized_query}%"
+        result = await session.execute(
+            select(FinancialTransaction)
+            .where(
+                FinancialTransaction.owner_id == owner_id,
+                FinancialTransaction.direction == "expense",
+                FinancialTransaction.occurred_at >= date_from.astimezone(timezone.utc),
+                FinancialTransaction.occurred_at < date_to.astimezone(timezone.utc),
+                or_(
+                    FinancialTransaction.merchant.ilike(pattern),
+                    FinancialTransaction.description.ilike(pattern),
+                ),
+            )
+            .order_by(
+                FinancialTransaction.occurred_at.desc(),
+                FinancialTransaction.created_at.desc(),
+                FinancialTransaction.id.desc(),
+            )
+            .limit(limit)
+        )
+        return [
+            {
+                "transaction_id": str(transaction.id),
+                "amount": str(transaction.amount),
+                "currency": transaction.currency,
+                "merchant": transaction.merchant,
+                "category": transaction.category,
+                "occurred_at": transaction.occurred_at.isoformat(),
+                "sheets_status": transaction.sheets_sync_status,
+                "sheets_updated_range": transaction.sheets_updated_range or "",
+            }
+            for transaction in result.scalars().all()
+        ]
+
+    @staticmethod
+    async def get_expenses_in_window(
+        session: AsyncSession,
+        *,
+        owner_id: uuid.UUID,
+        date_from: datetime,
+        date_to: datetime,
+        limit: int = 50,
+    ) -> list[dict[str, str]]:
+        """Return confirmed expenses used as the money section of shared recaps."""
+        if date_from.tzinfo is None:
+            date_from = date_from.replace(tzinfo=timezone.utc)
+        if date_to.tzinfo is None:
+            date_to = date_to.replace(tzinfo=timezone.utc)
+        result = await session.execute(
+            select(FinancialTransaction)
+            .where(
+                FinancialTransaction.owner_id == owner_id,
+                FinancialTransaction.direction == "expense",
+                FinancialTransaction.occurred_at >= date_from.astimezone(timezone.utc),
+                FinancialTransaction.occurred_at <= date_to.astimezone(timezone.utc),
+            )
+            .order_by(
+                FinancialTransaction.occurred_at,
+                FinancialTransaction.created_at,
+                FinancialTransaction.id,
+            )
+            .limit(limit)
+        )
+        return [
+            {
+                "amount": str(transaction.amount),
+                "currency": transaction.currency,
+                "merchant": transaction.merchant,
+                "category": transaction.category,
+                "sheets_status": transaction.sheets_sync_status,
+                "sheets_updated_range": transaction.sheets_updated_range or "",
+            }
+            for transaction in result.scalars().all()
+        ]
+
+    @staticmethod
+    async def get_latest_sheet_sync_status(
+        session: AsyncSession,
+        *,
+        owner_id: uuid.UUID,
+    ) -> dict[str, str] | None:
+        if not isinstance(owner_id, uuid.UUID):
+            raise ValueError("owner_id must be an internal UUID.")
+        result = await session.execute(
+            select(FinancialTransaction)
+            .where(FinancialTransaction.owner_id == owner_id)
+            .order_by(
+                FinancialTransaction.occurred_at.desc(),
+                FinancialTransaction.created_at.desc(),
+                FinancialTransaction.id.desc(),
+            )
+            .limit(1)
+        )
+        transaction = result.scalar_one_or_none()
+        if transaction is None:
+            return None
+        return {
+            "transaction_id": str(transaction.id),
+            "merchant": transaction.merchant,
+            "amount": str(transaction.amount),
+            "currency": transaction.currency,
+            "status": transaction.sheets_sync_status,
+            "updated_range": transaction.sheets_updated_range or "",
+            "error_code": transaction.sheets_sync_error or "",
+        }

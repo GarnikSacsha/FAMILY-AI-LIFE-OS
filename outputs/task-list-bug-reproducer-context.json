@@ -1,0 +1,78 @@
+{
+  "title": "Explicit task requests are classified as calendar events",
+  "project": "FAMILY-AI-LIFE-OS",
+  "generated_at": "2026-08-10",
+  "mode": "prove-fix",
+  "original_report": "In an authorized family group, a multiline request beginning with «Добавь в таски для меня на завтра» received the private-calendar access denial.",
+  "discovery_scope": [
+    "app/orchestration/orchestrator.py",
+    "app/domains/identity/service.py",
+    "app/telegram/bot.py",
+    "tests/test_task_list_routing_regression.py",
+    "existing planning, calendar, memory, security, and orchestrator tests"
+  ],
+  "candidates": [
+    {
+      "candidate": "Explicit task marker is classified as calendar",
+      "location": "app/orchestration/orchestrator.py:198",
+      "contract": "Household planner operations are allowed in family groups; calendar is private-only.",
+      "trigger": "Добавь в таски для меня на завтра.\\n\\nКупить порошок.",
+      "confidence": "high",
+      "outcome": "REPRODUCED"
+    },
+    {
+      "candidate": "Multiline task list is not parsed into separate tasks",
+      "location": "app/orchestration/orchestrator.py:1540",
+      "contract": "Each non-empty task line becomes a household task with the shared due date and requested assignee.",
+      "trigger": "The supplied eight-line task list.",
+      "confidence": "high",
+      "outcome": "FIX_PROVEN"
+    }
+  ],
+  "expected": "The request is authorized as planner work, creates eight household tasks, assigns them to the current user, and sets their due date to tomorrow.",
+  "actual": "Before the fix, domain_for_message returned calendar, causing the family-group authorization check to reject the request.",
+  "environment": "Python 3.14.6, Windows, pytest, Europe/Kyiv",
+  "reproduction": "A focused unit test calls MainOrchestrator.domain_for_message with the explicit task marker and expects planner.",
+  "failure_signal": "The pre-fix assertion received calendar instead of planner.",
+  "root_cause": "Calendar classification ran before explicit task classification, and the shared-chat semantic calendar path could also claim explicit task requests.",
+  "fix_summary": "Added explicit task-marker precedence, skipped semantic calendar handling for explicit task requests, and added deterministic multiline task parsing with list cleanup, due-date extraction, and current-user assignment.",
+  "why_causal": "The authorization domain is now planner before any calendar predicate can match, while the processing path reaches PlannerTools directly for explicit task lists.",
+  "reproduction_files": [
+    {
+      "path": "C:/Users/Денис/Desktop/Всякое вайбкодинг/Просто тест всякое/FAMILY-AI-LIFE-OS/tests/test_task_list_routing_regression.py",
+      "line": 12,
+      "summary": "Gate 1 regression and post-fix task-list coverage."
+    }
+  ],
+  "fix_files": [
+    {
+      "path": "C:/Users/Денис/Desktop/Всякое вайбкодинг/Просто тест всякое/FAMILY-AI-LIFE-OS/app/orchestration/orchestrator.py",
+      "line": 185,
+      "summary": "Task-marker precedence, semantic-calendar guard, and list task creation."
+    },
+    {
+      "path": "C:/Users/Денис/Desktop/Всякое вайбкодинг/Просто тест всякое/FAMILY-AI-LIFE-OS/tests/test_task_list_routing_regression.py",
+      "line": 24,
+      "summary": "Regression coverage for eight tasks, tomorrow due date, and current-user assignment."
+    }
+  ],
+  "checks": [
+    {"name": "Regression test", "status": "passed", "detail": "Red before, green after: 3 passed."},
+    {"name": "Relevant suite", "status": "passed", "detail": "51 passed, 1 warning."},
+    {"name": "Full pytest suite", "status": "passed", "detail": "276 passed, 1 skipped, 1 warning."},
+    {"name": "Ruff", "status": "passed", "detail": "All checks passed for changed Python files."}
+  ],
+  "reproduce": [
+    ".venv\\Scripts\\python.exe -m pytest -q tests/test_task_list_routing_regression.py"
+  ],
+  "limitations": [
+    "The regression uses the existing in-memory SQLite fixture; PostgreSQL execution is covered by the same SQLAlchemy model path but was not run here."
+  ],
+  "residual_risks": [
+    "Natural-language task date phrases beyond today/tomorrow/after-tomorrow remain outside this focused change."
+  ],
+  "notes": [
+    "app/domains/identity/service.py was not changed; planner remains allowed in family groups and calendar remains private-only.",
+    "Existing user modifications in .env.example, outputs/bug-reproducer-report.md, tests/test_voice_transcription.py, and .worktrees were preserved."
+  ]
+}

@@ -105,3 +105,48 @@ def test_database_url_rejects_concatenated_connection_strings():
 def test_production_database_cannot_target_localhost():
     with pytest.raises(ValidationError, match="cannot target localhost"):
         production_settings(DATABASE_URL=("postgresql+asyncpg://postgres:postgres@localhost:5432/family_life_os"))
+
+
+def test_google_oauth_requires_complete_https_configuration_in_production():
+    with pytest.raises(ValidationError, match="GOOGLE_OAUTH_CLIENT_SECRET"):
+        production_settings(GOOGLE_OAUTH_CLIENT_ID="client-id")
+
+    with pytest.raises(ValidationError, match="GOOGLE_OAUTH_REDIRECT_URI"):
+        production_settings(
+            GOOGLE_OAUTH_CLIENT_ID="client-id",
+            GOOGLE_OAUTH_CLIENT_SECRET="client-secret",
+            GOOGLE_OAUTH_REDIRECT_URI="http://localhost/oauth/google/callback",
+        )
+
+    configured = production_settings(
+        GOOGLE_OAUTH_CLIENT_ID="client-id",
+        GOOGLE_OAUTH_CLIENT_SECRET="client-secret",
+        GOOGLE_OAUTH_REDIRECT_URI="https://family.example.com/oauth/google/callback",
+    )
+    assert str(configured.GOOGLE_OAUTH_CLIENT_SECRET) == "**********"
+
+
+def test_monthly_sheets_layout_requires_a_canonical_period():
+    with pytest.raises(ValidationError, match="GOOGLE_SHEETS_PERIOD"):
+        Settings(
+            ENVIRONMENT="test",
+            GOOGLE_SHEETS_LAYOUT="monthly_budget",
+            GOOGLE_SHEETS_PERIOD=None,
+            _env_file=None,
+        )
+
+    with pytest.raises(ValidationError, match="YYYY-MM"):
+        Settings(
+            ENVIRONMENT="test",
+            GOOGLE_SHEETS_LAYOUT="monthly_budget",
+            GOOGLE_SHEETS_PERIOD="2026-8",
+            _env_file=None,
+        )
+
+    configured = Settings(
+        ENVIRONMENT="test",
+        GOOGLE_SHEETS_LAYOUT="monthly_budget",
+        GOOGLE_SHEETS_PERIOD="2026-08",
+        _env_file=None,
+    )
+    assert configured.GOOGLE_SHEETS_PERIOD == "2026-08"

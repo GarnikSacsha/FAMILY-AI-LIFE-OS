@@ -2,74 +2,98 @@
 
 ## ✅ FIX_PROVEN — Bug reproduced and fix proven
 
-The same reproducer changed from failing to passing, and the broader checks passed.
+> The same screenshot-derived regression test changed from failing to passing, and the full project suite passed.
 
-Project: Family AI Life OS
+**Project:** FAMILY-AI-LIFE-OS
 
-Generated: 2026-07-26
+**Bug:** A complete quoted calendar command is hijacked by stale pending context
+
+**Environment:** Python 3.12, Windows, pytest, Europe/Kyiv
+
+**Generated:** 2026-08-03
 
 ## Original report
 
-Ordinary Telegram messages received the same scripted response. A request to record a 1900 UAH market expense also performed no action.
+With an older unfinished recurring task present, the command 'Добавь в календарь с сегодняшнего дня до четверга на 17:00 "изучение python"' created an event with the old title and displayed 13:00.
 
-Expected:
-
-- General messages receive a relevant LLM response.
-- Natural-language expenses are validated and saved through the finance tools.
-
-Actual:
-
-- The hard-coded fallback was returned.
-- The finance agent was never invoked.
+| Contract | Expected | Actual |
+|---|---|---|
+| Observed behavior | Create 'изучение python' at 17:00 Europe/Kyiv every day from 03.08.2026 through 06.08.2026, superseding stale pending context. | The old pending title was sent to Google Calendar, the new 17:00 value was ignored, and UTC 13:00 was displayed. |
 
 ## Minimal reproduction
 
-The approved regression tests call the real `MainOrchestrator` with:
+Seed one stale recurring pending action, then process the exact complete calendar command from the screenshot through MainOrchestrator with Google Calendar mocked only at the external boundary.
 
-1. A general conversational message.
-2. `Запиши пожалуйста мои траты сегодняшние, базар 1900 грн`.
+**Confirming signal:** The mock received the stale summary instead of 'изучение python'.
 
-External AI calls are mocked. The initial run failed with:
+### Reproduction files approved at Gate 1
+
+- [test_calendar_followups.py](<C:\Users\Денис\Desktop\Всякое вайбкодинг\Просто тест всякое\FAMILY-AI-LIFE-OS\tests\test_calendar_followups.py:260>) — Screenshot-derived regression test approved at Gate 1.
+
+## Red to green evidence
+
+| Evidence | Before fix | After fix |
+|---|---:|---:|
+| Exit code | 1 | 0 |
+| Timed out | False | False |
+| Duration | 9,401 ms | 8,827 ms |
+| Same command | — | True |
+| Broader suite | — | passed |
+
+### Before — failing evidence
 
 ```text
-Expected the mocked reasoning response, received the static fallback template.
-Expected FinanceAgent to be awaited once, awaited 0 times.
-2 failed
+FAILED tests/test_calendar_followups.py::test_complete_quoted_calendar_request_supersedes_stale_pending_action - AssertionError: Google Calendar received the stale pending title instead of 'изучение python'.
 ```
 
-After the fix:
+### After — fixed evidence
 
 ```text
-2 passed in 0.85s
+1 passed, 5 deselected, 1 warning in 6.95s
 ```
-
-Regression test: [test_orchestrator_agent_regressions.py](<C:/Users/Денис/Desktop/Всякое вайбкодинг/Просто тест всякое/FAMILY-AI-LIFE-OS/tests/test_orchestrator_agent_regressions.py:1>)
 
 ## Root cause
 
-`MainOrchestrator` contained deterministic branches but never connected its general fallback to `TerraReasoningProvider`. Its financial branch implemented summaries but not transaction logging.
+Pending actions were consumed before checking whether the message was a complete new calendar command. Quoted text had no title priority, the date range was not classified as recurring, and pending UTC timestamps were formatted without conversion to the event timezone.
 
 ## Approved fix
 
-- [orchestrator.py](<C:/Users/Денис/Desktop/Всякое вайбкодинг/Просто тест всякое/FAMILY-AI-LIFE-OS/app/orchestration/orchestrator.py:1>) routes ordinary conversation to the LLM and expenses to validated finance tooling.
-- [provider.py](<C:/Users/Денис/Desktop/Всякое вайбкодинг/Просто тест всякое/FAMILY-AI-LIFE-OS/app/integrations/llm/provider.py:138>) uses the Responses API, extracts output text, and disables server-side response storage.
+Recognize fully specified calendar commands before pending follow-ups, cancel stale pending context, prioritize quoted titles, recognize today-to-weekday ranges as recurring, honor supplied follow-up times, and format pending event confirmations in the event timezone.
 
-Database writes still pass through `FinanceAgent` and `FinanceTools`; the model does not write directly.
+**Why this is causal:** The new-command guard prevents stale state from owning the message; the quote extractor supplies the intended summary; range detection routes to recurrence; and timezone conversion controls the displayed time.
+
+### Production files approved at Gate 2
+
+- [calendar_parser.py](<C:\Users\Денис\Desktop\Всякое вайбкодинг\Просто тест всякое\FAMILY-AI-LIFE-OS\app\domains\planning\calendar_parser.py:195>) — Prioritize a valid title enclosed in straight or typographic quotes.
+- [orchestrator.py](<C:\Users\Денис\Desktop\Всякое вайбкодинг\Просто тест всякое\FAMILY-AI-LIFE-OS\app\orchestration\orchestrator.py:426>) — Let complete calendar commands supersede stale pending actions and preserve local time semantics.
 
 ## Verification
 
 | Check | Status | Evidence |
 |---|---|---|
-| Focused regressions | Passed | 2 failed before, 2 passed after |
-| Full test suite | Passed | 103 passed, 1 skipped |
-| Ruff | Passed | Formatting and lint clean |
-| mypy | Passed | No typing issues |
-| Bandit | Passed | No reported security findings |
+| Regression test | ✅ passed | Exit code changed from 1 to 0 with the same command. |
+| Calendar suites | ✅ passed | 23 passed. |
+| Full project suite | ✅ passed | 203 passed, 1 skipped. |
+| Ruff | ✅ passed | All checks passed. |
 
-## Limitations and residual risks
+## Reproduce
 
-- Conversation is currently stateless; persistent multi-turn history is not included in this fix.
-- Expense extraction currently expects an explicit UAH amount.
-- Broader task and reminder execution requires separate tool-routing contracts.
+```bash
+.\.venv\Scripts\python.exe -m pytest tests/test_calendar_followups.py -k complete_quoted_calendar_request_supersedes_stale_pending_action -q
+```
 
-The machine-readable evidence is in [bug-reproducer-evidence.json](<C:/Users/Денис/Desktop/Всякое вайбкодинг/Просто тест всякое/FAMILY-AI-LIFE-OS/outputs/bug-reproducer-evidence.json>).
+## Limitations
+
+- A fully specified new command must include a calendar action, the word 'календар', a date, and a time to supersede pending state.
+
+## Residual risks
+
+- Quoted explanatory text in a calendar command may be interpreted as the event title; the parser intentionally selects the last valid quoted phrase.
+
+## Notes
+
+- No dependencies, schemas, migrations, or external API contracts changed.
+
+---
+
+Generated by `$bug-reproducer`. A fix is proven only by the same red-to-green reproducer plus relevant broader checks.

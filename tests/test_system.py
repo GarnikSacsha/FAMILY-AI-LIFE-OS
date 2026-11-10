@@ -14,6 +14,13 @@ class TestFamilyLifeOS(unittest.TestCase):
         self.assertEqual(res["intent"], "HEALTH_BIOMETRICS_QUERY")
         self.assertEqual(res["primary_agent"], "health")
 
+    def test_intent_router_treats_oura_company_news_as_general(self):
+        res = IntentRouter.classify_intent(
+            "Oura планує US IPO на вересень. Оцінка $16 млрд, обсяг залучення капіталу $3 млрд."
+        )
+        self.assertEqual(res["intent"], "GENERAL_FAMILY_ASSISTANT")
+        self.assertEqual(res["primary_agent"], "orchestrator")
+
     def test_intent_router_financial_query(self):
         res = IntentRouter.classify_intent("Сколько мы потратили на рестораны?")
         self.assertEqual(res["intent"], "FINANCIAL_QUERY_OR_LOG")

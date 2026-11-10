@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import JSON, ForeignKey, String
+from sqlalchemy import JSON, ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.infrastructure.database.base import Base, TimestampMixin
@@ -8,6 +8,7 @@ from app.infrastructure.database.base import Base, TimestampMixin
 
 class Document(Base, TimestampMixin):
     __tablename__ = "documents"
+    __table_args__ = (UniqueConstraint("owner_id", "id", name="uq_documents_owner_id_id"),)
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
