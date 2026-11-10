@@ -24,6 +24,40 @@ def test_explicit_task_command_stays_in_planner_domain() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("message", ["не купил хлеб", "хлеб ещё не купил", "купил молоко, но не купил хлеб"])
+async def test_negated_completion_keeps_task_active(message: str) -> None:
+    engine, factory = await _memory_database()
+    try:
+        household_id, user_id = await _seed_family(factory)
+        async with factory.begin() as session:
+            await PlannerTools.create_task(
+                session,
+                creator_id=user_id,
+                owner_type="household",
+                owner_id=household_id,
+                assignee_id=user_id,
+                title="Купить хлеб",
+            )
+        async with factory.begin() as session:
+            await MainOrchestrator.process_user_message(
+                session=session,
+                user_id=user_id,
+                household_id=household_id,
+                user_name="Test user",
+                message_text=message,
+                timezone_name="Europe/Kyiv",
+                telegram_chat_id=-100123,
+                shared_context_enabled=True,
+            )
+        async with factory() as session:
+            tasks = list((await session.execute(select(Task))).scalars().all())
+        assert len(tasks) == 1
+        assert tasks[0].is_completed is False, "A negated statement must not complete the task"
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_multiline_task_list_creates_due_tasks_for_current_user() -> None:
     engine, factory = await _memory_database()
     task_ids = iter(range(8, 0, -1))

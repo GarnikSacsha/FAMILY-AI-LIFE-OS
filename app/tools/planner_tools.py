@@ -202,6 +202,12 @@ class PlannerTools:
         message_text: str,
     ) -> list[str]:
         """Mark uncompleted tasks as done only when the message matches safely."""
+        # Token overlap cannot establish which clause a negation applies to.
+        # Leave every task unchanged for negative or mixed statements; the
+        # caller asks for clarification and explicit task buttons remain usable.
+        words = set(re.findall(r"\w+", message_text.casefold()))
+        if words & {"не", "нет", "ні", "not", "no", "never"}:
+            return []
         result = await session.execute(
             select(Task)
             .where(
