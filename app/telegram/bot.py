@@ -507,16 +507,20 @@ async def cmd_calendar(message: types.Message) -> None:
         if error.error_code == "GOOGLE_CALENDAR_SCOPE_MISSING":
             await message.answer(
                 "📅 Почта подключена, но разрешения на Calendar в текущем токене нет. "
-                "Переподключите Google командой /google и подтвердите доступ к календарю."
+                "Переподключите Google командой /google reconnect и подтвердите доступ к календарю."
             )
         elif error.error_code == "GOOGLE_PERMISSION_OR_API_DISABLED":
             await message.answer(
                 "📅 Google-аккаунт подключён, но Calendar API отклонил запрос. "
                 "Проверьте, что Google Calendar API включён в Google Cloud Console, "
-                "затем выполните /google ещё раз."
+                "затем повторите /calendar."
             )
-        else:
+        elif error.error_code in {"GOOGLE_RECONNECT_REQUIRED", "GOOGLE_TOKEN_INVALID"}:
+            await message.answer("📅 Доступ к Google нужно обновить. Выполните /google reconnect и подтвердите доступ.")
+        elif error.error_code == "GOOGLE_NOT_CONNECTED":
             await message.answer("📅 Сначала подключите личный Google-аккаунт командой /google.")
+        else:
+            await message.answer("📅 Сейчас не удалось обратиться к Google Calendar. Попробуйте немного позже.")
         return
     except Exception as error:
         logger.error("Calendar listing failed (%s).", type(error).__name__)

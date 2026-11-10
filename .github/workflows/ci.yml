@@ -80,7 +80,11 @@ jobs:
             fi
           done
           exit 1
+      - name: Verify the scoped pip VEX assessment
+        run: docker run --rm -i --network none --entrypoint python family-ai-life-os:ci -B - < scripts/check_pip_vendor_surface.py
       - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_VEX: .vex/pip.openvex.json
         with:
           image-ref: family-ai-life-os:ci
           format: table

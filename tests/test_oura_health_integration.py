@@ -638,14 +638,15 @@ def test_oura_summary_formatter_renders_rich_sections():
 
     assert "📅 26 июля 2026" in response
     assert "• Спал: 7ч 18м" in response
-    assert "• Deep: 1ч 42м" in response
-    assert "• REM: 1ч 55м" in response
-    assert "• HRV: 61 ms" in response
-    assert "• Min HR: 48 bpm" in response
-    assert "• Температура: +0.1°C" in response
+    assert "• Глубокий сон: 1ч 42м" in response
+    assert "• Быстрый сон (REM): 1ч 55м" in response
+    assert "• Вариабельность пульса (HRV): 61 мс" in response
+    assert "• Минимальный пульс во сне: 48 уд/мин" in response
+    assert "• Отклонение температуры кожи: +0.1°C" in response
     assert "• Шаги: 8431" in response
     assert "• Средняя/высокая активность: 47м" in response
     assert "🧠 Стресс" in response
     assert "• Высокий стресс: 42м" in response
     assert "• Восстановление: 1ч 8м" in response
     assert "🤖 Анализ" in response
+    assert response.index("🤖 Анализ") < response.index("😴 Сон")

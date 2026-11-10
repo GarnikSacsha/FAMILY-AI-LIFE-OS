@@ -22,6 +22,10 @@ GOOGLE_USER_SCOPES = (
 class GoogleOAuthError(Exception):
     """Safe Google OAuth error that never contains credentials or provider bodies."""
 
+    def __init__(self, message: str, *, error_code: str = "GOOGLE_OAUTH_UNAVAILABLE") -> None:
+        super().__init__(message)
+        self.error_code = error_code
+
 
 class GoogleOAuthClient:
     @classmethod
@@ -68,6 +72,14 @@ class GoogleOAuthClient:
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.post(GOOGLE_TOKEN_URL, data=payload) as response:
                     if response.status != 200:
+                        # Only a recognized invalid grant requires user consent again.
+                        if response.status == 400:
+                            error_data = await response.json()
+                            if isinstance(error_data, dict) and error_data.get("error") == "invalid_grant":
+                                raise GoogleOAuthError(
+                                    "Google authorization must be renewed.",
+                                    error_code="GOOGLE_RECONNECT_REQUIRED",
+                                )
                         raise GoogleOAuthError("Google authorization is unavailable.")
                     data = await response.json()
         except GoogleOAuthError:
@@ -76,6 +88,8 @@ class GoogleOAuthClient:
             logger.warning("Google token request failed (%s).", type(exc).__name__)
             raise GoogleOAuthError("Google authorization is unavailable.") from exc
 
+        if not isinstance(data, dict):
+            raise GoogleOAuthError("Google returned an invalid token response.")
         access_token = data.get("access_token")
         expires_in = data.get("expires_in")
         if not isinstance(access_token, str) or not access_token.strip():

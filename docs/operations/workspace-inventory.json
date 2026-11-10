@@ -1,0 +1,1942 @@
+{
+  "generated_at_utc": "2026-11-09T16:53:51.840767+00:00",
+  "repository": "<WORKSPACE>/FAMILY-AI-LIFE-OS",
+  "local_main_worktree": "<LEGACY_MAIN_WORKTREE>",
+  "scope": "Local source/build files and Git metadata only; no fetch or live service access.",
+  "limitations": [
+    "Local main and origin refs do not establish the deployed version.",
+    "Hashes normalize CRLF to LF and exclude tests, documents, secrets, and outputs.",
+    "Git warnings can indicate inaccessible untracked directories; those are not safe to delete."
+  ],
+  "directories": [
+    {
+      "path": "<WORKSPACE>/FAMILY-AI-LIFE-OS",
+      "runtime_file_count": 71,
+      "source_sha256_lf": {
+        "alembic/env.py": "6bb5dd78aad16d8155deb616ceae1e35359782800d6245ef7d00143234213c8a",
+        "alembic/versions/001_initial_schema.py": "98f7749264c217d26d8e06324e054eaa35eae39de152069f543fe773d630b37e",
+        "alembic/versions/002_security_hardening.py": "59eda6d1a046f5f3beb2a5c7cdc90bf97a83254ab625798029af4f24d01809e1",
+        "alembic/versions/003_identity_unique_cleanup.py": "fd37ed1cc56ecbf251eda88563fdb21574e4e2cc59b17c50af6d6311e8fc2d64",
+        "alembic/versions/004_google_workspace_sync.py": "a3c1e4dae9325763f6f0ec73ca94daa9f5326502acbdef0976ef67b640f57266",
+        "alembic/versions/005_chat_reminder_delivery.py": "7c7dc5edbf78bfe10fc62874253c06311fc43f80628582e3882b1f2e89a1f762",
+        "alembic/versions/006_shared_family_memory.py": "0dd299ac8ed877d2abbfa20d3558f01a60bc48852c407b95637664a429d5569c",
+        "alembic/versions/007_clean_legacy_shared_memory.py": "c0f1fc69c3701499e871f6002aa31009fd00ddebc9af52bdccbdef783f54313c",
+        "alembic/versions/008_recurring_calendar_pending_actions.py": "d48d6eb38d231aa8df9298e86fe61967edac0a0bd72014f7e267be79ddfe3821",
+        "alembic/versions/009_calendar_event_pending_actions.py": "577272143129d493719455070a27aca32a028539f64b26a187fc47e083893601",
+        "alembic/versions/010_google_sheets_sync_reliability.py": "d22e3703144a2a673d96e4be79e97b542f5e7e2fff9408884b04127c07196d81",
+        "alembic/versions/011_pending_confirmations.py": "346d03b8798a639c1db306ee910ac4617abdeaa838020361965c558050390889",
+        "alembic/versions/012_shared_context_retry_outbox.py": "3f055b1ee4b7e6f0ec2f8109e6a506b175939dab9175553c2b4bd2f0c7081203",
+        "alembic/versions/013_google_sheets_projection_target.py": "b25f454060b247ee75202a99dd06e0486c9545147b687f411bd258db4a8f77b1",
+        "alembic/versions/014_reclassify_monthly_payments.py": "748259ebf8d243d3b7e308bc026a4466cc010e1c3398147d5a09ff21ba54366d",
+        "alembic.ini": "06d4045598ab254c3cc81d560982f8d589ef51956fca79646de427797a3ac175",
+        "app/__init__.py": "2c7bdd88098b18544ac55c8ff56d7ce0d9c3be288aca79442ec2e86b1b59598a",
+        "app/agents/finance/agent.py": "8a3b942107e2a2612c4b6b58f88e00875ebe41c1441b7657d5204c8e458a7a9a",
+        "app/agents/memory/agent.py": "ba30911eb3556ee1c6fb479600e2a70049e8080f9b476d140785505aa295535c",
+        "app/api/application.py": "25bc041feb789b141f3788d037205f2485cb686f6a70866e2d0138c33bbf2009",
+        "app/api/bitrix.py": "b21e50e6fd280223ae7d8561d09cf65cea23cd68207370802d656fc3fecaa00e",
+        "app/api/oauth.py": "507408753ded0bb0820d261256491f6de3d88791f8a522f1321fb345f12e3dd0",
+        "app/api/public_pages.py": "b9a7dec75c4ee55dc3d03418e193a038097b8832ff6af484340541339621dc0f",
+        "app/config/settings.py": "b554235d32337e0d407bdb54950f04c2b78b1ccc801632eb7e0365770ef50b14",
+        "app/domains/audit/models.py": "baa30938299f0d64689988c2411824872ffe8242def674636043c0ec85dd872c",
+        "app/domains/audit/service.py": "dba409d994e23817fdf2baf96a47cab0ba02924e8c393de691061e2ce23d7ade",
+        "app/domains/documents/models.py": "8f83cf50a6a6cdba0bf59ead0d2066a8e84e5b32b288afd6f9dfded828caad90",
+        "app/domains/finance/models.py": "79a1f03f7c1c7a0cba40300457554a99f2d0a138241480f7935da31093e41473",
+        "app/domains/health/models.py": "d3783d370654a83702ffd86c1463d04cb2507d56f6a12b55b7dd8245699ae23f",
+        "app/domains/identity/models.py": "3ad6d04b991397b3000ee85f0b57c930b7f34c8b69d286aaef0b5679bff0d8dd",
+        "app/domains/identity/service.py": "99f39df3b3b09388e6ba4a4b6095cbe7ac703edf2f07d524ca2bf3326dd3c872",
+        "app/domains/memory/models.py": "05c90875e69860a287605372fbce8c028cc166d5507447cc656787843c3e2955",
+        "app/domains/planning/calendar_parser.py": "8bf2df2639048973bc7ea3d89d71e81f5fca3d99c930e059bd7750df718853a2",
+        "app/domains/planning/models.py": "3243d85f6d12f275fd4af84337bac6ba88221f0378b86db078c6563b9bbcaa09",
+        "app/domains/planning/reminder_parser.py": "a727c41d97b2d1b9704a437061e8573e6ea81b1ec1d54659df1217e95c1c1ee3",
+        "app/domains/planning/semantic_calendar.py": "c1396c9ce2563bef5351f94a314980bffe510c7bdb80ca78a24672ebadb2f08e",
+        "app/infrastructure/database/base.py": "97e5ec3602da880d7ace78be2476a9d666fde767c8c52de2978b2b3b1c8d3dc8",
+        "app/infrastructure/database/prepare.py": "98013069daeca4f7a4bc5769ab9b5aba7437817e4632e78292a91ee01b705665",
+        "app/infrastructure/database/session.py": "64792dc50f476200e78af600826731be1d42f30005afb90a337aebb67b5160ad",
+        "app/infrastructure/integrations/conversation_summary_worker.py": "536682dd3944696d2d4e99432ff6a6f07cbc63435f234b8889500b1bb82049a5",
+        "app/infrastructure/integrations/google_sheets_worker.py": "5b8b9c09b5dae7c485efdb5d0a5e4eaf9544478d74aadf5b82b32f11c9c736c2",
+        "app/infrastructure/integrations/reminder_worker.py": "758a24adcf95f2d64cfd0b4ec358da7b820f4c1c1dc6d78df803f92b5bfce418",
+        "app/integrations/bitrix/__init__.py": "6153dc02d7500b991df8bbb860a19629500dfff69f8bce239d7ffa30ab662cc8",
+        "app/integrations/bitrix/client.py": "74ef70819042d5fe9b7bd9049eda86d96f15f32118928cf1af8cd073bb847f63",
+        "app/integrations/gemini/client.py": "f681d2513340e6ba8d157e8deb487cb28df0d2ad2e55294d4141b1436b16b8e0",
+        "app/integrations/google/oauth.py": "4ea741d3e53892b845efc83d0015b3bfd59262d7744bfe96f1521a1c5a67c1ed",
+        "app/integrations/google/sheets.py": "709e38caaa8f1bcc09ee43243102fbebc9f046ab953c0c338e6affb2cd7576bb",
+        "app/integrations/llm/provider.py": "bc9213497227f5f7b9b36a5d8fad8a1eab4a5babe83283d1aa3760531ee4454c",
+        "app/integrations/openai/__init__.py": "d60dd50ed9381acbf4555289e1efb9a1190f9843ed5d97da033133cea06924fd",
+        "app/integrations/openai/transcription.py": "fa910da3e2bb186ced95ec6923b37f960d8a707551bfc4790382f407c4f166ba",
+        "app/integrations/oura/client.py": "2e7ffcbb90a744a5dd61af989c9c9ebadbdf25b0a22cf82b8fff8333dc5d1972",
+        "app/orchestration/orchestrator.py": "b183c54dd263c4af71084f75afadbbe3424067e5ab41b840f63aee809a3e63af",
+        "app/orchestration/router.py": "8d050f4d7ea8d532c60cb580395dbb65eb7e96701aebe6d15a641b0d4ad8063d",
+        "app/security/logging.py": "86ac940ca3eb22637b89bdb09af988b5431415974a25ed8b626cc23cf4231ffa",
+        "app/security/oauth.py": "5c0f2ea6319e7d18fa0d30068b28502eb38a0d3c5bf79aabacfca23c6d3148e1",
+        "app/security/token_cipher.py": "d69ff83b70ed43b64e87d623df6b8a9ae3d1e6c2ca1779571c2959da217238f3",
+        "app/telegram/bitrix.py": "b1b8f83dc58e439b24baed7583c7c81f9c15a1ef84e7cad321391be15b714091",
+        "app/telegram/bot.py": "2ca26d17e7fdca8291f2cc7483097785431af19db4e527b68faa34501623278b",
+        "app/tools/bitrix_tools.py": "8490b59db8bc735e4176be2125ff7a356081f89e9dede10d4fac93d44f8a300b",
+        "app/tools/confirmation_tools.py": "112fad02f97f72753e3bd7deb3ce72f56980a4907335f3e5b038166ca1c4d57e",
+        "app/tools/expense_selection.py": "dd6b1e5f1c1cd0a1df86ca255263dbb8dda88bf4d7672b64f99768eb179510e2",
+        "app/tools/finance_tools.py": "297d28b94ad49510deb8eaa7cadd6108d5c25a94a4fb716548fe848fe17581fc",
+        "app/tools/google_tools.py": "00ff16b6c6fb824700891a4dc70f1e76503df702136c23ef3b3feb449765b010",
+        "app/tools/health_tools.py": "2534a5debc3c0097c47c88f8e5eea02b5f2b9d6acfe3f38d98352ead78cf1084",
+        "app/tools/mail_filter.py": "4e49c82195b4e544cc9c4db2be56f90612a217dd8b89499aed40c54a599a59c5",
+        "app/tools/memory_tools.py": "67d7baa7fdb7ca12cb21764b92cb1d0d8d1e4df6dac006bb831697804a2a23be",
+        "app/tools/planner_tools.py": "72edac97493c8820d7d94e1b309adbefccc2d9b5f8ee5c3ed6fa59679312016a",
+        "Dockerfile": "f106f4675184cc18218124b1ff1d1097694dd70d964f37dd2fd24151b81c8ae5",
+        "main.py": "a284c8ff740428b7923ce4bfceebebacf42c93b6fec9c74a99fe8f7d75931752",
+        "pyproject.toml": "d1912da358a2dd993a1f6a39c11aeaa55de78c40004fc326db2dd728070ad49b",
+        "railway.toml": "1fc1f28c6b63eef57cb64fae98c25fee2ef84dca79eff790c41bb0652ca0e901"
+      },
+      "kind": "git_worktree",
+      "head": "7ba3fdeb8d14856d2d390761fc523443f4aab51e",
+      "branch": "refs/heads/agent/fix-live-ukrainian-expense-input",
+      "detached": false,
+      "changes": [
+        {
+          "status": " M",
+          "path": ".dockerignore"
+        },
+        {
+          "status": " M",
+          "path": ".env.example"
+        },
+        {
+          "status": " M",
+          "path": "README.md"
+        },
+        {
+          "status": " M",
+          "path": "STATE.md"
+        },
+        {
+          "status": " M",
+          "path": "STATUS.md"
+        },
+        {
+          "status": " M",
+          "path": "app/api/application.py"
+        },
+        {
+          "status": " M",
+          "path": "app/api/oauth.py"
+        },
+        {
+          "status": " M",
+          "path": "app/config/settings.py"
+        },
+        {
+          "status": " M",
+          "path": "app/integrations/google/oauth.py"
+        },
+        {
+          "status": " M",
+          "path": "app/integrations/google/sheets.py"
+        },
+        {
+          "status": " M",
+          "path": "app/orchestration/orchestrator.py"
+        },
+        {
+          "status": " M",
+          "path": "app/telegram/bot.py"
+        },
+        {
+          "status": " M",
+          "path": "app/tools/confirmation_tools.py"
+        },
+        {
+          "status": " M",
+          "path": "app/tools/google_tools.py"
+        },
+        {
+          "status": " M",
+          "path": "app/tools/planner_tools.py"
+        },
+        {
+          "status": " M",
+          "path": "outputs/bug-reproducer-report.md"
+        },
+        {
+          "status": " M",
+          "path": "tests/test_finance_regressions.py"
+        },
+        {
+          "status": " M",
+          "path": "tests/test_google_workspace_paths.py"
+        },
+        {
+          "status": " M",
+          "path": "tests/test_multiline_expenses.py"
+        },
+        {
+          "status": " M",
+          "path": "tests/test_pending_confirmations.py"
+        },
+        {
+          "status": " M",
+          "path": "tests/test_task_list_routing_regression.py"
+        },
+        {
+          "status": " M",
+          "path": "tests/test_telegram_confirmation_ux.py"
+        },
+        {
+          "status": " M",
+          "path": "tests/test_voice_transcription.py"
+        },
+        {
+          "status": "??",
+          "path": ".worktrees/health-platform/"
+        },
+        {
+          "status": "??",
+          "path": ".worktrees/telegram-context-repro/"
+        },
+        {
+          "status": "??",
+          "path": "app/api/bitrix.py"
+        },
+        {
+          "status": "??",
+          "path": "app/api/public_pages.py"
+        },
+        {
+          "status": "??",
+          "path": "app/integrations/bitrix/__init__.py"
+        },
+        {
+          "status": "??",
+          "path": "app/integrations/bitrix/client.py"
+        },
+        {
+          "status": "??",
+          "path": "app/telegram/bitrix.py"
+        },
+        {
+          "status": "??",
+          "path": "app/tools/bitrix_tools.py"
+        },
+        {
+          "status": "??",
+          "path": "app/tools/expense_selection.py"
+        },
+        {
+          "status": "??",
+          "path": "docs/bitrix24-setup.md"
+        },
+        {
+          "status": "??",
+          "path": "docs/operations/MONTHLY_SHEETS.md"
+        },
+        {
+          "status": "??",
+          "path": "docs/operations/PROJECT.md"
+        },
+        {
+          "status": "??",
+          "path": "docs/operations/RELEASE.md"
+        },
+        {
+          "status": "??",
+          "path": "docs/operations/workspace-inventory.json"
+        },
+        {
+          "status": "??",
+          "path": "outputs/bitrix-tests-4244b34a2a694d39a383d3de4feacd6e/test_sheets_credentials_config0/service.json"
+        },
+        {
+          "status": "??",
+          "path": "outputs/check_expense_deployment.py"
+        },
+        {
+          "status": "??",
+          "path": "outputs/check_public_pages_live.py"
+        },
+        {
+          "status": "??",
+          "path": "outputs/check_release_config.py"
+        },
+        {
+          "status": "??",
+          "path": "outputs/configure_release_secret.py"
+        },
+        {
+          "status": "??",
+          "path": "outputs/expense_date_audit.py"
+        },
+        {
+          "status": "??",
+          "path": "outputs/google-oauth-diagnostics.xml"
+        },
+        {
+          "status": "??",
+          "path": "outputs/google-oauth-fixed.xml"
+        },
+        {
+          "status": "??",
+          "path": "outputs/google-oauth-recovery-report.md"
+        },
+        {
+          "status": "??",
+          "path": "outputs/inspect_release_secret_metadata.py"
+        },
+        {
+          "status": "??",
+          "path": "outputs/monthly-payment-bug-after.json"
+        },
+        {
+          "status": "??",
+          "path": "outputs/monthly-payment-bug-before.json"
+        },
+        {
+          "status": "??",
+          "path": "outputs/monthly-payment-bug-context.json"
+        },
+        {
+          "status": "??",
+          "path": "outputs/monthly-payment-bug-reproducer-evidence.json"
+        },
+        {
+          "status": "??",
+          "path": "outputs/monthly-payment-bug-reproducer-report.md"
+        },
+        {
+          "status": "??",
+          "path": "outputs/prepare_expense_release.py"
+        },
+        {
+          "status": "??",
+          "path": "outputs/prepare_public_pages_release.py"
+        },
+        {
+          "status": "??",
+          "path": "outputs/public-pages-deployment.md"
+        },
+        {
+          "status": "??",
+          "path": "outputs/public-pages-preview/index.html"
+        },
+        {
+          "status": "??",
+          "path": "outputs/public-pages-preview/privacy.html"
+        },
+        {
+          "status": "??",
+          "path": "outputs/public-pages-preview/privacy/index.html"
+        },
+        {
+          "status": "??",
+          "path": "outputs/repair_september_expense_dates.py"
+        },
+        {
+          "status": "??",
+          "path": "outputs/run_expense_remote.py"
+        },
+        {
+          "status": "??",
+          "path": "outputs/run_google_oauth_tests.py"
+        },
+        {
+          "status": "??",
+          "path": "outputs/september-expense-date-repair.md"
+        },
+        {
+          "status": "??",
+          "path": "outputs/september-expense-dates-before.json"
+        },
+        {
+          "status": "??",
+          "path": "outputs/september-expense-dates-verified.json"
+        },
+        {
+          "status": "??",
+          "path": "outputs/verify_public_pages_release.py"
+        },
+        {
+          "status": "??",
+          "path": "outputs/verify_september_sheet.py"
+        },
+        {
+          "status": "??",
+          "path": "scripts/workspace_inventory.py"
+        },
+        {
+          "status": "??",
+          "path": "tests/test_bitrix_client.py"
+        },
+        {
+          "status": "??",
+          "path": "tests/test_bitrix_commands.py"
+        },
+        {
+          "status": "??",
+          "path": "tests/test_bitrix_storage.py"
+        },
+        {
+          "status": "??",
+          "path": "tests/test_expense_selection.py"
+        },
+        {
+          "status": "??",
+          "path": "tests/test_google_oauth_recovery_regression.py"
+        },
+        {
+          "status": "??",
+          "path": "tests/test_public_pages.py"
+        }
+      ],
+      "status_has_warnings": true,
+      "compared_to_local_main": {
+        "added": [
+          "app/api/bitrix.py",
+          "app/api/public_pages.py",
+          "app/integrations/bitrix/__init__.py",
+          "app/integrations/bitrix/client.py",
+          "app/telegram/bitrix.py",
+          "app/tools/bitrix_tools.py"
+        ],
+        "missing": [
+          "alembic/versions/015_health_data_foundation.py"
+        ],
+        "different": [
+          "app/api/application.py",
+          "app/api/oauth.py",
+          "app/config/settings.py",
+          "app/domains/documents/models.py",
+          "app/domains/health/models.py",
+          "app/domains/memory/models.py",
+          "app/infrastructure/integrations/google_sheets_worker.py",
+          "app/integrations/google/oauth.py",
+          "app/integrations/google/sheets.py",
+          "app/orchestration/orchestrator.py",
+          "app/telegram/bot.py",
+          "app/tools/expense_selection.py",
+          "app/tools/google_tools.py",
+          "app/tools/planner_tools.py"
+        ]
+      }
+    },
+    {
+      "path": "<WORKSPACE>/FAMILY-AI-LIFE-OS-audit-8059665",
+      "runtime_file_count": 29,
+      "source_sha256_lf": {
+        "alembic/env.py": "bcc6734fb913ec40fb967aad8277181a2b995e935a47305d424f19e7a7fbcc6a",
+        "alembic/versions/001_initial_schema.py": "1b72e568b36299e52fc38bca8db5135f2bd9b8048e309341088faefed9ea01d9",
+        "alembic.ini": "06d4045598ab254c3cc81d560982f8d589ef51956fca79646de427797a3ac175",
+        "app/agents/finance/agent.py": "9871b4ef62609ee56a10e3344dd4a3310c22323d0de0a6d44ac6b24025929fb3",
+        "app/api/oauth.py": "e18fea5f2aac88167d8f93b7d5a1cad0efaa35e27299d2ada1dc79a0e410c6bc",
+        "app/config/settings.py": "eb8fe4a7fee060eb441bcf4b5c19087f89a456776b66cda7a1dcaec45fa23f8a",
+        "app/domains/documents/models.py": "63aaa6823a160f8591b89843b98feb4bc5bdec9ef6aeadfb293ff467396f8102",
+        "app/domains/finance/models.py": "835f4a054affcdb80a65dc15f34110dcc6b21d237940313a65afa2fd8f86e4e9",
+        "app/domains/health/models.py": "63a9ff1abbfc0368b7175cf5a4e2574ecaa542a3509ad2cfbbb5ec088dd3e6e7",
+        "app/domains/identity/models.py": "54ce4d3af0da4f9eef602c218b4e1fdf63ab65c88085811fca1cdd73bb99c62e",
+        "app/domains/identity/service.py": "2996ca12037d0023b0d726f55ee61786a6c2a7cbae4b867e0894ca83562b3af0",
+        "app/domains/memory/models.py": "c10abab1465d11cb97a155d11784a874458561e1d97d5b69d03819ebfc66bb63",
+        "app/domains/planning/models.py": "f0466b734f432bc473906b5abaf29f7024a2448dd7338c3462969d0adb829a6b",
+        "app/infrastructure/database/base.py": "17e9e81f5ebf219558c9cc99172e8c0bc31aba4dc55f6adf91fed5bd5beb06a9",
+        "app/infrastructure/database/session.py": "4c71b0c298499ac7305ac599f9135f3cb11cd7b16714c0f470020c3cfaeebbe9",
+        "app/integrations/gemini/client.py": "542d76bf4149d1f8638a63cf4c8fdd5416349b48ac56feeb52b8d9d216defada",
+        "app/integrations/llm/provider.py": "a8f38419ff939a3a18befed45047ddee5a7c0bc9caedcd054558c55f4fc7c749",
+        "app/integrations/oura/client.py": "a0cd4c934aa059b5602e6c3f7b63d8a4bc7c5a797fd0bd1ab6fcb3d5371211f7",
+        "app/orchestration/orchestrator.py": "00cd269c111f6101fc38b89609a13856311f058927ef97fd01359d1b90f3368d",
+        "app/orchestration/router.py": "c5419c2882cad592a51df4e41bbc184f5ceda5f975e396cf517d9b406c86c282",
+        "app/security/oauth.py": "d6ed1279d1e00151545c8456e561687bb908c4be7831a4456302ed2e1762922c",
+        "app/security/token_cipher.py": "de1dc37e7148df317ff4c9e10c0e244f0b97be92e4e85a29958378a41c24f324",
+        "app/telegram/bot.py": "d1f0c68ceaab3d19d04ba3f8a652bafcdcfbda1791a1ce0fe9d0df2b276ea238",
+        "app/tools/finance_tools.py": "edc330a2d955a9a5877e000c0ed407639daba1a5bdf98c3a52352f4e1020776a",
+        "app/tools/health_tools.py": "cf5040398bdeb8183db22e297ffe161855c8be0cef6c6d99956a2a9e605d9496",
+        "app/tools/planner_tools.py": "d07bb40105e82315454371f0b2da79fec00e220c0400948c5055ecdabcca1147",
+        "Dockerfile": "a1dca0248d62845e5628a552c49f2791f261411ffc77baefd113df706577b4f9",
+        "main.py": "dd0c18101e71120ae084eb8f40298697d6d43c6c4e6a33e9599ceacc45839846",
+        "pyproject.toml": "a8d46115b21dfac6217e88530e460a97b424591c98d0d75ed067828b89f98cb8"
+      },
+      "kind": "source_snapshot",
+      "compared_to_local_main": {
+        "added": [],
+        "missing": [
+          "alembic/versions/002_security_hardening.py",
+          "alembic/versions/003_identity_unique_cleanup.py",
+          "alembic/versions/004_google_workspace_sync.py",
+          "alembic/versions/005_chat_reminder_delivery.py",
+          "alembic/versions/006_shared_family_memory.py",
+          "alembic/versions/007_clean_legacy_shared_memory.py",
+          "alembic/versions/008_recurring_calendar_pending_actions.py",
+          "alembic/versions/009_calendar_event_pending_actions.py",
+          "alembic/versions/010_google_sheets_sync_reliability.py",
+          "alembic/versions/011_pending_confirmations.py",
+          "alembic/versions/012_shared_context_retry_outbox.py",
+          "alembic/versions/013_google_sheets_projection_target.py",
+          "alembic/versions/014_reclassify_monthly_payments.py",
+          "alembic/versions/015_health_data_foundation.py",
+          "app/__init__.py",
+          "app/agents/memory/agent.py",
+          "app/api/application.py",
+          "app/domains/audit/models.py",
+          "app/domains/audit/service.py",
+          "app/domains/planning/calendar_parser.py",
+          "app/domains/planning/reminder_parser.py",
+          "app/domains/planning/semantic_calendar.py",
+          "app/infrastructure/database/prepare.py",
+          "app/infrastructure/integrations/conversation_summary_worker.py",
+          "app/infrastructure/integrations/google_sheets_worker.py",
+          "app/infrastructure/integrations/reminder_worker.py",
+          "app/integrations/google/oauth.py",
+          "app/integrations/google/sheets.py",
+          "app/integrations/openai/__init__.py",
+          "app/integrations/openai/transcription.py",
+          "app/security/logging.py",
+          "app/tools/confirmation_tools.py",
+          "app/tools/expense_selection.py",
+          "app/tools/google_tools.py",
+          "app/tools/mail_filter.py",
+          "app/tools/memory_tools.py",
+          "railway.toml"
+        ],
+        "different": [
+          "Dockerfile",
+          "alembic/env.py",
+          "alembic/versions/001_initial_schema.py",
+          "app/agents/finance/agent.py",
+          "app/api/oauth.py",
+          "app/config/settings.py",
+          "app/domains/documents/models.py",
+          "app/domains/finance/models.py",
+          "app/domains/health/models.py",
+          "app/domains/identity/models.py",
+          "app/domains/identity/service.py",
+          "app/domains/memory/models.py",
+          "app/domains/planning/models.py",
+          "app/infrastructure/database/base.py",
+          "app/infrastructure/database/session.py",
+          "app/integrations/gemini/client.py",
+          "app/integrations/llm/provider.py",
+          "app/integrations/oura/client.py",
+          "app/orchestration/orchestrator.py",
+          "app/orchestration/router.py",
+          "app/security/oauth.py",
+          "app/security/token_cipher.py",
+          "app/telegram/bot.py",
+          "app/tools/finance_tools.py",
+          "app/tools/health_tools.py",
+          "app/tools/planner_tools.py",
+          "main.py",
+          "pyproject.toml"
+        ]
+      }
+    },
+    {
+      "path": "<WORKSPACE>/FAMILY-AI-LIFE-OS-expense-release",
+      "runtime_file_count": 66,
+      "source_sha256_lf": {
+        "alembic/env.py": "6bb5dd78aad16d8155deb616ceae1e35359782800d6245ef7d00143234213c8a",
+        "alembic/versions/001_initial_schema.py": "98f7749264c217d26d8e06324e054eaa35eae39de152069f543fe773d630b37e",
+        "alembic/versions/002_security_hardening.py": "59eda6d1a046f5f3beb2a5c7cdc90bf97a83254ab625798029af4f24d01809e1",
+        "alembic/versions/003_identity_unique_cleanup.py": "fd37ed1cc56ecbf251eda88563fdb21574e4e2cc59b17c50af6d6311e8fc2d64",
+        "alembic/versions/004_google_workspace_sync.py": "a3c1e4dae9325763f6f0ec73ca94daa9f5326502acbdef0976ef67b640f57266",
+        "alembic/versions/005_chat_reminder_delivery.py": "7c7dc5edbf78bfe10fc62874253c06311fc43f80628582e3882b1f2e89a1f762",
+        "alembic/versions/006_shared_family_memory.py": "0dd299ac8ed877d2abbfa20d3558f01a60bc48852c407b95637664a429d5569c",
+        "alembic/versions/007_clean_legacy_shared_memory.py": "c0f1fc69c3701499e871f6002aa31009fd00ddebc9af52bdccbdef783f54313c",
+        "alembic/versions/008_recurring_calendar_pending_actions.py": "d48d6eb38d231aa8df9298e86fe61967edac0a0bd72014f7e267be79ddfe3821",
+        "alembic/versions/009_calendar_event_pending_actions.py": "577272143129d493719455070a27aca32a028539f64b26a187fc47e083893601",
+        "alembic/versions/010_google_sheets_sync_reliability.py": "d22e3703144a2a673d96e4be79e97b542f5e7e2fff9408884b04127c07196d81",
+        "alembic/versions/011_pending_confirmations.py": "346d03b8798a639c1db306ee910ac4617abdeaa838020361965c558050390889",
+        "alembic/versions/012_shared_context_retry_outbox.py": "3f055b1ee4b7e6f0ec2f8109e6a506b175939dab9175553c2b4bd2f0c7081203",
+        "alembic/versions/013_google_sheets_projection_target.py": "b25f454060b247ee75202a99dd06e0486c9545147b687f411bd258db4a8f77b1",
+        "alembic/versions/014_reclassify_monthly_payments.py": "748259ebf8d243d3b7e308bc026a4466cc010e1c3398147d5a09ff21ba54366d",
+        "alembic/versions/015_health_data_foundation.py": "922eed7c4ba75e409bed72b4a9508bf227bfdc66b5016c89602996da3760138a",
+        "alembic.ini": "06d4045598ab254c3cc81d560982f8d589ef51956fca79646de427797a3ac175",
+        "app/__init__.py": "2c7bdd88098b18544ac55c8ff56d7ce0d9c3be288aca79442ec2e86b1b59598a",
+        "app/agents/finance/agent.py": "8a3b942107e2a2612c4b6b58f88e00875ebe41c1441b7657d5204c8e458a7a9a",
+        "app/agents/memory/agent.py": "ba30911eb3556ee1c6fb479600e2a70049e8080f9b476d140785505aa295535c",
+        "app/api/application.py": "49bdd968c947fd21ea01ba747a204add0537a7cb38d4ee98c147c18caf4c6a33",
+        "app/api/oauth.py": "518bc19f4c95ab4ace0affe7036e7ccd160e6904722d17f8da402189553306eb",
+        "app/config/settings.py": "b1bce1dbd7fd50304e8e31a103f1a56de2f5c272dc7316e7e387bf6f37a649e0",
+        "app/domains/audit/models.py": "baa30938299f0d64689988c2411824872ffe8242def674636043c0ec85dd872c",
+        "app/domains/audit/service.py": "dba409d994e23817fdf2baf96a47cab0ba02924e8c393de691061e2ce23d7ade",
+        "app/domains/documents/models.py": "ee0f3c8544717f86cb7026d83a3739a30665904bcd2e5a31821b0c89cb6db9b9",
+        "app/domains/finance/models.py": "79a1f03f7c1c7a0cba40300457554a99f2d0a138241480f7935da31093e41473",
+        "app/domains/health/models.py": "3cadfa32271178a03dd3fb86411eef39b7cde4fa77d5ff47531d6ab3ab633ac9",
+        "app/domains/identity/models.py": "3ad6d04b991397b3000ee85f0b57c930b7f34c8b69d286aaef0b5679bff0d8dd",
+        "app/domains/identity/service.py": "99f39df3b3b09388e6ba4a4b6095cbe7ac703edf2f07d524ca2bf3326dd3c872",
+        "app/domains/memory/models.py": "5efea4843d2ad0c718fb586389dc308a0444d3f0bfa41dff4dd50d0dc23e1015",
+        "app/domains/planning/calendar_parser.py": "8bf2df2639048973bc7ea3d89d71e81f5fca3d99c930e059bd7750df718853a2",
+        "app/domains/planning/models.py": "3243d85f6d12f275fd4af84337bac6ba88221f0378b86db078c6563b9bbcaa09",
+        "app/domains/planning/reminder_parser.py": "a727c41d97b2d1b9704a437061e8573e6ea81b1ec1d54659df1217e95c1c1ee3",
+        "app/domains/planning/semantic_calendar.py": "c1396c9ce2563bef5351f94a314980bffe510c7bdb80ca78a24672ebadb2f08e",
+        "app/infrastructure/database/base.py": "97e5ec3602da880d7ace78be2476a9d666fde767c8c52de2978b2b3b1c8d3dc8",
+        "app/infrastructure/database/prepare.py": "98013069daeca4f7a4bc5769ab9b5aba7437817e4632e78292a91ee01b705665",
+        "app/infrastructure/database/session.py": "64792dc50f476200e78af600826731be1d42f30005afb90a337aebb67b5160ad",
+        "app/infrastructure/integrations/conversation_summary_worker.py": "536682dd3944696d2d4e99432ff6a6f07cbc63435f234b8889500b1bb82049a5",
+        "app/infrastructure/integrations/google_sheets_worker.py": "5b8b9c09b5dae7c485efdb5d0a5e4eaf9544478d74aadf5b82b32f11c9c736c2",
+        "app/infrastructure/integrations/reminder_worker.py": "758a24adcf95f2d64cfd0b4ec358da7b820f4c1c1dc6d78df803f92b5bfce418",
+        "app/integrations/gemini/client.py": "f681d2513340e6ba8d157e8deb487cb28df0d2ad2e55294d4141b1436b16b8e0",
+        "app/integrations/google/oauth.py": "0bffd657c423ed3e5645f43f1d49a35af3aed5eebd7aa64d3d54bd808fc65f43",
+        "app/integrations/google/sheets.py": "709e38caaa8f1bcc09ee43243102fbebc9f046ab953c0c338e6affb2cd7576bb",
+        "app/integrations/llm/provider.py": "bc9213497227f5f7b9b36a5d8fad8a1eab4a5babe83283d1aa3760531ee4454c",
+        "app/integrations/openai/__init__.py": "d60dd50ed9381acbf4555289e1efb9a1190f9843ed5d97da033133cea06924fd",
+        "app/integrations/openai/transcription.py": "fa910da3e2bb186ced95ec6923b37f960d8a707551bfc4790382f407c4f166ba",
+        "app/integrations/oura/client.py": "2e7ffcbb90a744a5dd61af989c9c9ebadbdf25b0a22cf82b8fff8333dc5d1972",
+        "app/orchestration/orchestrator.py": "7bf14bd69123c9c54d06ab9dc3cd8697a3a6571bc48932d6d9cce685096ce902",
+        "app/orchestration/router.py": "8d050f4d7ea8d532c60cb580395dbb65eb7e96701aebe6d15a641b0d4ad8063d",
+        "app/security/logging.py": "86ac940ca3eb22637b89bdb09af988b5431415974a25ed8b626cc23cf4231ffa",
+        "app/security/oauth.py": "5c0f2ea6319e7d18fa0d30068b28502eb38a0d3c5bf79aabacfca23c6d3148e1",
+        "app/security/token_cipher.py": "d69ff83b70ed43b64e87d623df6b8a9ae3d1e6c2ca1779571c2959da217238f3",
+        "app/telegram/bot.py": "3adcc5a9c246c688240f2c5c447d1b69954c56d3bf3957aa6999cab9c731c05e",
+        "app/tools/confirmation_tools.py": "112fad02f97f72753e3bd7deb3ce72f56980a4907335f3e5b038166ca1c4d57e",
+        "app/tools/expense_selection.py": "dd6b1e5f1c1cd0a1df86ca255263dbb8dda88bf4d7672b64f99768eb179510e2",
+        "app/tools/finance_tools.py": "297d28b94ad49510deb8eaa7cadd6108d5c25a94a4fb716548fe848fe17581fc",
+        "app/tools/google_tools.py": "203250d168919f6f0b48e3b3eb3fa16139668fe89947cdf398ad55e527db6a3c",
+        "app/tools/health_tools.py": "2534a5debc3c0097c47c88f8e5eea02b5f2b9d6acfe3f38d98352ead78cf1084",
+        "app/tools/mail_filter.py": "4e49c82195b4e544cc9c4db2be56f90612a217dd8b89499aed40c54a599a59c5",
+        "app/tools/memory_tools.py": "67d7baa7fdb7ca12cb21764b92cb1d0d8d1e4df6dac006bb831697804a2a23be",
+        "app/tools/planner_tools.py": "283e6c0f818df79416fe275f165925a270843c545af00d279a9cd5bede22c8b1",
+        "Dockerfile": "f106f4675184cc18218124b1ff1d1097694dd70d964f37dd2fd24151b81c8ae5",
+        "main.py": "a284c8ff740428b7923ce4bfceebebacf42c93b6fec9c74a99fe8f7d75931752",
+        "pyproject.toml": "d1912da358a2dd993a1f6a39c11aeaa55de78c40004fc326db2dd728070ad49b",
+        "railway.toml": "1fc1f28c6b63eef57cb64fae98c25fee2ef84dca79eff790c41bb0652ca0e901"
+      },
+      "kind": "git_worktree",
+      "head": "5fc8b4f7f11f29852d1f16a0699318fbc6db34e1",
+      "branch": "refs/heads/agent/expense-category-selection-deploy",
+      "detached": false,
+      "changes": [],
+      "status_has_warnings": true,
+      "compared_to_local_main": {
+        "added": [],
+        "missing": [],
+        "different": [
+          "app/infrastructure/integrations/google_sheets_worker.py",
+          "app/integrations/google/sheets.py",
+          "app/orchestration/orchestrator.py",
+          "app/tools/expense_selection.py"
+        ]
+      }
+    },
+    {
+      "path": "<WORKSPACE>/FAMILY-AI-LIFE-OS-oura-explanation-release",
+      "runtime_file_count": 71,
+      "source_sha256_lf": {
+        "alembic/env.py": "6bb5dd78aad16d8155deb616ceae1e35359782800d6245ef7d00143234213c8a",
+        "alembic/versions/001_initial_schema.py": "98f7749264c217d26d8e06324e054eaa35eae39de152069f543fe773d630b37e",
+        "alembic/versions/002_security_hardening.py": "59eda6d1a046f5f3beb2a5c7cdc90bf97a83254ab625798029af4f24d01809e1",
+        "alembic/versions/003_identity_unique_cleanup.py": "fd37ed1cc56ecbf251eda88563fdb21574e4e2cc59b17c50af6d6311e8fc2d64",
+        "alembic/versions/004_google_workspace_sync.py": "a3c1e4dae9325763f6f0ec73ca94daa9f5326502acbdef0976ef67b640f57266",
+        "alembic/versions/005_chat_reminder_delivery.py": "7c7dc5edbf78bfe10fc62874253c06311fc43f80628582e3882b1f2e89a1f762",
+        "alembic/versions/006_shared_family_memory.py": "0dd299ac8ed877d2abbfa20d3558f01a60bc48852c407b95637664a429d5569c",
+        "alembic/versions/007_clean_legacy_shared_memory.py": "c0f1fc69c3701499e871f6002aa31009fd00ddebc9af52bdccbdef783f54313c",
+        "alembic/versions/008_recurring_calendar_pending_actions.py": "d48d6eb38d231aa8df9298e86fe61967edac0a0bd72014f7e267be79ddfe3821",
+        "alembic/versions/009_calendar_event_pending_actions.py": "577272143129d493719455070a27aca32a028539f64b26a187fc47e083893601",
+        "alembic/versions/010_google_sheets_sync_reliability.py": "d22e3703144a2a673d96e4be79e97b542f5e7e2fff9408884b04127c07196d81",
+        "alembic/versions/011_pending_confirmations.py": "346d03b8798a639c1db306ee910ac4617abdeaa838020361965c558050390889",
+        "alembic/versions/012_shared_context_retry_outbox.py": "3f055b1ee4b7e6f0ec2f8109e6a506b175939dab9175553c2b4bd2f0c7081203",
+        "alembic/versions/013_google_sheets_projection_target.py": "b25f454060b247ee75202a99dd06e0486c9545147b687f411bd258db4a8f77b1",
+        "alembic/versions/014_reclassify_monthly_payments.py": "748259ebf8d243d3b7e308bc026a4466cc010e1c3398147d5a09ff21ba54366d",
+        "alembic/versions/015_health_data_foundation.py": "922eed7c4ba75e409bed72b4a9508bf227bfdc66b5016c89602996da3760138a",
+        "alembic.ini": "06d4045598ab254c3cc81d560982f8d589ef51956fca79646de427797a3ac175",
+        "app/__init__.py": "2c7bdd88098b18544ac55c8ff56d7ce0d9c3be288aca79442ec2e86b1b59598a",
+        "app/agents/finance/agent.py": "8a3b942107e2a2612c4b6b58f88e00875ebe41c1441b7657d5204c8e458a7a9a",
+        "app/agents/memory/agent.py": "ba30911eb3556ee1c6fb479600e2a70049e8080f9b476d140785505aa295535c",
+        "app/api/application.py": "ba2a6614853e62f9c9e6ea5857042d84a3a4bc87a82ee296a34eb3acd8a665b3",
+        "app/api/oauth.py": "518bc19f4c95ab4ace0affe7036e7ccd160e6904722d17f8da402189553306eb",
+        "app/config/settings.py": "b1bce1dbd7fd50304e8e31a103f1a56de2f5c272dc7316e7e387bf6f37a649e0",
+        "app/domains/audit/models.py": "baa30938299f0d64689988c2411824872ffe8242def674636043c0ec85dd872c",
+        "app/domains/audit/service.py": "dba409d994e23817fdf2baf96a47cab0ba02924e8c393de691061e2ce23d7ade",
+        "app/domains/documents/models.py": "ee0f3c8544717f86cb7026d83a3739a30665904bcd2e5a31821b0c89cb6db9b9",
+        "app/domains/finance/models.py": "79a1f03f7c1c7a0cba40300457554a99f2d0a138241480f7935da31093e41473",
+        "app/domains/health/models.py": "3cadfa32271178a03dd3fb86411eef39b7cde4fa77d5ff47531d6ab3ab633ac9",
+        "app/domains/identity/models.py": "3ad6d04b991397b3000ee85f0b57c930b7f34c8b69d286aaef0b5679bff0d8dd",
+        "app/domains/identity/service.py": "99f39df3b3b09388e6ba4a4b6095cbe7ac703edf2f07d524ca2bf3326dd3c872",
+        "app/domains/memory/models.py": "5efea4843d2ad0c718fb586389dc308a0444d3f0bfa41dff4dd50d0dc23e1015",
+        "app/domains/planning/calendar_parser.py": "8bf2df2639048973bc7ea3d89d71e81f5fca3d99c930e059bd7750df718853a2",
+        "app/domains/planning/models.py": "3243d85f6d12f275fd4af84337bac6ba88221f0378b86db078c6563b9bbcaa09",
+        "app/domains/planning/reminder_parser.py": "a727c41d97b2d1b9704a437061e8573e6ea81b1ec1d54659df1217e95c1c1ee3",
+        "app/domains/planning/semantic_calendar.py": "80a795af349c124e94eb652b8b27317862420f1bbab698d1f3d06200cb8303ac",
+        "app/infrastructure/database/base.py": "97e5ec3602da880d7ace78be2476a9d666fde767c8c52de2978b2b3b1c8d3dc8",
+        "app/infrastructure/database/prepare.py": "98013069daeca4f7a4bc5769ab9b5aba7437817e4632e78292a91ee01b705665",
+        "app/infrastructure/database/session.py": "64792dc50f476200e78af600826731be1d42f30005afb90a337aebb67b5160ad",
+        "app/infrastructure/integrations/conversation_summary_worker.py": "536682dd3944696d2d4e99432ff6a6f07cbc63435f234b8889500b1bb82049a5",
+        "app/infrastructure/integrations/google_sheets_worker.py": "a2134994d35a8479b50bc3c1e699887d6d2cc939b09f08bd4b017edc60bdc1f1",
+        "app/infrastructure/integrations/reminder_worker.py": "758a24adcf95f2d64cfd0b4ec358da7b820f4c1c1dc6d78df803f92b5bfce418",
+        "app/integrations/gemini/client.py": "f681d2513340e6ba8d157e8deb487cb28df0d2ad2e55294d4141b1436b16b8e0",
+        "app/integrations/google/oauth.py": "0bffd657c423ed3e5645f43f1d49a35af3aed5eebd7aa64d3d54bd808fc65f43",
+        "app/integrations/google/sheets.py": "709e38caaa8f1bcc09ee43243102fbebc9f046ab953c0c338e6affb2cd7576bb",
+        "app/integrations/llm/provider.py": "bc9213497227f5f7b9b36a5d8fad8a1eab4a5babe83283d1aa3760531ee4454c",
+        "app/integrations/openai/__init__.py": "d60dd50ed9381acbf4555289e1efb9a1190f9843ed5d97da033133cea06924fd",
+        "app/integrations/openai/transcription.py": "fa910da3e2bb186ced95ec6923b37f960d8a707551bfc4790382f407c4f166ba",
+        "app/integrations/oura/client.py": "00a04488f78ce1c69abff16ea4c72041ecaa5b0a6f6b5e688868fc21e2771642",
+        "app/orchestration/orchestrator.py": "6661b5ac5f15da557d5e569ab7b71fecd0d4678d538a7236c3234b4b308781c8",
+        "app/orchestration/router.py": "8d050f4d7ea8d532c60cb580395dbb65eb7e96701aebe6d15a641b0d4ad8063d",
+        "app/security/logging.py": "65663ddf7786927fa9775df7e1e99f71320e0a413a58c43f8c9fd8fe6c1d107b",
+        "app/security/oauth.py": "5c0f2ea6319e7d18fa0d30068b28502eb38a0d3c5bf79aabacfca23c6d3148e1",
+        "app/security/token_cipher.py": "d69ff83b70ed43b64e87d623df6b8a9ae3d1e6c2ca1779571c2959da217238f3",
+        "app/telegram/bot.py": "cf69321aed00c4a31aa91a3aeffa21fd01f95b32ce6b244e6532dadf2455dee8",
+        "app/telegram/planner.py": "8531dab36ba8c62a3131105c8ce1aa9592e72e091ce860e0c29b08b5d47a8ae2",
+        "app/tools/confirmation_tools.py": "112fad02f97f72753e3bd7deb3ce72f56980a4907335f3e5b038166ca1c4d57e",
+        "app/tools/expense_selection.py": "3ae72ad9e3a6a9130e3dcea4aee7320600164bb1a9457a1166484640300e32b9",
+        "app/tools/finance_tools.py": "297d28b94ad49510deb8eaa7cadd6108d5c25a94a4fb716548fe848fe17581fc",
+        "app/tools/google_tools.py": "6a87e9b82f453fd6f0a78c2c72556818d4d68638bd1344b998a7169fc04c9f33",
+        "app/tools/health_archive.py": "9460dbdcb434195f92165a62df747809a1d2cd062b9a5d82e646883502e89364",
+        "app/tools/health_explanation.py": "bb2780d4b6d608c050665decf57fe70aa5c2e601819d96c3a64c9f843369613b",
+        "app/tools/health_history.py": "b471c3a5f4984343dac2f4ddeccc8ff8f29ace5bba5a81140da3ee6d01bf9c52",
+        "app/tools/health_insights.py": "92adfcb26709bd2f955715611714121c985ee76326aa34ad7208e5834ded12cf",
+        "app/tools/health_tools.py": "d4252da96bab17bad6a442bb1704f7bcb72aecd13b65791bb5534a24136f013c",
+        "app/tools/mail_filter.py": "f826f65bb7814358710a2531016067a852f1f78103acada41b7553ce83cf2c8b",
+        "app/tools/memory_tools.py": "67d7baa7fdb7ca12cb21764b92cb1d0d8d1e4df6dac006bb831697804a2a23be",
+        "app/tools/planner_tools.py": "6f765f371eed05c2d01db3266eb97e0733601dfb218c34d04c7a4cd9e40ce987",
+        "Dockerfile": "f106f4675184cc18218124b1ff1d1097694dd70d964f37dd2fd24151b81c8ae5",
+        "main.py": "dba5c52525e162700064b85fcb503bbed2942b1bab722af0df7e8a242878ee40",
+        "pyproject.toml": "d1912da358a2dd993a1f6a39c11aeaa55de78c40004fc326db2dd728070ad49b",
+        "railway.toml": "1fc1f28c6b63eef57cb64fae98c25fee2ef84dca79eff790c41bb0652ca0e901"
+      },
+      "kind": "source_snapshot",
+      "compared_to_local_main": {
+        "added": [
+          "app/telegram/planner.py",
+          "app/tools/health_archive.py",
+          "app/tools/health_explanation.py",
+          "app/tools/health_history.py",
+          "app/tools/health_insights.py"
+        ],
+        "missing": [],
+        "different": [
+          "app/api/application.py",
+          "app/domains/planning/semantic_calendar.py",
+          "app/infrastructure/integrations/google_sheets_worker.py",
+          "app/integrations/google/sheets.py",
+          "app/integrations/oura/client.py",
+          "app/orchestration/orchestrator.py",
+          "app/security/logging.py",
+          "app/telegram/bot.py",
+          "app/tools/expense_selection.py",
+          "app/tools/google_tools.py",
+          "app/tools/health_tools.py",
+          "app/tools/mail_filter.py",
+          "app/tools/planner_tools.py",
+          "main.py"
+        ]
+      }
+    },
+    {
+      "path": "<WORKSPACE>/FAMILY-AI-LIFE-OS-oura-fix",
+      "runtime_file_count": 72,
+      "source_sha256_lf": {
+        "alembic/env.py": "6bb5dd78aad16d8155deb616ceae1e35359782800d6245ef7d00143234213c8a",
+        "alembic/versions/001_initial_schema.py": "98f7749264c217d26d8e06324e054eaa35eae39de152069f543fe773d630b37e",
+        "alembic/versions/002_security_hardening.py": "59eda6d1a046f5f3beb2a5c7cdc90bf97a83254ab625798029af4f24d01809e1",
+        "alembic/versions/003_identity_unique_cleanup.py": "fd37ed1cc56ecbf251eda88563fdb21574e4e2cc59b17c50af6d6311e8fc2d64",
+        "alembic/versions/004_google_workspace_sync.py": "a3c1e4dae9325763f6f0ec73ca94daa9f5326502acbdef0976ef67b640f57266",
+        "alembic/versions/005_chat_reminder_delivery.py": "7c7dc5edbf78bfe10fc62874253c06311fc43f80628582e3882b1f2e89a1f762",
+        "alembic/versions/006_shared_family_memory.py": "0dd299ac8ed877d2abbfa20d3558f01a60bc48852c407b95637664a429d5569c",
+        "alembic/versions/007_clean_legacy_shared_memory.py": "c0f1fc69c3701499e871f6002aa31009fd00ddebc9af52bdccbdef783f54313c",
+        "alembic/versions/008_recurring_calendar_pending_actions.py": "d48d6eb38d231aa8df9298e86fe61967edac0a0bd72014f7e267be79ddfe3821",
+        "alembic/versions/009_calendar_event_pending_actions.py": "577272143129d493719455070a27aca32a028539f64b26a187fc47e083893601",
+        "alembic/versions/010_google_sheets_sync_reliability.py": "d22e3703144a2a673d96e4be79e97b542f5e7e2fff9408884b04127c07196d81",
+        "alembic/versions/011_pending_confirmations.py": "346d03b8798a639c1db306ee910ac4617abdeaa838020361965c558050390889",
+        "alembic/versions/012_shared_context_retry_outbox.py": "3f055b1ee4b7e6f0ec2f8109e6a506b175939dab9175553c2b4bd2f0c7081203",
+        "alembic/versions/013_google_sheets_projection_target.py": "b25f454060b247ee75202a99dd06e0486c9545147b687f411bd258db4a8f77b1",
+        "alembic/versions/014_reclassify_monthly_payments.py": "748259ebf8d243d3b7e308bc026a4466cc010e1c3398147d5a09ff21ba54366d",
+        "alembic/versions/015_health_data_foundation.py": "922eed7c4ba75e409bed72b4a9508bf227bfdc66b5016c89602996da3760138a",
+        "alembic.ini": "06d4045598ab254c3cc81d560982f8d589ef51956fca79646de427797a3ac175",
+        "app/__init__.py": "2c7bdd88098b18544ac55c8ff56d7ce0d9c3be288aca79442ec2e86b1b59598a",
+        "app/agents/finance/agent.py": "8a3b942107e2a2612c4b6b58f88e00875ebe41c1441b7657d5204c8e458a7a9a",
+        "app/agents/memory/agent.py": "ba30911eb3556ee1c6fb479600e2a70049e8080f9b476d140785505aa295535c",
+        "app/api/application.py": "ba2a6614853e62f9c9e6ea5857042d84a3a4bc87a82ee296a34eb3acd8a665b3",
+        "app/api/oauth.py": "518bc19f4c95ab4ace0affe7036e7ccd160e6904722d17f8da402189553306eb",
+        "app/config/settings.py": "14f1ad5639b99a53260991bff7b0a0c02803cb4804361b0e8b683107b68b5f82",
+        "app/domains/audit/models.py": "baa30938299f0d64689988c2411824872ffe8242def674636043c0ec85dd872c",
+        "app/domains/audit/service.py": "dba409d994e23817fdf2baf96a47cab0ba02924e8c393de691061e2ce23d7ade",
+        "app/domains/documents/models.py": "ee0f3c8544717f86cb7026d83a3739a30665904bcd2e5a31821b0c89cb6db9b9",
+        "app/domains/finance/models.py": "79a1f03f7c1c7a0cba40300457554a99f2d0a138241480f7935da31093e41473",
+        "app/domains/health/models.py": "3cadfa32271178a03dd3fb86411eef39b7cde4fa77d5ff47531d6ab3ab633ac9",
+        "app/domains/identity/models.py": "3ad6d04b991397b3000ee85f0b57c930b7f34c8b69d286aaef0b5679bff0d8dd",
+        "app/domains/identity/service.py": "99f39df3b3b09388e6ba4a4b6095cbe7ac703edf2f07d524ca2bf3326dd3c872",
+        "app/domains/memory/models.py": "5efea4843d2ad0c718fb586389dc308a0444d3f0bfa41dff4dd50d0dc23e1015",
+        "app/domains/planning/calendar_parser.py": "8bf2df2639048973bc7ea3d89d71e81f5fca3d99c930e059bd7750df718853a2",
+        "app/domains/planning/models.py": "3243d85f6d12f275fd4af84337bac6ba88221f0378b86db078c6563b9bbcaa09",
+        "app/domains/planning/reminder_parser.py": "a727c41d97b2d1b9704a437061e8573e6ea81b1ec1d54659df1217e95c1c1ee3",
+        "app/domains/planning/semantic_calendar.py": "80a795af349c124e94eb652b8b27317862420f1bbab698d1f3d06200cb8303ac",
+        "app/infrastructure/database/base.py": "97e5ec3602da880d7ace78be2476a9d666fde767c8c52de2978b2b3b1c8d3dc8",
+        "app/infrastructure/database/prepare.py": "98013069daeca4f7a4bc5769ab9b5aba7437817e4632e78292a91ee01b705665",
+        "app/infrastructure/database/session.py": "64792dc50f476200e78af600826731be1d42f30005afb90a337aebb67b5160ad",
+        "app/infrastructure/integrations/conversation_summary_worker.py": "536682dd3944696d2d4e99432ff6a6f07cbc63435f234b8889500b1bb82049a5",
+        "app/infrastructure/integrations/google_sheets_worker.py": "2687e49132a60165399cb0c080436161de4924b34e27a9a75c7ec2eae55e3c20",
+        "app/infrastructure/integrations/reminder_worker.py": "758a24adcf95f2d64cfd0b4ec358da7b820f4c1c1dc6d78df803f92b5bfce418",
+        "app/integrations/gemini/client.py": "f681d2513340e6ba8d157e8deb487cb28df0d2ad2e55294d4141b1436b16b8e0",
+        "app/integrations/google/oauth.py": "0bffd657c423ed3e5645f43f1d49a35af3aed5eebd7aa64d3d54bd808fc65f43",
+        "app/integrations/google/sheets.py": "9e63eff50725d7ed706ec99e62f4b34a649bfbe8503e85e44ad2432064deab73",
+        "app/integrations/llm/provider.py": "610793af81fec7f8c20425acc9e8a8d75586f84aacd9709f772cf679ba63c1a8",
+        "app/integrations/openai/__init__.py": "d60dd50ed9381acbf4555289e1efb9a1190f9843ed5d97da033133cea06924fd",
+        "app/integrations/openai/transcription.py": "fa910da3e2bb186ced95ec6923b37f960d8a707551bfc4790382f407c4f166ba",
+        "app/integrations/oura/client.py": "00a04488f78ce1c69abff16ea4c72041ecaa5b0a6f6b5e688868fc21e2771642",
+        "app/orchestration/orchestrator.py": "238391ecf0203d7eb52a4bdefc5774815102a1bae80ba8c27d8aa1959095235e",
+        "app/orchestration/router.py": "8d050f4d7ea8d532c60cb580395dbb65eb7e96701aebe6d15a641b0d4ad8063d",
+        "app/security/demo.py": "d1619d66e0ccef0899cde8418f7a11ce7da2cd8667e34705061f32c4f7677518",
+        "app/security/logging.py": "65663ddf7786927fa9775df7e1e99f71320e0a413a58c43f8c9fd8fe6c1d107b",
+        "app/security/oauth.py": "5c0f2ea6319e7d18fa0d30068b28502eb38a0d3c5bf79aabacfca23c6d3148e1",
+        "app/security/token_cipher.py": "d69ff83b70ed43b64e87d623df6b8a9ae3d1e6c2ca1779571c2959da217238f3",
+        "app/telegram/bot.py": "04ea72728747bbe11ba979002cb9798a1979a6b45516227e909095afdd48a09f",
+        "app/telegram/planner.py": "8531dab36ba8c62a3131105c8ce1aa9592e72e091ce860e0c29b08b5d47a8ae2",
+        "app/tools/confirmation_tools.py": "112fad02f97f72753e3bd7deb3ce72f56980a4907335f3e5b038166ca1c4d57e",
+        "app/tools/expense_selection.py": "b2a68f170e65c2da6c965e52117aed777aef3975e43f8e61a6ae7d6799172a13",
+        "app/tools/finance_tools.py": "297d28b94ad49510deb8eaa7cadd6108d5c25a94a4fb716548fe848fe17581fc",
+        "app/tools/google_tools.py": "6a87e9b82f453fd6f0a78c2c72556818d4d68638bd1344b998a7169fc04c9f33",
+        "app/tools/health_archive.py": "9460dbdcb434195f92165a62df747809a1d2cd062b9a5d82e646883502e89364",
+        "app/tools/health_explanation.py": "8227e075ae75822a86521db103315dbe024cda71a87652537caa37ec183be9e9",
+        "app/tools/health_history.py": "b471c3a5f4984343dac2f4ddeccc8ff8f29ace5bba5a81140da3ee6d01bf9c52",
+        "app/tools/health_insights.py": "92adfcb26709bd2f955715611714121c985ee76326aa34ad7208e5834ded12cf",
+        "app/tools/health_tools.py": "d4252da96bab17bad6a442bb1704f7bcb72aecd13b65791bb5534a24136f013c",
+        "app/tools/mail_filter.py": "f826f65bb7814358710a2531016067a852f1f78103acada41b7553ce83cf2c8b",
+        "app/tools/memory_tools.py": "67d7baa7fdb7ca12cb21764b92cb1d0d8d1e4df6dac006bb831697804a2a23be",
+        "app/tools/planner_tools.py": "6f765f371eed05c2d01db3266eb97e0733601dfb218c34d04c7a4cd9e40ce987",
+        "Dockerfile": "f106f4675184cc18218124b1ff1d1097694dd70d964f37dd2fd24151b81c8ae5",
+        "main.py": "dba5c52525e162700064b85fcb503bbed2942b1bab722af0df7e8a242878ee40",
+        "pyproject.toml": "d1912da358a2dd993a1f6a39c11aeaa55de78c40004fc326db2dd728070ad49b",
+        "railway.toml": "1fc1f28c6b63eef57cb64fae98c25fee2ef84dca79eff790c41bb0652ca0e901"
+      },
+      "kind": "git_worktree",
+      "head": "3312fa3c97bc9e41e86bcacdcc801b6279935679",
+      "branch": null,
+      "detached": true,
+      "changes": [
+        {
+          "status": " M",
+          "path": ".gitignore"
+        },
+        {
+          "status": " M",
+          "path": "app/config/settings.py"
+        },
+        {
+          "status": " M",
+          "path": "app/infrastructure/integrations/google_sheets_worker.py"
+        },
+        {
+          "status": " M",
+          "path": "app/integrations/google/sheets.py"
+        },
+        {
+          "status": " M",
+          "path": "app/integrations/llm/provider.py"
+        },
+        {
+          "status": " M",
+          "path": "app/orchestration/orchestrator.py"
+        },
+        {
+          "status": " M",
+          "path": "app/telegram/bot.py"
+        },
+        {
+          "status": " M",
+          "path": "app/tools/expense_selection.py"
+        },
+        {
+          "status": " M",
+          "path": "app/tools/health_archive.py"
+        },
+        {
+          "status": " M",
+          "path": "app/tools/health_history.py"
+        },
+        {
+          "status": " M",
+          "path": "app/tools/health_tools.py"
+        },
+        {
+          "status": " M",
+          "path": "tests/test_health_archive.py"
+        },
+        {
+          "status": " M",
+          "path": "tests/test_llm_providers.py"
+        },
+        {
+          "status": " M",
+          "path": "tests/test_oura_health_integration.py"
+        },
+        {
+          "status": "??",
+          "path": ".env.demo.example"
+        },
+        {
+          "status": "??",
+          "path": "app/security/demo.py"
+        },
+        {
+          "status": "??",
+          "path": "app/tools/health_explanation.py"
+        },
+        {
+          "status": "??",
+          "path": "demo.py"
+        },
+        {
+          "status": "??",
+          "path": "docs/demo-readiness/AI_CAPABILITIES.md"
+        },
+        {
+          "status": "??",
+          "path": "docs/demo-readiness/AUDIT_REPORT.md"
+        },
+        {
+          "status": "??",
+          "path": "docs/demo-readiness/DEMO_SCENARIOS.md"
+        },
+        {
+          "status": "??",
+          "path": "docs/demo-readiness/ISSUES_AND_PRIORITIES.md"
+        },
+        {
+          "status": "??",
+          "path": "docs/demo-readiness/LIVE_DEMO_GUIDE.md"
+        },
+        {
+          "status": "??",
+          "path": "docs/demo-readiness/LOOM_OUTLINE.md"
+        },
+        {
+          "status": "??",
+          "path": "docs/demo-readiness/REMEDIATION_REPORT.md"
+        },
+        {
+          "status": "??",
+          "path": "outputs/check_october_sheets.py"
+        },
+        {
+          "status": "??",
+          "path": "outputs/check_oura_llm.py"
+        },
+        {
+          "status": "??",
+          "path": "outputs/check_oura_release.py"
+        },
+        {
+          "status": "??",
+          "path": "outputs/oura-explanation-update.md"
+        },
+        {
+          "status": "??",
+          "path": "outputs/oura-report-fix-evidence.json"
+        },
+        {
+          "status": "??",
+          "path": "outputs/oura-report-fix.md"
+        },
+        {
+          "status": "??",
+          "path": "outputs/oura-strict-format-fix.md"
+        },
+        {
+          "status": "??",
+          "path": "outputs/prepare_oura_explanation_release.py"
+        },
+        {
+          "status": "??",
+          "path": "outputs/prepare_oura_release.py"
+        },
+        {
+          "status": "??",
+          "path": "outputs/prepare_oura_strict_release.py"
+        },
+        {
+          "status": "??",
+          "path": "outputs/run_oura_tests.py"
+        },
+        {
+          "status": "??",
+          "path": "tests/test_demo_expenses.py"
+        },
+        {
+          "status": "??",
+          "path": "tests/test_demo_safety.py"
+        },
+        {
+          "status": "??",
+          "path": "tests/test_health_explanation.py"
+        },
+        {
+          "status": "??",
+          "path": "tests/test_sheets_literal_text.py"
+        }
+      ],
+      "status_has_warnings": true,
+      "compared_to_local_main": {
+        "added": [
+          "app/security/demo.py",
+          "app/telegram/planner.py",
+          "app/tools/health_archive.py",
+          "app/tools/health_explanation.py",
+          "app/tools/health_history.py",
+          "app/tools/health_insights.py"
+        ],
+        "missing": [],
+        "different": [
+          "app/api/application.py",
+          "app/config/settings.py",
+          "app/domains/planning/semantic_calendar.py",
+          "app/infrastructure/integrations/google_sheets_worker.py",
+          "app/integrations/llm/provider.py",
+          "app/integrations/oura/client.py",
+          "app/orchestration/orchestrator.py",
+          "app/security/logging.py",
+          "app/telegram/bot.py",
+          "app/tools/expense_selection.py",
+          "app/tools/google_tools.py",
+          "app/tools/health_tools.py",
+          "app/tools/mail_filter.py",
+          "app/tools/planner_tools.py",
+          "main.py"
+        ]
+      }
+    },
+    {
+      "path": "<WORKSPACE>/FAMILY-AI-LIFE-OS-oura-release",
+      "runtime_file_count": 70,
+      "source_sha256_lf": {
+        "alembic/env.py": "6bb5dd78aad16d8155deb616ceae1e35359782800d6245ef7d00143234213c8a",
+        "alembic/versions/001_initial_schema.py": "98f7749264c217d26d8e06324e054eaa35eae39de152069f543fe773d630b37e",
+        "alembic/versions/002_security_hardening.py": "59eda6d1a046f5f3beb2a5c7cdc90bf97a83254ab625798029af4f24d01809e1",
+        "alembic/versions/003_identity_unique_cleanup.py": "fd37ed1cc56ecbf251eda88563fdb21574e4e2cc59b17c50af6d6311e8fc2d64",
+        "alembic/versions/004_google_workspace_sync.py": "a3c1e4dae9325763f6f0ec73ca94daa9f5326502acbdef0976ef67b640f57266",
+        "alembic/versions/005_chat_reminder_delivery.py": "7c7dc5edbf78bfe10fc62874253c06311fc43f80628582e3882b1f2e89a1f762",
+        "alembic/versions/006_shared_family_memory.py": "0dd299ac8ed877d2abbfa20d3558f01a60bc48852c407b95637664a429d5569c",
+        "alembic/versions/007_clean_legacy_shared_memory.py": "c0f1fc69c3701499e871f6002aa31009fd00ddebc9af52bdccbdef783f54313c",
+        "alembic/versions/008_recurring_calendar_pending_actions.py": "d48d6eb38d231aa8df9298e86fe61967edac0a0bd72014f7e267be79ddfe3821",
+        "alembic/versions/009_calendar_event_pending_actions.py": "577272143129d493719455070a27aca32a028539f64b26a187fc47e083893601",
+        "alembic/versions/010_google_sheets_sync_reliability.py": "d22e3703144a2a673d96e4be79e97b542f5e7e2fff9408884b04127c07196d81",
+        "alembic/versions/011_pending_confirmations.py": "346d03b8798a639c1db306ee910ac4617abdeaa838020361965c558050390889",
+        "alembic/versions/012_shared_context_retry_outbox.py": "3f055b1ee4b7e6f0ec2f8109e6a506b175939dab9175553c2b4bd2f0c7081203",
+        "alembic/versions/013_google_sheets_projection_target.py": "b25f454060b247ee75202a99dd06e0486c9545147b687f411bd258db4a8f77b1",
+        "alembic/versions/014_reclassify_monthly_payments.py": "748259ebf8d243d3b7e308bc026a4466cc010e1c3398147d5a09ff21ba54366d",
+        "alembic/versions/015_health_data_foundation.py": "922eed7c4ba75e409bed72b4a9508bf227bfdc66b5016c89602996da3760138a",
+        "alembic.ini": "06d4045598ab254c3cc81d560982f8d589ef51956fca79646de427797a3ac175",
+        "app/__init__.py": "2c7bdd88098b18544ac55c8ff56d7ce0d9c3be288aca79442ec2e86b1b59598a",
+        "app/agents/finance/agent.py": "8a3b942107e2a2612c4b6b58f88e00875ebe41c1441b7657d5204c8e458a7a9a",
+        "app/agents/memory/agent.py": "ba30911eb3556ee1c6fb479600e2a70049e8080f9b476d140785505aa295535c",
+        "app/api/application.py": "ba2a6614853e62f9c9e6ea5857042d84a3a4bc87a82ee296a34eb3acd8a665b3",
+        "app/api/oauth.py": "518bc19f4c95ab4ace0affe7036e7ccd160e6904722d17f8da402189553306eb",
+        "app/config/settings.py": "b1bce1dbd7fd50304e8e31a103f1a56de2f5c272dc7316e7e387bf6f37a649e0",
+        "app/domains/audit/models.py": "baa30938299f0d64689988c2411824872ffe8242def674636043c0ec85dd872c",
+        "app/domains/audit/service.py": "dba409d994e23817fdf2baf96a47cab0ba02924e8c393de691061e2ce23d7ade",
+        "app/domains/documents/models.py": "ee0f3c8544717f86cb7026d83a3739a30665904bcd2e5a31821b0c89cb6db9b9",
+        "app/domains/finance/models.py": "79a1f03f7c1c7a0cba40300457554a99f2d0a138241480f7935da31093e41473",
+        "app/domains/health/models.py": "3cadfa32271178a03dd3fb86411eef39b7cde4fa77d5ff47531d6ab3ab633ac9",
+        "app/domains/identity/models.py": "3ad6d04b991397b3000ee85f0b57c930b7f34c8b69d286aaef0b5679bff0d8dd",
+        "app/domains/identity/service.py": "99f39df3b3b09388e6ba4a4b6095cbe7ac703edf2f07d524ca2bf3326dd3c872",
+        "app/domains/memory/models.py": "5efea4843d2ad0c718fb586389dc308a0444d3f0bfa41dff4dd50d0dc23e1015",
+        "app/domains/planning/calendar_parser.py": "8bf2df2639048973bc7ea3d89d71e81f5fca3d99c930e059bd7750df718853a2",
+        "app/domains/planning/models.py": "3243d85f6d12f275fd4af84337bac6ba88221f0378b86db078c6563b9bbcaa09",
+        "app/domains/planning/reminder_parser.py": "a727c41d97b2d1b9704a437061e8573e6ea81b1ec1d54659df1217e95c1c1ee3",
+        "app/domains/planning/semantic_calendar.py": "80a795af349c124e94eb652b8b27317862420f1bbab698d1f3d06200cb8303ac",
+        "app/infrastructure/database/base.py": "97e5ec3602da880d7ace78be2476a9d666fde767c8c52de2978b2b3b1c8d3dc8",
+        "app/infrastructure/database/prepare.py": "98013069daeca4f7a4bc5769ab9b5aba7437817e4632e78292a91ee01b705665",
+        "app/infrastructure/database/session.py": "64792dc50f476200e78af600826731be1d42f30005afb90a337aebb67b5160ad",
+        "app/infrastructure/integrations/conversation_summary_worker.py": "536682dd3944696d2d4e99432ff6a6f07cbc63435f234b8889500b1bb82049a5",
+        "app/infrastructure/integrations/google_sheets_worker.py": "a2134994d35a8479b50bc3c1e699887d6d2cc939b09f08bd4b017edc60bdc1f1",
+        "app/infrastructure/integrations/reminder_worker.py": "758a24adcf95f2d64cfd0b4ec358da7b820f4c1c1dc6d78df803f92b5bfce418",
+        "app/integrations/gemini/client.py": "f681d2513340e6ba8d157e8deb487cb28df0d2ad2e55294d4141b1436b16b8e0",
+        "app/integrations/google/oauth.py": "0bffd657c423ed3e5645f43f1d49a35af3aed5eebd7aa64d3d54bd808fc65f43",
+        "app/integrations/google/sheets.py": "709e38caaa8f1bcc09ee43243102fbebc9f046ab953c0c338e6affb2cd7576bb",
+        "app/integrations/llm/provider.py": "bc9213497227f5f7b9b36a5d8fad8a1eab4a5babe83283d1aa3760531ee4454c",
+        "app/integrations/openai/__init__.py": "d60dd50ed9381acbf4555289e1efb9a1190f9843ed5d97da033133cea06924fd",
+        "app/integrations/openai/transcription.py": "fa910da3e2bb186ced95ec6923b37f960d8a707551bfc4790382f407c4f166ba",
+        "app/integrations/oura/client.py": "00a04488f78ce1c69abff16ea4c72041ecaa5b0a6f6b5e688868fc21e2771642",
+        "app/orchestration/orchestrator.py": "4f1c1505f8c680829584cb4bdd563c811858e11335c1084dad74bdf7dfd8eff3",
+        "app/orchestration/router.py": "8d050f4d7ea8d532c60cb580395dbb65eb7e96701aebe6d15a641b0d4ad8063d",
+        "app/security/logging.py": "65663ddf7786927fa9775df7e1e99f71320e0a413a58c43f8c9fd8fe6c1d107b",
+        "app/security/oauth.py": "5c0f2ea6319e7d18fa0d30068b28502eb38a0d3c5bf79aabacfca23c6d3148e1",
+        "app/security/token_cipher.py": "d69ff83b70ed43b64e87d623df6b8a9ae3d1e6c2ca1779571c2959da217238f3",
+        "app/telegram/bot.py": "cf69321aed00c4a31aa91a3aeffa21fd01f95b32ce6b244e6532dadf2455dee8",
+        "app/telegram/planner.py": "8531dab36ba8c62a3131105c8ce1aa9592e72e091ce860e0c29b08b5d47a8ae2",
+        "app/tools/confirmation_tools.py": "112fad02f97f72753e3bd7deb3ce72f56980a4907335f3e5b038166ca1c4d57e",
+        "app/tools/expense_selection.py": "3ae72ad9e3a6a9130e3dcea4aee7320600164bb1a9457a1166484640300e32b9",
+        "app/tools/finance_tools.py": "297d28b94ad49510deb8eaa7cadd6108d5c25a94a4fb716548fe848fe17581fc",
+        "app/tools/google_tools.py": "6a87e9b82f453fd6f0a78c2c72556818d4d68638bd1344b998a7169fc04c9f33",
+        "app/tools/health_archive.py": "6e4bfe91d5b98cda714715f8a5b4e9a396f6a1a16ce9a04f328b295db2a3270f",
+        "app/tools/health_history.py": "ccadf48312335c1009481deb9fdfaf683597cbda5a5249655ed72e778bd45ee9",
+        "app/tools/health_insights.py": "92adfcb26709bd2f955715611714121c985ee76326aa34ad7208e5834ded12cf",
+        "app/tools/health_tools.py": "d4252da96bab17bad6a442bb1704f7bcb72aecd13b65791bb5534a24136f013c",
+        "app/tools/mail_filter.py": "f826f65bb7814358710a2531016067a852f1f78103acada41b7553ce83cf2c8b",
+        "app/tools/memory_tools.py": "67d7baa7fdb7ca12cb21764b92cb1d0d8d1e4df6dac006bb831697804a2a23be",
+        "app/tools/planner_tools.py": "6f765f371eed05c2d01db3266eb97e0733601dfb218c34d04c7a4cd9e40ce987",
+        "Dockerfile": "f106f4675184cc18218124b1ff1d1097694dd70d964f37dd2fd24151b81c8ae5",
+        "main.py": "dba5c52525e162700064b85fcb503bbed2942b1bab722af0df7e8a242878ee40",
+        "pyproject.toml": "d1912da358a2dd993a1f6a39c11aeaa55de78c40004fc326db2dd728070ad49b",
+        "railway.toml": "1fc1f28c6b63eef57cb64fae98c25fee2ef84dca79eff790c41bb0652ca0e901"
+      },
+      "kind": "source_snapshot",
+      "compared_to_local_main": {
+        "added": [
+          "app/telegram/planner.py",
+          "app/tools/health_archive.py",
+          "app/tools/health_history.py",
+          "app/tools/health_insights.py"
+        ],
+        "missing": [],
+        "different": [
+          "app/api/application.py",
+          "app/domains/planning/semantic_calendar.py",
+          "app/infrastructure/integrations/google_sheets_worker.py",
+          "app/integrations/google/sheets.py",
+          "app/integrations/oura/client.py",
+          "app/orchestration/orchestrator.py",
+          "app/security/logging.py",
+          "app/telegram/bot.py",
+          "app/tools/expense_selection.py",
+          "app/tools/google_tools.py",
+          "app/tools/health_tools.py",
+          "app/tools/mail_filter.py",
+          "app/tools/planner_tools.py",
+          "main.py"
+        ]
+      }
+    },
+    {
+      "path": "<WORKSPACE>/FAMILY-AI-LIFE-OS-oura-strict-release",
+      "runtime_file_count": 71,
+      "source_sha256_lf": {
+        "alembic/env.py": "6bb5dd78aad16d8155deb616ceae1e35359782800d6245ef7d00143234213c8a",
+        "alembic/versions/001_initial_schema.py": "98f7749264c217d26d8e06324e054eaa35eae39de152069f543fe773d630b37e",
+        "alembic/versions/002_security_hardening.py": "59eda6d1a046f5f3beb2a5c7cdc90bf97a83254ab625798029af4f24d01809e1",
+        "alembic/versions/003_identity_unique_cleanup.py": "fd37ed1cc56ecbf251eda88563fdb21574e4e2cc59b17c50af6d6311e8fc2d64",
+        "alembic/versions/004_google_workspace_sync.py": "a3c1e4dae9325763f6f0ec73ca94daa9f5326502acbdef0976ef67b640f57266",
+        "alembic/versions/005_chat_reminder_delivery.py": "7c7dc5edbf78bfe10fc62874253c06311fc43f80628582e3882b1f2e89a1f762",
+        "alembic/versions/006_shared_family_memory.py": "0dd299ac8ed877d2abbfa20d3558f01a60bc48852c407b95637664a429d5569c",
+        "alembic/versions/007_clean_legacy_shared_memory.py": "c0f1fc69c3701499e871f6002aa31009fd00ddebc9af52bdccbdef783f54313c",
+        "alembic/versions/008_recurring_calendar_pending_actions.py": "d48d6eb38d231aa8df9298e86fe61967edac0a0bd72014f7e267be79ddfe3821",
+        "alembic/versions/009_calendar_event_pending_actions.py": "577272143129d493719455070a27aca32a028539f64b26a187fc47e083893601",
+        "alembic/versions/010_google_sheets_sync_reliability.py": "d22e3703144a2a673d96e4be79e97b542f5e7e2fff9408884b04127c07196d81",
+        "alembic/versions/011_pending_confirmations.py": "346d03b8798a639c1db306ee910ac4617abdeaa838020361965c558050390889",
+        "alembic/versions/012_shared_context_retry_outbox.py": "3f055b1ee4b7e6f0ec2f8109e6a506b175939dab9175553c2b4bd2f0c7081203",
+        "alembic/versions/013_google_sheets_projection_target.py": "b25f454060b247ee75202a99dd06e0486c9545147b687f411bd258db4a8f77b1",
+        "alembic/versions/014_reclassify_monthly_payments.py": "748259ebf8d243d3b7e308bc026a4466cc010e1c3398147d5a09ff21ba54366d",
+        "alembic/versions/015_health_data_foundation.py": "922eed7c4ba75e409bed72b4a9508bf227bfdc66b5016c89602996da3760138a",
+        "alembic.ini": "06d4045598ab254c3cc81d560982f8d589ef51956fca79646de427797a3ac175",
+        "app/__init__.py": "2c7bdd88098b18544ac55c8ff56d7ce0d9c3be288aca79442ec2e86b1b59598a",
+        "app/agents/finance/agent.py": "8a3b942107e2a2612c4b6b58f88e00875ebe41c1441b7657d5204c8e458a7a9a",
+        "app/agents/memory/agent.py": "ba30911eb3556ee1c6fb479600e2a70049e8080f9b476d140785505aa295535c",
+        "app/api/application.py": "ba2a6614853e62f9c9e6ea5857042d84a3a4bc87a82ee296a34eb3acd8a665b3",
+        "app/api/oauth.py": "518bc19f4c95ab4ace0affe7036e7ccd160e6904722d17f8da402189553306eb",
+        "app/config/settings.py": "b1bce1dbd7fd50304e8e31a103f1a56de2f5c272dc7316e7e387bf6f37a649e0",
+        "app/domains/audit/models.py": "baa30938299f0d64689988c2411824872ffe8242def674636043c0ec85dd872c",
+        "app/domains/audit/service.py": "dba409d994e23817fdf2baf96a47cab0ba02924e8c393de691061e2ce23d7ade",
+        "app/domains/documents/models.py": "ee0f3c8544717f86cb7026d83a3739a30665904bcd2e5a31821b0c89cb6db9b9",
+        "app/domains/finance/models.py": "79a1f03f7c1c7a0cba40300457554a99f2d0a138241480f7935da31093e41473",
+        "app/domains/health/models.py": "3cadfa32271178a03dd3fb86411eef39b7cde4fa77d5ff47531d6ab3ab633ac9",
+        "app/domains/identity/models.py": "3ad6d04b991397b3000ee85f0b57c930b7f34c8b69d286aaef0b5679bff0d8dd",
+        "app/domains/identity/service.py": "99f39df3b3b09388e6ba4a4b6095cbe7ac703edf2f07d524ca2bf3326dd3c872",
+        "app/domains/memory/models.py": "5efea4843d2ad0c718fb586389dc308a0444d3f0bfa41dff4dd50d0dc23e1015",
+        "app/domains/planning/calendar_parser.py": "8bf2df2639048973bc7ea3d89d71e81f5fca3d99c930e059bd7750df718853a2",
+        "app/domains/planning/models.py": "3243d85f6d12f275fd4af84337bac6ba88221f0378b86db078c6563b9bbcaa09",
+        "app/domains/planning/reminder_parser.py": "a727c41d97b2d1b9704a437061e8573e6ea81b1ec1d54659df1217e95c1c1ee3",
+        "app/domains/planning/semantic_calendar.py": "80a795af349c124e94eb652b8b27317862420f1bbab698d1f3d06200cb8303ac",
+        "app/infrastructure/database/base.py": "97e5ec3602da880d7ace78be2476a9d666fde767c8c52de2978b2b3b1c8d3dc8",
+        "app/infrastructure/database/prepare.py": "98013069daeca4f7a4bc5769ab9b5aba7437817e4632e78292a91ee01b705665",
+        "app/infrastructure/database/session.py": "64792dc50f476200e78af600826731be1d42f30005afb90a337aebb67b5160ad",
+        "app/infrastructure/integrations/conversation_summary_worker.py": "536682dd3944696d2d4e99432ff6a6f07cbc63435f234b8889500b1bb82049a5",
+        "app/infrastructure/integrations/google_sheets_worker.py": "a2134994d35a8479b50bc3c1e699887d6d2cc939b09f08bd4b017edc60bdc1f1",
+        "app/infrastructure/integrations/reminder_worker.py": "758a24adcf95f2d64cfd0b4ec358da7b820f4c1c1dc6d78df803f92b5bfce418",
+        "app/integrations/gemini/client.py": "f681d2513340e6ba8d157e8deb487cb28df0d2ad2e55294d4141b1436b16b8e0",
+        "app/integrations/google/oauth.py": "0bffd657c423ed3e5645f43f1d49a35af3aed5eebd7aa64d3d54bd808fc65f43",
+        "app/integrations/google/sheets.py": "709e38caaa8f1bcc09ee43243102fbebc9f046ab953c0c338e6affb2cd7576bb",
+        "app/integrations/llm/provider.py": "610793af81fec7f8c20425acc9e8a8d75586f84aacd9709f772cf679ba63c1a8",
+        "app/integrations/openai/__init__.py": "d60dd50ed9381acbf4555289e1efb9a1190f9843ed5d97da033133cea06924fd",
+        "app/integrations/openai/transcription.py": "fa910da3e2bb186ced95ec6923b37f960d8a707551bfc4790382f407c4f166ba",
+        "app/integrations/oura/client.py": "00a04488f78ce1c69abff16ea4c72041ecaa5b0a6f6b5e688868fc21e2771642",
+        "app/orchestration/orchestrator.py": "6661b5ac5f15da557d5e569ab7b71fecd0d4678d538a7236c3234b4b308781c8",
+        "app/orchestration/router.py": "8d050f4d7ea8d532c60cb580395dbb65eb7e96701aebe6d15a641b0d4ad8063d",
+        "app/security/logging.py": "65663ddf7786927fa9775df7e1e99f71320e0a413a58c43f8c9fd8fe6c1d107b",
+        "app/security/oauth.py": "5c0f2ea6319e7d18fa0d30068b28502eb38a0d3c5bf79aabacfca23c6d3148e1",
+        "app/security/token_cipher.py": "d69ff83b70ed43b64e87d623df6b8a9ae3d1e6c2ca1779571c2959da217238f3",
+        "app/telegram/bot.py": "cf69321aed00c4a31aa91a3aeffa21fd01f95b32ce6b244e6532dadf2455dee8",
+        "app/telegram/planner.py": "8531dab36ba8c62a3131105c8ce1aa9592e72e091ce860e0c29b08b5d47a8ae2",
+        "app/tools/confirmation_tools.py": "112fad02f97f72753e3bd7deb3ce72f56980a4907335f3e5b038166ca1c4d57e",
+        "app/tools/expense_selection.py": "3ae72ad9e3a6a9130e3dcea4aee7320600164bb1a9457a1166484640300e32b9",
+        "app/tools/finance_tools.py": "297d28b94ad49510deb8eaa7cadd6108d5c25a94a4fb716548fe848fe17581fc",
+        "app/tools/google_tools.py": "6a87e9b82f453fd6f0a78c2c72556818d4d68638bd1344b998a7169fc04c9f33",
+        "app/tools/health_archive.py": "9460dbdcb434195f92165a62df747809a1d2cd062b9a5d82e646883502e89364",
+        "app/tools/health_explanation.py": "8227e075ae75822a86521db103315dbe024cda71a87652537caa37ec183be9e9",
+        "app/tools/health_history.py": "b471c3a5f4984343dac2f4ddeccc8ff8f29ace5bba5a81140da3ee6d01bf9c52",
+        "app/tools/health_insights.py": "92adfcb26709bd2f955715611714121c985ee76326aa34ad7208e5834ded12cf",
+        "app/tools/health_tools.py": "d4252da96bab17bad6a442bb1704f7bcb72aecd13b65791bb5534a24136f013c",
+        "app/tools/mail_filter.py": "f826f65bb7814358710a2531016067a852f1f78103acada41b7553ce83cf2c8b",
+        "app/tools/memory_tools.py": "67d7baa7fdb7ca12cb21764b92cb1d0d8d1e4df6dac006bb831697804a2a23be",
+        "app/tools/planner_tools.py": "6f765f371eed05c2d01db3266eb97e0733601dfb218c34d04c7a4cd9e40ce987",
+        "Dockerfile": "f106f4675184cc18218124b1ff1d1097694dd70d964f37dd2fd24151b81c8ae5",
+        "main.py": "dba5c52525e162700064b85fcb503bbed2942b1bab722af0df7e8a242878ee40",
+        "pyproject.toml": "d1912da358a2dd993a1f6a39c11aeaa55de78c40004fc326db2dd728070ad49b",
+        "railway.toml": "1fc1f28c6b63eef57cb64fae98c25fee2ef84dca79eff790c41bb0652ca0e901"
+      },
+      "kind": "source_snapshot",
+      "compared_to_local_main": {
+        "added": [
+          "app/telegram/planner.py",
+          "app/tools/health_archive.py",
+          "app/tools/health_explanation.py",
+          "app/tools/health_history.py",
+          "app/tools/health_insights.py"
+        ],
+        "missing": [],
+        "different": [
+          "app/api/application.py",
+          "app/domains/planning/semantic_calendar.py",
+          "app/infrastructure/integrations/google_sheets_worker.py",
+          "app/integrations/google/sheets.py",
+          "app/integrations/llm/provider.py",
+          "app/integrations/oura/client.py",
+          "app/orchestration/orchestrator.py",
+          "app/security/logging.py",
+          "app/telegram/bot.py",
+          "app/tools/expense_selection.py",
+          "app/tools/google_tools.py",
+          "app/tools/health_tools.py",
+          "app/tools/mail_filter.py",
+          "app/tools/planner_tools.py",
+          "main.py"
+        ]
+      }
+    },
+    {
+      "path": "<WORKSPACE>/FAMILY-AI-LIFE-OS-public-pages-release",
+      "runtime_file_count": 67,
+      "source_sha256_lf": {
+        "alembic/env.py": "6bb5dd78aad16d8155deb616ceae1e35359782800d6245ef7d00143234213c8a",
+        "alembic/versions/001_initial_schema.py": "98f7749264c217d26d8e06324e054eaa35eae39de152069f543fe773d630b37e",
+        "alembic/versions/002_security_hardening.py": "59eda6d1a046f5f3beb2a5c7cdc90bf97a83254ab625798029af4f24d01809e1",
+        "alembic/versions/003_identity_unique_cleanup.py": "fd37ed1cc56ecbf251eda88563fdb21574e4e2cc59b17c50af6d6311e8fc2d64",
+        "alembic/versions/004_google_workspace_sync.py": "a3c1e4dae9325763f6f0ec73ca94daa9f5326502acbdef0976ef67b640f57266",
+        "alembic/versions/005_chat_reminder_delivery.py": "7c7dc5edbf78bfe10fc62874253c06311fc43f80628582e3882b1f2e89a1f762",
+        "alembic/versions/006_shared_family_memory.py": "0dd299ac8ed877d2abbfa20d3558f01a60bc48852c407b95637664a429d5569c",
+        "alembic/versions/007_clean_legacy_shared_memory.py": "c0f1fc69c3701499e871f6002aa31009fd00ddebc9af52bdccbdef783f54313c",
+        "alembic/versions/008_recurring_calendar_pending_actions.py": "d48d6eb38d231aa8df9298e86fe61967edac0a0bd72014f7e267be79ddfe3821",
+        "alembic/versions/009_calendar_event_pending_actions.py": "577272143129d493719455070a27aca32a028539f64b26a187fc47e083893601",
+        "alembic/versions/010_google_sheets_sync_reliability.py": "d22e3703144a2a673d96e4be79e97b542f5e7e2fff9408884b04127c07196d81",
+        "alembic/versions/011_pending_confirmations.py": "346d03b8798a639c1db306ee910ac4617abdeaa838020361965c558050390889",
+        "alembic/versions/012_shared_context_retry_outbox.py": "3f055b1ee4b7e6f0ec2f8109e6a506b175939dab9175553c2b4bd2f0c7081203",
+        "alembic/versions/013_google_sheets_projection_target.py": "b25f454060b247ee75202a99dd06e0486c9545147b687f411bd258db4a8f77b1",
+        "alembic/versions/014_reclassify_monthly_payments.py": "748259ebf8d243d3b7e308bc026a4466cc010e1c3398147d5a09ff21ba54366d",
+        "alembic/versions/015_health_data_foundation.py": "922eed7c4ba75e409bed72b4a9508bf227bfdc66b5016c89602996da3760138a",
+        "alembic.ini": "06d4045598ab254c3cc81d560982f8d589ef51956fca79646de427797a3ac175",
+        "app/__init__.py": "2c7bdd88098b18544ac55c8ff56d7ce0d9c3be288aca79442ec2e86b1b59598a",
+        "app/agents/finance/agent.py": "8a3b942107e2a2612c4b6b58f88e00875ebe41c1441b7657d5204c8e458a7a9a",
+        "app/agents/memory/agent.py": "ba30911eb3556ee1c6fb479600e2a70049e8080f9b476d140785505aa295535c",
+        "app/api/application.py": "25bc041feb789b141f3788d037205f2485cb686f6a70866e2d0138c33bbf2009",
+        "app/api/oauth.py": "518bc19f4c95ab4ace0affe7036e7ccd160e6904722d17f8da402189553306eb",
+        "app/api/public_pages.py": "b9a7dec75c4ee55dc3d03418e193a038097b8832ff6af484340541339621dc0f",
+        "app/config/settings.py": "b1bce1dbd7fd50304e8e31a103f1a56de2f5c272dc7316e7e387bf6f37a649e0",
+        "app/domains/audit/models.py": "baa30938299f0d64689988c2411824872ffe8242def674636043c0ec85dd872c",
+        "app/domains/audit/service.py": "dba409d994e23817fdf2baf96a47cab0ba02924e8c393de691061e2ce23d7ade",
+        "app/domains/documents/models.py": "ee0f3c8544717f86cb7026d83a3739a30665904bcd2e5a31821b0c89cb6db9b9",
+        "app/domains/finance/models.py": "79a1f03f7c1c7a0cba40300457554a99f2d0a138241480f7935da31093e41473",
+        "app/domains/health/models.py": "3cadfa32271178a03dd3fb86411eef39b7cde4fa77d5ff47531d6ab3ab633ac9",
+        "app/domains/identity/models.py": "3ad6d04b991397b3000ee85f0b57c930b7f34c8b69d286aaef0b5679bff0d8dd",
+        "app/domains/identity/service.py": "99f39df3b3b09388e6ba4a4b6095cbe7ac703edf2f07d524ca2bf3326dd3c872",
+        "app/domains/memory/models.py": "5efea4843d2ad0c718fb586389dc308a0444d3f0bfa41dff4dd50d0dc23e1015",
+        "app/domains/planning/calendar_parser.py": "8bf2df2639048973bc7ea3d89d71e81f5fca3d99c930e059bd7750df718853a2",
+        "app/domains/planning/models.py": "3243d85f6d12f275fd4af84337bac6ba88221f0378b86db078c6563b9bbcaa09",
+        "app/domains/planning/reminder_parser.py": "a727c41d97b2d1b9704a437061e8573e6ea81b1ec1d54659df1217e95c1c1ee3",
+        "app/domains/planning/semantic_calendar.py": "c1396c9ce2563bef5351f94a314980bffe510c7bdb80ca78a24672ebadb2f08e",
+        "app/infrastructure/database/base.py": "97e5ec3602da880d7ace78be2476a9d666fde767c8c52de2978b2b3b1c8d3dc8",
+        "app/infrastructure/database/prepare.py": "98013069daeca4f7a4bc5769ab9b5aba7437817e4632e78292a91ee01b705665",
+        "app/infrastructure/database/session.py": "64792dc50f476200e78af600826731be1d42f30005afb90a337aebb67b5160ad",
+        "app/infrastructure/integrations/conversation_summary_worker.py": "536682dd3944696d2d4e99432ff6a6f07cbc63435f234b8889500b1bb82049a5",
+        "app/infrastructure/integrations/google_sheets_worker.py": "5b8b9c09b5dae7c485efdb5d0a5e4eaf9544478d74aadf5b82b32f11c9c736c2",
+        "app/infrastructure/integrations/reminder_worker.py": "758a24adcf95f2d64cfd0b4ec358da7b820f4c1c1dc6d78df803f92b5bfce418",
+        "app/integrations/gemini/client.py": "f681d2513340e6ba8d157e8deb487cb28df0d2ad2e55294d4141b1436b16b8e0",
+        "app/integrations/google/oauth.py": "0bffd657c423ed3e5645f43f1d49a35af3aed5eebd7aa64d3d54bd808fc65f43",
+        "app/integrations/google/sheets.py": "709e38caaa8f1bcc09ee43243102fbebc9f046ab953c0c338e6affb2cd7576bb",
+        "app/integrations/llm/provider.py": "bc9213497227f5f7b9b36a5d8fad8a1eab4a5babe83283d1aa3760531ee4454c",
+        "app/integrations/openai/__init__.py": "d60dd50ed9381acbf4555289e1efb9a1190f9843ed5d97da033133cea06924fd",
+        "app/integrations/openai/transcription.py": "fa910da3e2bb186ced95ec6923b37f960d8a707551bfc4790382f407c4f166ba",
+        "app/integrations/oura/client.py": "2e7ffcbb90a744a5dd61af989c9c9ebadbdf25b0a22cf82b8fff8333dc5d1972",
+        "app/orchestration/orchestrator.py": "7bf14bd69123c9c54d06ab9dc3cd8697a3a6571bc48932d6d9cce685096ce902",
+        "app/orchestration/router.py": "8d050f4d7ea8d532c60cb580395dbb65eb7e96701aebe6d15a641b0d4ad8063d",
+        "app/security/logging.py": "86ac940ca3eb22637b89bdb09af988b5431415974a25ed8b626cc23cf4231ffa",
+        "app/security/oauth.py": "5c0f2ea6319e7d18fa0d30068b28502eb38a0d3c5bf79aabacfca23c6d3148e1",
+        "app/security/token_cipher.py": "d69ff83b70ed43b64e87d623df6b8a9ae3d1e6c2ca1779571c2959da217238f3",
+        "app/telegram/bot.py": "3adcc5a9c246c688240f2c5c447d1b69954c56d3bf3957aa6999cab9c731c05e",
+        "app/tools/confirmation_tools.py": "112fad02f97f72753e3bd7deb3ce72f56980a4907335f3e5b038166ca1c4d57e",
+        "app/tools/expense_selection.py": "dd6b1e5f1c1cd0a1df86ca255263dbb8dda88bf4d7672b64f99768eb179510e2",
+        "app/tools/finance_tools.py": "297d28b94ad49510deb8eaa7cadd6108d5c25a94a4fb716548fe848fe17581fc",
+        "app/tools/google_tools.py": "203250d168919f6f0b48e3b3eb3fa16139668fe89947cdf398ad55e527db6a3c",
+        "app/tools/health_tools.py": "2534a5debc3c0097c47c88f8e5eea02b5f2b9d6acfe3f38d98352ead78cf1084",
+        "app/tools/mail_filter.py": "4e49c82195b4e544cc9c4db2be56f90612a217dd8b89499aed40c54a599a59c5",
+        "app/tools/memory_tools.py": "67d7baa7fdb7ca12cb21764b92cb1d0d8d1e4df6dac006bb831697804a2a23be",
+        "app/tools/planner_tools.py": "283e6c0f818df79416fe275f165925a270843c545af00d279a9cd5bede22c8b1",
+        "Dockerfile": "f106f4675184cc18218124b1ff1d1097694dd70d964f37dd2fd24151b81c8ae5",
+        "main.py": "a284c8ff740428b7923ce4bfceebebacf42c93b6fec9c74a99fe8f7d75931752",
+        "pyproject.toml": "d1912da358a2dd993a1f6a39c11aeaa55de78c40004fc326db2dd728070ad49b",
+        "railway.toml": "1fc1f28c6b63eef57cb64fae98c25fee2ef84dca79eff790c41bb0652ca0e901"
+      },
+      "kind": "source_snapshot",
+      "compared_to_local_main": {
+        "added": [
+          "app/api/public_pages.py"
+        ],
+        "missing": [],
+        "different": [
+          "app/api/application.py",
+          "app/infrastructure/integrations/google_sheets_worker.py",
+          "app/integrations/google/sheets.py",
+          "app/orchestration/orchestrator.py",
+          "app/tools/expense_selection.py"
+        ]
+      }
+    },
+    {
+      "path": "<WORKSPACE>/FAMILY-AI-LIFE-OS/.worktrees/health-platform",
+      "runtime_file_count": 70,
+      "source_sha256_lf": {
+        "alembic/env.py": "6bb5dd78aad16d8155deb616ceae1e35359782800d6245ef7d00143234213c8a",
+        "alembic/versions/001_initial_schema.py": "98f7749264c217d26d8e06324e054eaa35eae39de152069f543fe773d630b37e",
+        "alembic/versions/002_security_hardening.py": "59eda6d1a046f5f3beb2a5c7cdc90bf97a83254ab625798029af4f24d01809e1",
+        "alembic/versions/003_identity_unique_cleanup.py": "fd37ed1cc56ecbf251eda88563fdb21574e4e2cc59b17c50af6d6311e8fc2d64",
+        "alembic/versions/004_google_workspace_sync.py": "a3c1e4dae9325763f6f0ec73ca94daa9f5326502acbdef0976ef67b640f57266",
+        "alembic/versions/005_chat_reminder_delivery.py": "7c7dc5edbf78bfe10fc62874253c06311fc43f80628582e3882b1f2e89a1f762",
+        "alembic/versions/006_shared_family_memory.py": "0dd299ac8ed877d2abbfa20d3558f01a60bc48852c407b95637664a429d5569c",
+        "alembic/versions/007_clean_legacy_shared_memory.py": "c0f1fc69c3701499e871f6002aa31009fd00ddebc9af52bdccbdef783f54313c",
+        "alembic/versions/008_recurring_calendar_pending_actions.py": "d48d6eb38d231aa8df9298e86fe61967edac0a0bd72014f7e267be79ddfe3821",
+        "alembic/versions/009_calendar_event_pending_actions.py": "577272143129d493719455070a27aca32a028539f64b26a187fc47e083893601",
+        "alembic/versions/010_google_sheets_sync_reliability.py": "d22e3703144a2a673d96e4be79e97b542f5e7e2fff9408884b04127c07196d81",
+        "alembic/versions/011_pending_confirmations.py": "346d03b8798a639c1db306ee910ac4617abdeaa838020361965c558050390889",
+        "alembic/versions/012_shared_context_retry_outbox.py": "3f055b1ee4b7e6f0ec2f8109e6a506b175939dab9175553c2b4bd2f0c7081203",
+        "alembic/versions/013_google_sheets_projection_target.py": "b25f454060b247ee75202a99dd06e0486c9545147b687f411bd258db4a8f77b1",
+        "alembic/versions/014_reclassify_monthly_payments.py": "748259ebf8d243d3b7e308bc026a4466cc010e1c3398147d5a09ff21ba54366d",
+        "alembic/versions/015_health_data_foundation.py": "922eed7c4ba75e409bed72b4a9508bf227bfdc66b5016c89602996da3760138a",
+        "alembic.ini": "06d4045598ab254c3cc81d560982f8d589ef51956fca79646de427797a3ac175",
+        "app/__init__.py": "2c7bdd88098b18544ac55c8ff56d7ce0d9c3be288aca79442ec2e86b1b59598a",
+        "app/agents/finance/agent.py": "de89bfcfde9b324bdb32280f28df85b6c4f14a305bbc86121c2db8aa84a50071",
+        "app/agents/memory/agent.py": "ba30911eb3556ee1c6fb479600e2a70049e8080f9b476d140785505aa295535c",
+        "app/api/application.py": "b5cbeb4c2de6b0ab375e27ffd4db854b4325fb4e04fd248e2a2862194ac6e7d2",
+        "app/api/oauth.py": "518bc19f4c95ab4ace0affe7036e7ccd160e6904722d17f8da402189553306eb",
+        "app/config/settings.py": "df3d3f1be560317b8c2faea5929c6cbc683de6510c170a064412bf31b4b917ab",
+        "app/domains/audit/models.py": "baa30938299f0d64689988c2411824872ffe8242def674636043c0ec85dd872c",
+        "app/domains/audit/service.py": "dba409d994e23817fdf2baf96a47cab0ba02924e8c393de691061e2ce23d7ade",
+        "app/domains/documents/models.py": "ee0f3c8544717f86cb7026d83a3739a30665904bcd2e5a31821b0c89cb6db9b9",
+        "app/domains/finance/models.py": "79a1f03f7c1c7a0cba40300457554a99f2d0a138241480f7935da31093e41473",
+        "app/domains/health/analysis.py": "b482199ffe6d577ebc625a13b354001c3a08aceed2f85d9852581ceb01244255",
+        "app/domains/health/metrics.py": "5424fdf7f93eda89c53058dbf7fe4602c7232ef17e71766588d9bf9e7d3b2240",
+        "app/domains/health/models.py": "3cadfa32271178a03dd3fb86411eef39b7cde4fa77d5ff47531d6ab3ab633ac9",
+        "app/domains/identity/models.py": "3ad6d04b991397b3000ee85f0b57c930b7f34c8b69d286aaef0b5679bff0d8dd",
+        "app/domains/identity/service.py": "99f39df3b3b09388e6ba4a4b6095cbe7ac703edf2f07d524ca2bf3326dd3c872",
+        "app/domains/memory/models.py": "5efea4843d2ad0c718fb586389dc308a0444d3f0bfa41dff4dd50d0dc23e1015",
+        "app/domains/planning/calendar_parser.py": "8bf2df2639048973bc7ea3d89d71e81f5fca3d99c930e059bd7750df718853a2",
+        "app/domains/planning/models.py": "3243d85f6d12f275fd4af84337bac6ba88221f0378b86db078c6563b9bbcaa09",
+        "app/domains/planning/reminder_parser.py": "a727c41d97b2d1b9704a437061e8573e6ea81b1ec1d54659df1217e95c1c1ee3",
+        "app/domains/planning/semantic_calendar.py": "c1396c9ce2563bef5351f94a314980bffe510c7bdb80ca78a24672ebadb2f08e",
+        "app/infrastructure/database/base.py": "97e5ec3602da880d7ace78be2476a9d666fde767c8c52de2978b2b3b1c8d3dc8",
+        "app/infrastructure/database/prepare.py": "98013069daeca4f7a4bc5769ab9b5aba7437817e4632e78292a91ee01b705665",
+        "app/infrastructure/database/session.py": "64792dc50f476200e78af600826731be1d42f30005afb90a337aebb67b5160ad",
+        "app/infrastructure/integrations/conversation_summary_worker.py": "779f4f5375c47472fade54eb9dafdd575717cdf8e49e3c5993bdb06ac170db62",
+        "app/infrastructure/integrations/google_sheets_worker.py": "5b8b9c09b5dae7c485efdb5d0a5e4eaf9544478d74aadf5b82b32f11c9c736c2",
+        "app/infrastructure/integrations/oura_sync_worker.py": "7db8d065920676dfccfe9d6e394c01dd08128bb8d34cb073c4ff1472fd5de4bb",
+        "app/infrastructure/integrations/reminder_worker.py": "758a24adcf95f2d64cfd0b4ec358da7b820f4c1c1dc6d78df803f92b5bfce418",
+        "app/integrations/gemini/client.py": "f681d2513340e6ba8d157e8deb487cb28df0d2ad2e55294d4141b1436b16b8e0",
+        "app/integrations/google/oauth.py": "0bffd657c423ed3e5645f43f1d49a35af3aed5eebd7aa64d3d54bd808fc65f43",
+        "app/integrations/google/sheets.py": "803f2f47770f3370305f767ec9bfebf80f0a7e27c13d19dcc12ea7b1358e0402",
+        "app/integrations/llm/provider.py": "bc9213497227f5f7b9b36a5d8fad8a1eab4a5babe83283d1aa3760531ee4454c",
+        "app/integrations/openai/__init__.py": "d60dd50ed9381acbf4555289e1efb9a1190f9843ed5d97da033133cea06924fd",
+        "app/integrations/openai/transcription.py": "fa910da3e2bb186ced95ec6923b37f960d8a707551bfc4790382f407c4f166ba",
+        "app/integrations/oura/client.py": "6f5ab92674a823584eb3ae073c61eed6dd3f11a8cbdd53daae6b35d3169b7663",
+        "app/orchestration/orchestrator.py": "11e1c71ebc46360524b7576b859a5b6fed87754a85ce2a88eb45af848d7efe0c",
+        "app/orchestration/router.py": "c99c13b867c3e92055db26ce0ae0c71cee398ba7292ab54ca554da2e933c0a53",
+        "app/security/health_data_cipher.py": "3ceb75eb828487c37879a1fbd2348ed895bc30e832c7b45cc5ea60e6f1b8e836",
+        "app/security/logging.py": "86ac940ca3eb22637b89bdb09af988b5431415974a25ed8b626cc23cf4231ffa",
+        "app/security/oauth.py": "5c0f2ea6319e7d18fa0d30068b28502eb38a0d3c5bf79aabacfca23c6d3148e1",
+        "app/security/token_cipher.py": "d69ff83b70ed43b64e87d623df6b8a9ae3d1e6c2ca1779571c2959da217238f3",
+        "app/telegram/bot.py": "7818f41603047140cbbab5d02d817e3dac1b71b488c76c73f7dfe4c2ffa3be78",
+        "app/tools/confirmation_tools.py": "112fad02f97f72753e3bd7deb3ce72f56980a4907335f3e5b038166ca1c4d57e",
+        "app/tools/finance_tools.py": "297d28b94ad49510deb8eaa7cadd6108d5c25a94a4fb716548fe848fe17581fc",
+        "app/tools/google_tools.py": "203250d168919f6f0b48e3b3eb3fa16139668fe89947cdf398ad55e527db6a3c",
+        "app/tools/health_data_tools.py": "d7b8ef1091cde3b429a0bfaaf963efd2e4ea0fa58e0c6c1261a20f5644a1735e",
+        "app/tools/health_tools.py": "975bd3698c98da192295ae733ff478c85fd21b64f406a10fff7ab492d28b93b5",
+        "app/tools/mail_filter.py": "4e49c82195b4e544cc9c4db2be56f90612a217dd8b89499aed40c54a599a59c5",
+        "app/tools/memory_tools.py": "67d7baa7fdb7ca12cb21764b92cb1d0d8d1e4df6dac006bb831697804a2a23be",
+        "app/tools/planner_tools.py": "2d229265b2bea56e0166f6e4ca5a4fb97ce346b032fd31c63fa1b386e5595c5b",
+        "Dockerfile": "f106f4675184cc18218124b1ff1d1097694dd70d964f37dd2fd24151b81c8ae5",
+        "main.py": "a284c8ff740428b7923ce4bfceebebacf42c93b6fec9c74a99fe8f7d75931752",
+        "pyproject.toml": "d1912da358a2dd993a1f6a39c11aeaa55de78c40004fc326db2dd728070ad49b",
+        "railway.toml": "1fc1f28c6b63eef57cb64fae98c25fee2ef84dca79eff790c41bb0652ca0e901"
+      },
+      "kind": "git_worktree",
+      "head": "67ebc13771241dca3eac0002c2dca3326410dc8d",
+      "branch": "refs/heads/agent/health-platform",
+      "detached": false,
+      "changes": [
+        {
+          "status": " M",
+          "path": ".env.example"
+        },
+        {
+          "status": " M",
+          "path": ".env.test.example"
+        },
+        {
+          "status": " M",
+          "path": "AGENTS.md"
+        },
+        {
+          "status": " M",
+          "path": "README.md"
+        },
+        {
+          "status": " M",
+          "path": "REQ.md"
+        },
+        {
+          "status": " M",
+          "path": "SECURITY.md"
+        },
+        {
+          "status": " M",
+          "path": "STATE.md"
+        },
+        {
+          "status": " M",
+          "path": "STATUS.md"
+        },
+        {
+          "status": " M",
+          "path": "app/api/application.py"
+        },
+        {
+          "status": " M",
+          "path": "app/config/settings.py"
+        },
+        {
+          "status": " M",
+          "path": "app/domains/documents/models.py"
+        },
+        {
+          "status": " M",
+          "path": "app/domains/health/models.py"
+        },
+        {
+          "status": " M",
+          "path": "app/domains/memory/models.py"
+        },
+        {
+          "status": " M",
+          "path": "app/integrations/oura/client.py"
+        },
+        {
+          "status": " M",
+          "path": "app/orchestration/orchestrator.py"
+        },
+        {
+          "status": " M",
+          "path": "app/telegram/bot.py"
+        },
+        {
+          "status": " M",
+          "path": "app/tools/confirmation_tools.py"
+        },
+        {
+          "status": " M",
+          "path": "app/tools/health_tools.py"
+        },
+        {
+          "status": " M",
+          "path": "app/tools/planner_tools.py"
+        },
+        {
+          "status": " M",
+          "path": "tests/test_finance_regressions.py"
+        },
+        {
+          "status": " M",
+          "path": "tests/test_oura_health_integration.py"
+        },
+        {
+          "status": " M",
+          "path": "tests/test_pending_confirmations.py"
+        },
+        {
+          "status": " M",
+          "path": "tests/test_settings_security.py"
+        },
+        {
+          "status": "??",
+          "path": "alembic/versions/015_health_data_foundation.py"
+        },
+        {
+          "status": "??",
+          "path": "app/domains/health/analysis.py"
+        },
+        {
+          "status": "??",
+          "path": "app/domains/health/metrics.py"
+        },
+        {
+          "status": "??",
+          "path": "app/infrastructure/integrations/oura_sync_worker.py"
+        },
+        {
+          "status": "??",
+          "path": "app/security/health_data_cipher.py"
+        },
+        {
+          "status": "??",
+          "path": "app/tools/health_data_tools.py"
+        },
+        {
+          "status": "??",
+          "path": "tests/test_health_data_cipher.py"
+        },
+        {
+          "status": "??",
+          "path": "tests/test_health_data_models.py"
+        },
+        {
+          "status": "??",
+          "path": "tests/test_health_data_platform.py"
+        },
+        {
+          "status": "??",
+          "path": "tests/test_health_live_fallback.py"
+        },
+        {
+          "status": "??",
+          "path": "tests/test_health_llm_analysis.py"
+        },
+        {
+          "status": "??",
+          "path": "tests/test_health_metrics.py"
+        },
+        {
+          "status": "??",
+          "path": "tests/test_health_report_formatting.py"
+        },
+        {
+          "status": "??",
+          "path": "tests/test_oura_pagination.py"
+        },
+        {
+          "status": "??",
+          "path": "tests/test_runtime_model_registry.py"
+        },
+        {
+          "status": "??",
+          "path": "tests/test_shopping_bulk_list_regressions.py"
+        },
+        {
+          "status": "??",
+          "path": "tests/test_shopping_order_regression.py"
+        },
+        {
+          "status": "??",
+          "path": "tests/test_telegram_confirmation_ux.py"
+        },
+        {
+          "status": "??",
+          "path": "tests/test_telegram_group_addressing.py"
+        },
+        {
+          "status": "??",
+          "path": "timestamptz"
+        }
+      ],
+      "status_has_warnings": false,
+      "compared_to_local_main": {
+        "added": [
+          "app/domains/health/analysis.py",
+          "app/domains/health/metrics.py",
+          "app/infrastructure/integrations/oura_sync_worker.py",
+          "app/security/health_data_cipher.py",
+          "app/tools/health_data_tools.py"
+        ],
+        "missing": [
+          "app/tools/expense_selection.py"
+        ],
+        "different": [
+          "app/agents/finance/agent.py",
+          "app/api/application.py",
+          "app/config/settings.py",
+          "app/infrastructure/integrations/conversation_summary_worker.py",
+          "app/infrastructure/integrations/google_sheets_worker.py",
+          "app/integrations/google/sheets.py",
+          "app/integrations/oura/client.py",
+          "app/orchestration/orchestrator.py",
+          "app/orchestration/router.py",
+          "app/telegram/bot.py",
+          "app/tools/health_tools.py",
+          "app/tools/planner_tools.py"
+        ]
+      }
+    },
+    {
+      "path": "<WORKSPACE>/FAMILY-AI-LIFE-OS/.worktrees/telegram-context-repro",
+      "runtime_file_count": 59,
+      "source_sha256_lf": {
+        "alembic/env.py": "6bb5dd78aad16d8155deb616ceae1e35359782800d6245ef7d00143234213c8a",
+        "alembic/versions/001_initial_schema.py": "98f7749264c217d26d8e06324e054eaa35eae39de152069f543fe773d630b37e",
+        "alembic/versions/002_security_hardening.py": "59eda6d1a046f5f3beb2a5c7cdc90bf97a83254ab625798029af4f24d01809e1",
+        "alembic/versions/003_identity_unique_cleanup.py": "fd37ed1cc56ecbf251eda88563fdb21574e4e2cc59b17c50af6d6311e8fc2d64",
+        "alembic/versions/004_google_workspace_sync.py": "a3c1e4dae9325763f6f0ec73ca94daa9f5326502acbdef0976ef67b640f57266",
+        "alembic/versions/005_chat_reminder_delivery.py": "7c7dc5edbf78bfe10fc62874253c06311fc43f80628582e3882b1f2e89a1f762",
+        "alembic/versions/006_shared_family_memory.py": "0dd299ac8ed877d2abbfa20d3558f01a60bc48852c407b95637664a429d5569c",
+        "alembic/versions/007_clean_legacy_shared_memory.py": "c0f1fc69c3701499e871f6002aa31009fd00ddebc9af52bdccbdef783f54313c",
+        "alembic/versions/008_recurring_calendar_pending_actions.py": "d48d6eb38d231aa8df9298e86fe61967edac0a0bd72014f7e267be79ddfe3821",
+        "alembic/versions/009_calendar_event_pending_actions.py": "577272143129d493719455070a27aca32a028539f64b26a187fc47e083893601",
+        "alembic/versions/010_shared_context_retry_outbox.py": "a5621990fa9b01194a000769090d7b9e4291ee1ef8acd7605af33aa6bf347197",
+        "alembic.ini": "06d4045598ab254c3cc81d560982f8d589ef51956fca79646de427797a3ac175",
+        "app/__init__.py": "2c7bdd88098b18544ac55c8ff56d7ce0d9c3be288aca79442ec2e86b1b59598a",
+        "app/agents/finance/agent.py": "62b46d57168d05d4e3df138a7773012b603ab8272c12670fd57e54f2d392002d",
+        "app/agents/memory/agent.py": "ba30911eb3556ee1c6fb479600e2a70049e8080f9b476d140785505aa295535c",
+        "app/api/application.py": "f70abca368787eb804db1a4efda5a701e47d1d2a6ac751762f57632a580b9278",
+        "app/api/oauth.py": "518bc19f4c95ab4ace0affe7036e7ccd160e6904722d17f8da402189553306eb",
+        "app/config/settings.py": "8bc350f7e1d8eb5548562b3b4ece9f94902facad6ea5d32f6cd5b0b3ed658fd6",
+        "app/domains/audit/models.py": "baa30938299f0d64689988c2411824872ffe8242def674636043c0ec85dd872c",
+        "app/domains/audit/service.py": "dba409d994e23817fdf2baf96a47cab0ba02924e8c393de691061e2ce23d7ade",
+        "app/domains/documents/models.py": "8f83cf50a6a6cdba0bf59ead0d2066a8e84e5b32b288afd6f9dfded828caad90",
+        "app/domains/finance/models.py": "ee0ba94f2450e0dcc724a4fd84c7634c127bec5fe9de54f9d7486b54d5c848b4",
+        "app/domains/health/models.py": "d3783d370654a83702ffd86c1463d04cb2507d56f6a12b55b7dd8245699ae23f",
+        "app/domains/identity/models.py": "3ad6d04b991397b3000ee85f0b57c930b7f34c8b69d286aaef0b5679bff0d8dd",
+        "app/domains/identity/service.py": "99f39df3b3b09388e6ba4a4b6095cbe7ac703edf2f07d524ca2bf3326dd3c872",
+        "app/domains/memory/models.py": "eb44b7bb2a954fe2b3b99a6a16fdacb46acda40898e82c9b95a478dc7e721393",
+        "app/domains/planning/calendar_parser.py": "8bf2df2639048973bc7ea3d89d71e81f5fca3d99c930e059bd7750df718853a2",
+        "app/domains/planning/models.py": "3243d85f6d12f275fd4af84337bac6ba88221f0378b86db078c6563b9bbcaa09",
+        "app/domains/planning/reminder_parser.py": "a727c41d97b2d1b9704a437061e8573e6ea81b1ec1d54659df1217e95c1c1ee3",
+        "app/domains/planning/semantic_calendar.py": "c1396c9ce2563bef5351f94a314980bffe510c7bdb80ca78a24672ebadb2f08e",
+        "app/infrastructure/database/base.py": "97e5ec3602da880d7ace78be2476a9d666fde767c8c52de2978b2b3b1c8d3dc8",
+        "app/infrastructure/database/prepare.py": "98013069daeca4f7a4bc5769ab9b5aba7437817e4632e78292a91ee01b705665",
+        "app/infrastructure/database/session.py": "2ed116f4d29c4ab0d02a90fb0a876d46bf490f0cf83178692a9e3e2b120eb177",
+        "app/infrastructure/integrations/conversation_summary_worker.py": "4baa96cb4edd8238d13c6b96ffd48640aba52fed28a3192488736350b5dc71a1",
+        "app/infrastructure/integrations/google_sheets_worker.py": "eb9b521f5e29be60836b238e36354244c3a2e41e756db3e8460cc657c74e7de8",
+        "app/infrastructure/integrations/reminder_worker.py": "758a24adcf95f2d64cfd0b4ec358da7b820f4c1c1dc6d78df803f92b5bfce418",
+        "app/integrations/gemini/client.py": "f681d2513340e6ba8d157e8deb487cb28df0d2ad2e55294d4141b1436b16b8e0",
+        "app/integrations/google/oauth.py": "0bffd657c423ed3e5645f43f1d49a35af3aed5eebd7aa64d3d54bd808fc65f43",
+        "app/integrations/google/sheets.py": "6cc85e17bdd4f8731e0f69867bead8b2d248b191edae6562fdfbf2f9c8352b5c",
+        "app/integrations/llm/provider.py": "bc9213497227f5f7b9b36a5d8fad8a1eab4a5babe83283d1aa3760531ee4454c",
+        "app/integrations/openai/__init__.py": "d60dd50ed9381acbf4555289e1efb9a1190f9843ed5d97da033133cea06924fd",
+        "app/integrations/openai/transcription.py": "fa910da3e2bb186ced95ec6923b37f960d8a707551bfc4790382f407c4f166ba",
+        "app/integrations/oura/client.py": "2e7ffcbb90a744a5dd61af989c9c9ebadbdf25b0a22cf82b8fff8333dc5d1972",
+        "app/orchestration/orchestrator.py": "21ffdbca80290027afc86b5f4a689db491e1ecb8ebeb49268c516eef5b71605c",
+        "app/orchestration/router.py": "5650b9824d8f5fb4d7edc18999f474e0f6d2125948e120d2fecc53b6fb3bc820",
+        "app/security/logging.py": "86ac940ca3eb22637b89bdb09af988b5431415974a25ed8b626cc23cf4231ffa",
+        "app/security/oauth.py": "5c0f2ea6319e7d18fa0d30068b28502eb38a0d3c5bf79aabacfca23c6d3148e1",
+        "app/security/token_cipher.py": "d69ff83b70ed43b64e87d623df6b8a9ae3d1e6c2ca1779571c2959da217238f3",
+        "app/telegram/bot.py": "b0ddbb7bb7c4cfc470ad1514b01f04167968e86795190fd84efc8476cc058da7",
+        "app/tools/finance_tools.py": "7ee2b90d9fcd964335e6aa5b045b638cc64080d5df5b41015cca8fc3b5a46fc9",
+        "app/tools/google_tools.py": "203250d168919f6f0b48e3b3eb3fa16139668fe89947cdf398ad55e527db6a3c",
+        "app/tools/health_tools.py": "2534a5debc3c0097c47c88f8e5eea02b5f2b9d6acfe3f38d98352ead78cf1084",
+        "app/tools/mail_filter.py": "4e49c82195b4e544cc9c4db2be56f90612a217dd8b89499aed40c54a599a59c5",
+        "app/tools/memory_tools.py": "b5265e490f9c0d511d9683f1c460e03eb02f89989f4b0bb153fc7fff748f33c0",
+        "app/tools/planner_tools.py": "283e6c0f818df79416fe275f165925a270843c545af00d279a9cd5bede22c8b1",
+        "Dockerfile": "f106f4675184cc18218124b1ff1d1097694dd70d964f37dd2fd24151b81c8ae5",
+        "main.py": "a284c8ff740428b7923ce4bfceebebacf42c93b6fec9c74a99fe8f7d75931752",
+        "pyproject.toml": "d1912da358a2dd993a1f6a39c11aeaa55de78c40004fc326db2dd728070ad49b",
+        "railway.toml": "1fc1f28c6b63eef57cb64fae98c25fee2ef84dca79eff790c41bb0652ca0e901"
+      },
+      "kind": "git_worktree",
+      "head": "108eee9bd48ff78f6f176674b12e0abf6e09adcc",
+      "branch": "refs/heads/test/telegram-context-persistence",
+      "detached": false,
+      "changes": [
+        {
+          "status": " M",
+          "path": "app/domains/memory/models.py"
+        },
+        {
+          "status": " M",
+          "path": "app/infrastructure/integrations/conversation_summary_worker.py"
+        },
+        {
+          "status": " M",
+          "path": "app/telegram/bot.py"
+        },
+        {
+          "status": " M",
+          "path": "app/tools/memory_tools.py"
+        },
+        {
+          "status": " M",
+          "path": "tests/test_shared_memory.py"
+        },
+        {
+          "status": "??",
+          "path": "alembic/versions/010_shared_context_retry_outbox.py"
+        },
+        {
+          "status": "??",
+          "path": "tests/test_telegram_context_persistence.py"
+        }
+      ],
+      "status_has_warnings": false,
+      "compared_to_local_main": {
+        "added": [
+          "alembic/versions/010_shared_context_retry_outbox.py"
+        ],
+        "missing": [
+          "alembic/versions/010_google_sheets_sync_reliability.py",
+          "alembic/versions/011_pending_confirmations.py",
+          "alembic/versions/012_shared_context_retry_outbox.py",
+          "alembic/versions/013_google_sheets_projection_target.py",
+          "alembic/versions/014_reclassify_monthly_payments.py",
+          "alembic/versions/015_health_data_foundation.py",
+          "app/tools/confirmation_tools.py",
+          "app/tools/expense_selection.py"
+        ],
+        "different": [
+          "app/agents/finance/agent.py",
+          "app/api/application.py",
+          "app/config/settings.py",
+          "app/domains/documents/models.py",
+          "app/domains/finance/models.py",
+          "app/domains/health/models.py",
+          "app/domains/memory/models.py",
+          "app/infrastructure/database/session.py",
+          "app/infrastructure/integrations/conversation_summary_worker.py",
+          "app/infrastructure/integrations/google_sheets_worker.py",
+          "app/integrations/google/sheets.py",
+          "app/orchestration/orchestrator.py",
+          "app/orchestration/router.py",
+          "app/telegram/bot.py",
+          "app/tools/finance_tools.py",
+          "app/tools/memory_tools.py"
+        ]
+      }
+    },
+    {
+      "path": "<LOCAL_PATH>/family-video-tools",
+      "runtime_file_count": 0,
+      "source_sha256_lf": {},
+      "kind": "non_runtime_directory",
+      "compared_to_local_main": {
+        "added": [],
+        "missing": [
+          "Dockerfile",
+          "alembic.ini",
+          "alembic/env.py",
+          "alembic/versions/001_initial_schema.py",
+          "alembic/versions/002_security_hardening.py",
+          "alembic/versions/003_identity_unique_cleanup.py",
+          "alembic/versions/004_google_workspace_sync.py",
+          "alembic/versions/005_chat_reminder_delivery.py",
+          "alembic/versions/006_shared_family_memory.py",
+          "alembic/versions/007_clean_legacy_shared_memory.py",
+          "alembic/versions/008_recurring_calendar_pending_actions.py",
+          "alembic/versions/009_calendar_event_pending_actions.py",
+          "alembic/versions/010_google_sheets_sync_reliability.py",
+          "alembic/versions/011_pending_confirmations.py",
+          "alembic/versions/012_shared_context_retry_outbox.py",
+          "alembic/versions/013_google_sheets_projection_target.py",
+          "alembic/versions/014_reclassify_monthly_payments.py",
+          "alembic/versions/015_health_data_foundation.py",
+          "app/__init__.py",
+          "app/agents/finance/agent.py",
+          "app/agents/memory/agent.py",
+          "app/api/application.py",
+          "app/api/oauth.py",
+          "app/config/settings.py",
+          "app/domains/audit/models.py",
+          "app/domains/audit/service.py",
+          "app/domains/documents/models.py",
+          "app/domains/finance/models.py",
+          "app/domains/health/models.py",
+          "app/domains/identity/models.py",
+          "app/domains/identity/service.py",
+          "app/domains/memory/models.py",
+          "app/domains/planning/calendar_parser.py",
+          "app/domains/planning/models.py",
+          "app/domains/planning/reminder_parser.py",
+          "app/domains/planning/semantic_calendar.py",
+          "app/infrastructure/database/base.py",
+          "app/infrastructure/database/prepare.py",
+          "app/infrastructure/database/session.py",
+          "app/infrastructure/integrations/conversation_summary_worker.py",
+          "app/infrastructure/integrations/google_sheets_worker.py",
+          "app/infrastructure/integrations/reminder_worker.py",
+          "app/integrations/gemini/client.py",
+          "app/integrations/google/oauth.py",
+          "app/integrations/google/sheets.py",
+          "app/integrations/llm/provider.py",
+          "app/integrations/openai/__init__.py",
+          "app/integrations/openai/transcription.py",
+          "app/integrations/oura/client.py",
+          "app/orchestration/orchestrator.py",
+          "app/orchestration/router.py",
+          "app/security/logging.py",
+          "app/security/oauth.py",
+          "app/security/token_cipher.py",
+          "app/telegram/bot.py",
+          "app/tools/confirmation_tools.py",
+          "app/tools/expense_selection.py",
+          "app/tools/finance_tools.py",
+          "app/tools/google_tools.py",
+          "app/tools/health_tools.py",
+          "app/tools/mail_filter.py",
+          "app/tools/memory_tools.py",
+          "app/tools/planner_tools.py",
+          "main.py",
+          "pyproject.toml",
+          "railway.toml"
+        ],
+        "different": []
+      }
+    },
+    {
+      "path": "<LEGACY_MAIN_WORKTREE>",
+      "runtime_file_count": 66,
+      "source_sha256_lf": {
+        "alembic/env.py": "6bb5dd78aad16d8155deb616ceae1e35359782800d6245ef7d00143234213c8a",
+        "alembic/versions/001_initial_schema.py": "98f7749264c217d26d8e06324e054eaa35eae39de152069f543fe773d630b37e",
+        "alembic/versions/002_security_hardening.py": "59eda6d1a046f5f3beb2a5c7cdc90bf97a83254ab625798029af4f24d01809e1",
+        "alembic/versions/003_identity_unique_cleanup.py": "fd37ed1cc56ecbf251eda88563fdb21574e4e2cc59b17c50af6d6311e8fc2d64",
+        "alembic/versions/004_google_workspace_sync.py": "a3c1e4dae9325763f6f0ec73ca94daa9f5326502acbdef0976ef67b640f57266",
+        "alembic/versions/005_chat_reminder_delivery.py": "7c7dc5edbf78bfe10fc62874253c06311fc43f80628582e3882b1f2e89a1f762",
+        "alembic/versions/006_shared_family_memory.py": "0dd299ac8ed877d2abbfa20d3558f01a60bc48852c407b95637664a429d5569c",
+        "alembic/versions/007_clean_legacy_shared_memory.py": "c0f1fc69c3701499e871f6002aa31009fd00ddebc9af52bdccbdef783f54313c",
+        "alembic/versions/008_recurring_calendar_pending_actions.py": "d48d6eb38d231aa8df9298e86fe61967edac0a0bd72014f7e267be79ddfe3821",
+        "alembic/versions/009_calendar_event_pending_actions.py": "577272143129d493719455070a27aca32a028539f64b26a187fc47e083893601",
+        "alembic/versions/010_google_sheets_sync_reliability.py": "d22e3703144a2a673d96e4be79e97b542f5e7e2fff9408884b04127c07196d81",
+        "alembic/versions/011_pending_confirmations.py": "346d03b8798a639c1db306ee910ac4617abdeaa838020361965c558050390889",
+        "alembic/versions/012_shared_context_retry_outbox.py": "3f055b1ee4b7e6f0ec2f8109e6a506b175939dab9175553c2b4bd2f0c7081203",
+        "alembic/versions/013_google_sheets_projection_target.py": "b25f454060b247ee75202a99dd06e0486c9545147b687f411bd258db4a8f77b1",
+        "alembic/versions/014_reclassify_monthly_payments.py": "748259ebf8d243d3b7e308bc026a4466cc010e1c3398147d5a09ff21ba54366d",
+        "alembic/versions/015_health_data_foundation.py": "922eed7c4ba75e409bed72b4a9508bf227bfdc66b5016c89602996da3760138a",
+        "alembic.ini": "06d4045598ab254c3cc81d560982f8d589ef51956fca79646de427797a3ac175",
+        "app/__init__.py": "2c7bdd88098b18544ac55c8ff56d7ce0d9c3be288aca79442ec2e86b1b59598a",
+        "app/agents/finance/agent.py": "8a3b942107e2a2612c4b6b58f88e00875ebe41c1441b7657d5204c8e458a7a9a",
+        "app/agents/memory/agent.py": "ba30911eb3556ee1c6fb479600e2a70049e8080f9b476d140785505aa295535c",
+        "app/api/application.py": "49bdd968c947fd21ea01ba747a204add0537a7cb38d4ee98c147c18caf4c6a33",
+        "app/api/oauth.py": "518bc19f4c95ab4ace0affe7036e7ccd160e6904722d17f8da402189553306eb",
+        "app/config/settings.py": "b1bce1dbd7fd50304e8e31a103f1a56de2f5c272dc7316e7e387bf6f37a649e0",
+        "app/domains/audit/models.py": "baa30938299f0d64689988c2411824872ffe8242def674636043c0ec85dd872c",
+        "app/domains/audit/service.py": "dba409d994e23817fdf2baf96a47cab0ba02924e8c393de691061e2ce23d7ade",
+        "app/domains/documents/models.py": "ee0f3c8544717f86cb7026d83a3739a30665904bcd2e5a31821b0c89cb6db9b9",
+        "app/domains/finance/models.py": "79a1f03f7c1c7a0cba40300457554a99f2d0a138241480f7935da31093e41473",
+        "app/domains/health/models.py": "3cadfa32271178a03dd3fb86411eef39b7cde4fa77d5ff47531d6ab3ab633ac9",
+        "app/domains/identity/models.py": "3ad6d04b991397b3000ee85f0b57c930b7f34c8b69d286aaef0b5679bff0d8dd",
+        "app/domains/identity/service.py": "99f39df3b3b09388e6ba4a4b6095cbe7ac703edf2f07d524ca2bf3326dd3c872",
+        "app/domains/memory/models.py": "5efea4843d2ad0c718fb586389dc308a0444d3f0bfa41dff4dd50d0dc23e1015",
+        "app/domains/planning/calendar_parser.py": "8bf2df2639048973bc7ea3d89d71e81f5fca3d99c930e059bd7750df718853a2",
+        "app/domains/planning/models.py": "3243d85f6d12f275fd4af84337bac6ba88221f0378b86db078c6563b9bbcaa09",
+        "app/domains/planning/reminder_parser.py": "a727c41d97b2d1b9704a437061e8573e6ea81b1ec1d54659df1217e95c1c1ee3",
+        "app/domains/planning/semantic_calendar.py": "c1396c9ce2563bef5351f94a314980bffe510c7bdb80ca78a24672ebadb2f08e",
+        "app/infrastructure/database/base.py": "97e5ec3602da880d7ace78be2476a9d666fde767c8c52de2978b2b3b1c8d3dc8",
+        "app/infrastructure/database/prepare.py": "98013069daeca4f7a4bc5769ab9b5aba7437817e4632e78292a91ee01b705665",
+        "app/infrastructure/database/session.py": "64792dc50f476200e78af600826731be1d42f30005afb90a337aebb67b5160ad",
+        "app/infrastructure/integrations/conversation_summary_worker.py": "536682dd3944696d2d4e99432ff6a6f07cbc63435f234b8889500b1bb82049a5",
+        "app/infrastructure/integrations/google_sheets_worker.py": "c7cd79cb4c543fa696f5fbbe5b07cac924a40db8dbfbc1a85282b7ea7ed7b7b0",
+        "app/infrastructure/integrations/reminder_worker.py": "758a24adcf95f2d64cfd0b4ec358da7b820f4c1c1dc6d78df803f92b5bfce418",
+        "app/integrations/gemini/client.py": "f681d2513340e6ba8d157e8deb487cb28df0d2ad2e55294d4141b1436b16b8e0",
+        "app/integrations/google/oauth.py": "0bffd657c423ed3e5645f43f1d49a35af3aed5eebd7aa64d3d54bd808fc65f43",
+        "app/integrations/google/sheets.py": "9e63eff50725d7ed706ec99e62f4b34a649bfbe8503e85e44ad2432064deab73",
+        "app/integrations/llm/provider.py": "bc9213497227f5f7b9b36a5d8fad8a1eab4a5babe83283d1aa3760531ee4454c",
+        "app/integrations/openai/__init__.py": "d60dd50ed9381acbf4555289e1efb9a1190f9843ed5d97da033133cea06924fd",
+        "app/integrations/openai/transcription.py": "fa910da3e2bb186ced95ec6923b37f960d8a707551bfc4790382f407c4f166ba",
+        "app/integrations/oura/client.py": "2e7ffcbb90a744a5dd61af989c9c9ebadbdf25b0a22cf82b8fff8333dc5d1972",
+        "app/orchestration/orchestrator.py": "90b047297ade1bd80a7d2f96292cdc0af3f59c1adf394bc86e073d3144771021",
+        "app/orchestration/router.py": "8d050f4d7ea8d532c60cb580395dbb65eb7e96701aebe6d15a641b0d4ad8063d",
+        "app/security/logging.py": "86ac940ca3eb22637b89bdb09af988b5431415974a25ed8b626cc23cf4231ffa",
+        "app/security/oauth.py": "5c0f2ea6319e7d18fa0d30068b28502eb38a0d3c5bf79aabacfca23c6d3148e1",
+        "app/security/token_cipher.py": "d69ff83b70ed43b64e87d623df6b8a9ae3d1e6c2ca1779571c2959da217238f3",
+        "app/telegram/bot.py": "3adcc5a9c246c688240f2c5c447d1b69954c56d3bf3957aa6999cab9c731c05e",
+        "app/tools/confirmation_tools.py": "112fad02f97f72753e3bd7deb3ce72f56980a4907335f3e5b038166ca1c4d57e",
+        "app/tools/expense_selection.py": "9508ec351f5e706c0b266e5c591de692359067358e4939be8b55c985c49196d5",
+        "app/tools/finance_tools.py": "297d28b94ad49510deb8eaa7cadd6108d5c25a94a4fb716548fe848fe17581fc",
+        "app/tools/google_tools.py": "203250d168919f6f0b48e3b3eb3fa16139668fe89947cdf398ad55e527db6a3c",
+        "app/tools/health_tools.py": "2534a5debc3c0097c47c88f8e5eea02b5f2b9d6acfe3f38d98352ead78cf1084",
+        "app/tools/mail_filter.py": "4e49c82195b4e544cc9c4db2be56f90612a217dd8b89499aed40c54a599a59c5",
+        "app/tools/memory_tools.py": "67d7baa7fdb7ca12cb21764b92cb1d0d8d1e4df6dac006bb831697804a2a23be",
+        "app/tools/planner_tools.py": "283e6c0f818df79416fe275f165925a270843c545af00d279a9cd5bede22c8b1",
+        "Dockerfile": "f106f4675184cc18218124b1ff1d1097694dd70d964f37dd2fd24151b81c8ae5",
+        "main.py": "a284c8ff740428b7923ce4bfceebebacf42c93b6fec9c74a99fe8f7d75931752",
+        "pyproject.toml": "d1912da358a2dd993a1f6a39c11aeaa55de78c40004fc326db2dd728070ad49b",
+        "railway.toml": "1fc1f28c6b63eef57cb64fae98c25fee2ef84dca79eff790c41bb0652ca0e901"
+      },
+      "kind": "git_worktree",
+      "head": "5a3f9bcd15ef2583e8ad286096e80ee7cd994675",
+      "branch": "refs/heads/main",
+      "detached": false,
+      "changes": [
+        {
+          "status": "??",
+          "path": "outputs/main-stabilization/bandit-final.txt"
+        },
+        {
+          "status": "??",
+          "path": "outputs/main-stabilization/bandit-precommit.txt"
+        },
+        {
+          "status": "??",
+          "path": "outputs/main-stabilization/before-hashes.json"
+        },
+        {
+          "status": "??",
+          "path": "outputs/main-stabilization/before/app/infrastructure/integrations/google_sheets_worker.py"
+        },
+        {
+          "status": "??",
+          "path": "outputs/main-stabilization/before/app/integrations/google/sheets.py"
+        },
+        {
+          "status": "??",
+          "path": "outputs/main-stabilization/before/app/orchestration/orchestrator.py"
+        },
+        {
+          "status": "??",
+          "path": "outputs/main-stabilization/before/app/tools/expense_selection.py"
+        },
+        {
+          "status": "??",
+          "path": "outputs/main-stabilization/before/tests/test_expense_input_regressions.py"
+        },
+        {
+          "status": "??",
+          "path": "outputs/main-stabilization/before/tests/test_sheets_literal_text.py"
+        },
+        {
+          "status": "??",
+          "path": "outputs/main-stabilization/before/tests/test_task_list_routing_regression.py"
+        },
+        {
+          "status": "??",
+          "path": "outputs/main-stabilization/mypy-before.txt"
+        },
+        {
+          "status": "??",
+          "path": "outputs/main-stabilization/mypy-final.txt"
+        },
+        {
+          "status": "??",
+          "path": "outputs/main-stabilization/mypy-precommit.txt"
+        },
+        {
+          "status": "??",
+          "path": "outputs/main-stabilization/pytest-final.txt"
+        },
+        {
+          "status": "??",
+          "path": "outputs/main-stabilization/pytest-precommit.txt"
+        },
+        {
+          "status": "??",
+          "path": "outputs/main-stabilization/reproduce.txt"
+        },
+        {
+          "status": "??",
+          "path": "outputs/main-stabilization/ruff-final.txt"
+        },
+        {
+          "status": "??",
+          "path": "outputs/main-stabilization/ruff-precommit.txt"
+        },
+        {
+          "status": "??",
+          "path": "outputs/main-stabilization/run_safe.py"
+        },
+        {
+          "status": "??",
+          "path": "outputs/main-stabilization/sitecustomize.py"
+        }
+      ],
+      "status_has_warnings": true,
+      "compared_to_local_main": {
+        "added": [],
+        "missing": [],
+        "different": []
+      }
+    }
+  ],
+  "privacy_note": "Machine-specific absolute paths were replaced by placeholders on 2026-11-10; source hashes describe the original snapshot."
+}

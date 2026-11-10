@@ -2,6 +2,10 @@
 
 Last reviewed: 2026-08-11
 
+> Historical milestone dashboard. See the integration review dated 2026-11-09
+> in [CONSOLIDATION.md](docs/operations/CONSOLIDATION.md) for the current local
+> branch and checks. It has not been deployed.
+
 ## Implemented
 
 - [x] **Foundation and configuration**
