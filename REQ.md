@@ -3,7 +3,7 @@
 ## 1. Functional Requirements
 
 ### 1.1 Identity & User Management
-- **REQ-ID-1**: Identify users by unique Telegram User ID (Denys & Oleksandra).
+- **REQ-ID-1**: Identify users by unique Telegram User ID (two configured household members).
 - **REQ-ID-2**: Support single household workspace with granular privacy boundaries (`private`, `shared_with_partner`, `household`).
 
 ### 1.2 Telegram Interface
@@ -12,7 +12,7 @@
 - **REQ-TG-3**: Operate seamlessly in 1-on-1 private chats and family group chat.
 
 ### 1.3 Health & Biometrics Module
-- **REQ-HL-1**: Separate Oura OAuth2 token storage for Denys and Oleksandra.
+- **REQ-HL-1**: Separate Oura OAuth2 token storage for the two household members.
 - **REQ-HL-2**: Pull daily sleep, readiness, HRV, SpO2, and activity metrics.
 - **REQ-HL-3**: Analyze food photos using LLM Vision model (Gemini 2.5 Flash), outputting structured calorie and macro estimates.
 - **REQ-HL-4**: Parse medical laboratory test reports (PDF/images) into structured metric records.

@@ -1,0 +1,442 @@
+{
+  "date": "2026-11-10",
+  "branch": "agent/consolidate-family-life-os-20261109",
+  "base_commit": "786ca0d",
+  "production_changed": false,
+  "production_attestation": "blocked: SSH/SFTP timeout",
+  "observed_live_deployment": "a6b37a8e-07dd-45d7-9702-7beef42270ac",
+  "image": {
+    "id": "sha256:640b6f3ebea844623ffd10f10ef9c350902f742d238ce0dd1192aaae817de070",
+    "platform": "linux/amd64",
+    "user": "appuser",
+    "working_dir": "/app"
+  },
+  "image_config_id": "sha256:afa3e13677d2dc703c7fa53618d9c26ffc9af0b0d44d15396036b8aa1c34b71a",
+  "platform_manifest": "sha256:108d9d65bf40be549174a7e2540b62c39130afcd5c861cb4c7d799a45a8a5267",
+  "python": "3.12.13",
+  "packages": {
+    "Mako": "1.4.3",
+    "MarkupSafe": "3.0.4",
+    "PyYAML": "6.0.3",
+    "SQLAlchemy": "2.1.8",
+    "aiofiles": "25.1.0",
+    "aiogram": "3.31.0",
+    "aiohappyeyeballs": "2.7.1",
+    "aiohttp": "3.14.5",
+    "aiosignal": "1.4.0",
+    "alembic": "1.20.1",
+    "annotated-doc": "0.0.5",
+    "annotated-types": "0.8.0",
+    "anyio": "4.16.0",
+    "asyncpg": "0.32.0",
+    "attrs": "26.1.0",
+    "certifi": "2026.10.23",
+    "cffi": "2.1.1",
+    "charset-normalizer": "3.5.2",
+    "click": "8.5.1",
+    "cryptography": "50.0.2",
+    "distro": "1.9.0",
+    "family-ai-life-os": "1.0.0",
+    "fastapi": "0.162.2",
+    "frozenlist": "1.8.0",
+    "google-auth": "2.62.1",
+    "google-genai": "1.75.0",
+    "greenlet": "3.5.6",
+    "h11": "0.16.0",
+    "httpcore": "1.0.9",
+    "httptools": "0.9.0",
+    "httpx": "0.28.1",
+    "idna": "3.20",
+    "magic-filter": "1.0.12",
+    "multidict": "7.2.1",
+    "opentelemetry-api": "1.45.2",
+    "pillow": "13.0.0",
+    "pip": "26.3",
+    "propcache": "0.5.4",
+    "pyasn1": "0.6.5",
+    "pyasn1_modules": "0.4.2",
+    "pycparser": "3.12",
+    "pydantic": "2.13.5",
+    "pydantic-settings": "2.16.2",
+    "pydantic_core": "2.46.5",
+    "python-dotenv": "1.2.4",
+    "redis": "6.4.0",
+    "requests": "2.34.2",
+    "sniffio": "1.3.1",
+    "starlette": "1.10.0",
+    "tenacity": "9.1.4",
+    "typing-inspection": "0.4.5",
+    "typing_extensions": "4.16.0",
+    "tzdata": "2026.6",
+    "urllib3": "2.8.0",
+    "uvicorn": "0.54.0",
+    "uvloop": "0.23.0",
+    "watchfiles": "1.3.0",
+    "websockets": "16.1.1",
+    "yarl": "1.25.1"
+  },
+  "runtime_files": {
+    "alembic.ini": {
+      "sha256": "5a65eae4a8e9f3e53fc490e186140d55872f3dc2ae27b485f9d72d6cc84ab070",
+      "sha256_lf": "06d4045598ab254c3cc81d560982f8d589ef51956fca79646de427797a3ac175"
+    },
+    "alembic/env.py": {
+      "sha256": "e08eec0fd3c458bc3146d684e9687c0d0002dae9485753389abbd641e854dfa6",
+      "sha256_lf": "6bb5dd78aad16d8155deb616ceae1e35359782800d6245ef7d00143234213c8a"
+    },
+    "alembic/versions/001_initial_schema.py": {
+      "sha256": "d49ceb9284f6d3781e3b96ad751d0cc5ff275bd75796e5572ebb9fbe2e7a217b",
+      "sha256_lf": "98f7749264c217d26d8e06324e054eaa35eae39de152069f543fe773d630b37e"
+    },
+    "alembic/versions/002_security_hardening.py": {
+      "sha256": "9b7e1b63913bbe802b7758dbe15e853cd8ef9e4c1214ea8ec0abbd399bb67ac5",
+      "sha256_lf": "59eda6d1a046f5f3beb2a5c7cdc90bf97a83254ab625798029af4f24d01809e1"
+    },
+    "alembic/versions/003_identity_unique_cleanup.py": {
+      "sha256": "19cf130fc80d874705d628b3f6dc748a027c4b0c70581ac55c30146e34f008a1",
+      "sha256_lf": "fd37ed1cc56ecbf251eda88563fdb21574e4e2cc59b17c50af6d6311e8fc2d64"
+    },
+    "alembic/versions/004_google_workspace_sync.py": {
+      "sha256": "aaebf673bd867b2fc3b025c872dc42026bf4b674004bf1c3d0157c9d6f9ea6ce",
+      "sha256_lf": "a3c1e4dae9325763f6f0ec73ca94daa9f5326502acbdef0976ef67b640f57266"
+    },
+    "alembic/versions/005_chat_reminder_delivery.py": {
+      "sha256": "5e7654ea0a6189ca50d9fd8f769ca1ea8136c1d31f4a12738df58b8dc5780ef4",
+      "sha256_lf": "7c7dc5edbf78bfe10fc62874253c06311fc43f80628582e3882b1f2e89a1f762"
+    },
+    "alembic/versions/006_shared_family_memory.py": {
+      "sha256": "198e3ddc1b81f3a7c461af4f5e4d35dd7b9044c3ad0bc8699523ff3a0da2c3d8",
+      "sha256_lf": "0dd299ac8ed877d2abbfa20d3558f01a60bc48852c407b95637664a429d5569c"
+    },
+    "alembic/versions/007_clean_legacy_shared_memory.py": {
+      "sha256": "d0fc422563e9846700d01882473864f227e3b2d76b70bd300c3b8932764d0a7f",
+      "sha256_lf": "c0f1fc69c3701499e871f6002aa31009fd00ddebc9af52bdccbdef783f54313c"
+    },
+    "alembic/versions/008_recurring_calendar_pending_actions.py": {
+      "sha256": "e2bf74d07cb16f37eed4704dc8eb5b3ecd27523badbd2d8afa914c214c5da7df",
+      "sha256_lf": "d48d6eb38d231aa8df9298e86fe61967edac0a0bd72014f7e267be79ddfe3821"
+    },
+    "alembic/versions/009_calendar_event_pending_actions.py": {
+      "sha256": "dcc06f80adb3a6a49e9992459f289e46531e09df996307e8d63e1cac1197dcd9",
+      "sha256_lf": "577272143129d493719455070a27aca32a028539f64b26a187fc47e083893601"
+    },
+    "alembic/versions/010_google_sheets_sync_reliability.py": {
+      "sha256": "0008572f819b26be79042283f3546a966480485a61d10f7b82cccbbe642aa098",
+      "sha256_lf": "d22e3703144a2a673d96e4be79e97b542f5e7e2fff9408884b04127c07196d81"
+    },
+    "alembic/versions/011_pending_confirmations.py": {
+      "sha256": "9a46d8a207e04ac6b34a74e75d01bfe3acbe7116ec5f0718d2e7e61a58905f35",
+      "sha256_lf": "346d03b8798a639c1db306ee910ac4617abdeaa838020361965c558050390889"
+    },
+    "alembic/versions/012_shared_context_retry_outbox.py": {
+      "sha256": "2f956e257926899243b13b7350a6930cb22443cc3e6759fcfc3bc30b579588e0",
+      "sha256_lf": "3f055b1ee4b7e6f0ec2f8109e6a506b175939dab9175553c2b4bd2f0c7081203"
+    },
+    "alembic/versions/013_google_sheets_projection_target.py": {
+      "sha256": "bd23023e534f738e8568b5822c4c343c527c41761d54b62cd48b210c0673369b",
+      "sha256_lf": "b25f454060b247ee75202a99dd06e0486c9545147b687f411bd258db4a8f77b1"
+    },
+    "alembic/versions/014_reclassify_monthly_payments.py": {
+      "sha256": "c5065fb76bbd32820bd4a6bf546352be2e1c01aa5ff6205e3420b2666f06d66b",
+      "sha256_lf": "748259ebf8d243d3b7e308bc026a4466cc010e1c3398147d5a09ff21ba54366d"
+    },
+    "alembic/versions/015_health_data_foundation.py": {
+      "sha256": "355e980429453cefa2b17154026aff6371a53d900f8cd0b0a504d06fcf38cbf7",
+      "sha256_lf": "922eed7c4ba75e409bed72b4a9508bf227bfdc66b5016c89602996da3760138a"
+    },
+    "app/__init__.py": {
+      "sha256": "79110747483c40a38ef9abc8cafa949063acd96126dbd47a0ac08c04664168a2",
+      "sha256_lf": "2c7bdd88098b18544ac55c8ff56d7ce0d9c3be288aca79442ec2e86b1b59598a"
+    },
+    "app/agents/finance/agent.py": {
+      "sha256": "2b212eaa2b21e4076e4c22eb52f3044142e5f36842d6e2e6910f009ccdb7c17c",
+      "sha256_lf": "8a3b942107e2a2612c4b6b58f88e00875ebe41c1441b7657d5204c8e458a7a9a"
+    },
+    "app/agents/memory/agent.py": {
+      "sha256": "cae4bd768c85c1b18771de36f6f467ff5b320cc2c1cdec2647563aed5372202f",
+      "sha256_lf": "ba30911eb3556ee1c6fb479600e2a70049e8080f9b476d140785505aa295535c"
+    },
+    "app/api/application.py": {
+      "sha256": "8bb058f54db92aed47845b106e4131978daf138eb42ca26a109332ba2ae3013d",
+      "sha256_lf": "8bb058f54db92aed47845b106e4131978daf138eb42ca26a109332ba2ae3013d"
+    },
+    "app/api/oauth.py": {
+      "sha256": "2bd114a4d539d189216f4dab38fce92c679326ecdc2b6c174105b39947348121",
+      "sha256_lf": "518bc19f4c95ab4ace0affe7036e7ccd160e6904722d17f8da402189553306eb"
+    },
+    "app/api/public_pages.py": {
+      "sha256": "b9a7dec75c4ee55dc3d03418e193a038097b8832ff6af484340541339621dc0f",
+      "sha256_lf": "b9a7dec75c4ee55dc3d03418e193a038097b8832ff6af484340541339621dc0f"
+    },
+    "app/config/settings.py": {
+      "sha256": "706b8676ffe8e78829b6a44c5673fc3feeb25e81e5dcc2efb1ee865d9f0776a7",
+      "sha256_lf": "b1bce1dbd7fd50304e8e31a103f1a56de2f5c272dc7316e7e387bf6f37a649e0"
+    },
+    "app/domains/audit/models.py": {
+      "sha256": "be3e75c9761ff72ec831138c2ae2300a421fe5729552c25c32f8c18cf134e447",
+      "sha256_lf": "baa30938299f0d64689988c2411824872ffe8242def674636043c0ec85dd872c"
+    },
+    "app/domains/audit/service.py": {
+      "sha256": "4584747888cbac1f747c2f0d99fb84120e7dfb960530933d9763cb2295498228",
+      "sha256_lf": "dba409d994e23817fdf2baf96a47cab0ba02924e8c393de691061e2ce23d7ade"
+    },
+    "app/domains/documents/models.py": {
+      "sha256": "5396cf2d348a9bda17f026c7d8b18935a36e2ccc03c95b1b90f5e8e571306613",
+      "sha256_lf": "ee0f3c8544717f86cb7026d83a3739a30665904bcd2e5a31821b0c89cb6db9b9"
+    },
+    "app/domains/finance/models.py": {
+      "sha256": "368d179f3513f973774c6be18b126766523f0812ae29300fb94cebc4e5b6c16a",
+      "sha256_lf": "79a1f03f7c1c7a0cba40300457554a99f2d0a138241480f7935da31093e41473"
+    },
+    "app/domains/health/models.py": {
+      "sha256": "172c09f658b785ff942baac3a2f2d7e59dd5dc0839b0b16bcbac6064b0688ad9",
+      "sha256_lf": "3cadfa32271178a03dd3fb86411eef39b7cde4fa77d5ff47531d6ab3ab633ac9"
+    },
+    "app/domains/identity/models.py": {
+      "sha256": "882f25e072182f40e49d0ee4b4dbb0f130106a4eedebf685bf225aa887eeb3bd",
+      "sha256_lf": "3ad6d04b991397b3000ee85f0b57c930b7f34c8b69d286aaef0b5679bff0d8dd"
+    },
+    "app/domains/identity/service.py": {
+      "sha256": "d637c7674c1ea4a989d43c9df80789444748226f53791b681d36ee8dea19f554",
+      "sha256_lf": "99f39df3b3b09388e6ba4a4b6095cbe7ac703edf2f07d524ca2bf3326dd3c872"
+    },
+    "app/domains/memory/models.py": {
+      "sha256": "9ac9ca7824a1e2e620af51239d845dcf59c8143ad74d3aec23071c30476db7f0",
+      "sha256_lf": "5efea4843d2ad0c718fb586389dc308a0444d3f0bfa41dff4dd50d0dc23e1015"
+    },
+    "app/domains/planning/calendar_parser.py": {
+      "sha256": "8d6a06810b23ddcd4dfa61f4946b7eef03ae297660e68319fb0efeb8870759c6",
+      "sha256_lf": "8bf2df2639048973bc7ea3d89d71e81f5fca3d99c930e059bd7750df718853a2"
+    },
+    "app/domains/planning/models.py": {
+      "sha256": "eecdd6ea01ee2d08ac353f5473f068b101468c6166204671da8d7092d4bcfcee",
+      "sha256_lf": "3243d85f6d12f275fd4af84337bac6ba88221f0378b86db078c6563b9bbcaa09"
+    },
+    "app/domains/planning/reminder_parser.py": {
+      "sha256": "c346b1552cb30955d56f932f612c06e64c2254676de2b674e0b0cace2301ca00",
+      "sha256_lf": "a727c41d97b2d1b9704a437061e8573e6ea81b1ec1d54659df1217e95c1c1ee3"
+    },
+    "app/domains/planning/semantic_calendar.py": {
+      "sha256": "52afbb45c22005800357c556cc38c32270c32b9f3ffe14eb7669d1364c480514",
+      "sha256_lf": "80a795af349c124e94eb652b8b27317862420f1bbab698d1f3d06200cb8303ac"
+    },
+    "app/infrastructure/database/base.py": {
+      "sha256": "5a48656549dbfa39d5c753bab68d6dce78b3e84d132a248cf6bcfea7fd92fe85",
+      "sha256_lf": "97e5ec3602da880d7ace78be2476a9d666fde767c8c52de2978b2b3b1c8d3dc8"
+    },
+    "app/infrastructure/database/prepare.py": {
+      "sha256": "41b6590bffdb50aa8370fea3f776ebfe379ba1b309912ae68ea45e0456b9322d",
+      "sha256_lf": "98013069daeca4f7a4bc5769ab9b5aba7437817e4632e78292a91ee01b705665"
+    },
+    "app/infrastructure/database/session.py": {
+      "sha256": "956803c507919b93fd4a841f5fa6ae1dedd8b3058d24719c7c9d1959805a99de",
+      "sha256_lf": "64792dc50f476200e78af600826731be1d42f30005afb90a337aebb67b5160ad"
+    },
+    "app/infrastructure/integrations/conversation_summary_worker.py": {
+      "sha256": "d86e269b40b2d3a4edab7d04cd7ac34f36b689e14aaf8a3a01b4867f4a55f965",
+      "sha256_lf": "536682dd3944696d2d4e99432ff6a6f07cbc63435f234b8889500b1bb82049a5"
+    },
+    "app/infrastructure/integrations/google_sheets_worker.py": {
+      "sha256": "5a6288c3fb400ff30810d6f88ed958c9c906a9d032a1ebcdadeebc660b563512",
+      "sha256_lf": "2687e49132a60165399cb0c080436161de4924b34e27a9a75c7ec2eae55e3c20"
+    },
+    "app/infrastructure/integrations/reminder_worker.py": {
+      "sha256": "f38e6ddc45a81c7a1701120c1d6d41085c1859337f120231e38ef181040ef978",
+      "sha256_lf": "758a24adcf95f2d64cfd0b4ec358da7b820f4c1c1dc6d78df803f92b5bfce418"
+    },
+    "app/integrations/gemini/client.py": {
+      "sha256": "15f9c9fd8a8c0fb9b1e084f5d0ed8ea67288326f18ac3b28e1c63dbabdeb9dd9",
+      "sha256_lf": "f681d2513340e6ba8d157e8deb487cb28df0d2ad2e55294d4141b1436b16b8e0"
+    },
+    "app/integrations/google/oauth.py": {
+      "sha256": "4ea741d3e53892b845efc83d0015b3bfd59262d7744bfe96f1521a1c5a67c1ed",
+      "sha256_lf": "4ea741d3e53892b845efc83d0015b3bfd59262d7744bfe96f1521a1c5a67c1ed"
+    },
+    "app/integrations/google/sheets.py": {
+      "sha256": "52ce4cb7518363cb101cdb062c6d319907f50ba162bf15348d34df9b5a9563e5",
+      "sha256_lf": "9e63eff50725d7ed706ec99e62f4b34a649bfbe8503e85e44ad2432064deab73"
+    },
+    "app/integrations/llm/provider.py": {
+      "sha256": "610793af81fec7f8c20425acc9e8a8d75586f84aacd9709f772cf679ba63c1a8",
+      "sha256_lf": "610793af81fec7f8c20425acc9e8a8d75586f84aacd9709f772cf679ba63c1a8"
+    },
+    "app/integrations/openai/__init__.py": {
+      "sha256": "1b709927d2872f321f4ac4201f7d3e666f0b951906dbee8eb1e9223de236e8a8",
+      "sha256_lf": "d60dd50ed9381acbf4555289e1efb9a1190f9843ed5d97da033133cea06924fd"
+    },
+    "app/integrations/openai/transcription.py": {
+      "sha256": "40109a420b46fc175830bb8631f5b4ad6a635512f405fb0b012d25dbc4dbd12f",
+      "sha256_lf": "fa910da3e2bb186ced95ec6923b37f960d8a707551bfc4790382f407c4f166ba"
+    },
+    "app/integrations/oura/client.py": {
+      "sha256": "8724b23f386464d91e113c6f8d61c8184a7771f39d460dc97b63226263c1cbc5",
+      "sha256_lf": "00a04488f78ce1c69abff16ea4c72041ecaa5b0a6f6b5e688868fc21e2771642"
+    },
+    "app/orchestration/orchestrator.py": {
+      "sha256": "51149265d7499a54a34ad012eb6a54c627ee856e5811e9ce9f89f43375f6eafd",
+      "sha256_lf": "51149265d7499a54a34ad012eb6a54c627ee856e5811e9ce9f89f43375f6eafd"
+    },
+    "app/orchestration/router.py": {
+      "sha256": "88683308c2082843695cb60deb4fef5fddb667736667a9eba33e2dd3ec0aa0b9",
+      "sha256_lf": "8d050f4d7ea8d532c60cb580395dbb65eb7e96701aebe6d15a641b0d4ad8063d"
+    },
+    "app/security/logging.py": {
+      "sha256": "054ac5e250508e9f17af0034269f9a2204bc06a9494f8e59943363913d32761f",
+      "sha256_lf": "65663ddf7786927fa9775df7e1e99f71320e0a413a58c43f8c9fd8fe6c1d107b"
+    },
+    "app/security/oauth.py": {
+      "sha256": "9b7d9edaf9228a4cf395aeb2511e02ec20d1c671524399c201b93b0036bff85f",
+      "sha256_lf": "5c0f2ea6319e7d18fa0d30068b28502eb38a0d3c5bf79aabacfca23c6d3148e1"
+    },
+    "app/security/token_cipher.py": {
+      "sha256": "843866940b8196bdb2b5679cfead76e9f9829550d2026d897733a4b6d5939abf",
+      "sha256_lf": "d69ff83b70ed43b64e87d623df6b8a9ae3d1e6c2ca1779571c2959da217238f3"
+    },
+    "app/telegram/bot.py": {
+      "sha256": "75a593474b99b19d1083f126c4aeb8d717a075d14454207c62e6c1f56e1b9cbf",
+      "sha256_lf": "75a593474b99b19d1083f126c4aeb8d717a075d14454207c62e6c1f56e1b9cbf"
+    },
+    "app/telegram/planner.py": {
+      "sha256": "42f3a1f2c8e46452617f1ee58f4a269c2ebcf1df8db762fa728157a6c5d96263",
+      "sha256_lf": "8531dab36ba8c62a3131105c8ce1aa9592e72e091ce860e0c29b08b5d47a8ae2"
+    },
+    "app/tools/confirmation_tools.py": {
+      "sha256": "32c55418447b838c2ce6709bd560026fdb57036525ffce73bde4bf82a9a7fbcc",
+      "sha256_lf": "112fad02f97f72753e3bd7deb3ce72f56980a4907335f3e5b038166ca1c4d57e"
+    },
+    "app/tools/expense_selection.py": {
+      "sha256": "ab13e844b52a23e89eadc3cb026a1129e7e3905a37a50bca097c76367f02c97f",
+      "sha256_lf": "b2a68f170e65c2da6c965e52117aed777aef3975e43f8e61a6ae7d6799172a13"
+    },
+    "app/tools/finance_tools.py": {
+      "sha256": "f186c2cab10222146c345360920cf1f60a82277dee5d5f3aacef52d50676eafc",
+      "sha256_lf": "297d28b94ad49510deb8eaa7cadd6108d5c25a94a4fb716548fe848fe17581fc"
+    },
+    "app/tools/google_tools.py": {
+      "sha256": "830ca955566e3c5ccafd0b8e10d1cbc1e299cc6bfc6036fe9d3df2ff8c8e7b66",
+      "sha256_lf": "830ca955566e3c5ccafd0b8e10d1cbc1e299cc6bfc6036fe9d3df2ff8c8e7b66"
+    },
+    "app/tools/health_archive.py": {
+      "sha256": "9460dbdcb434195f92165a62df747809a1d2cd062b9a5d82e646883502e89364",
+      "sha256_lf": "9460dbdcb434195f92165a62df747809a1d2cd062b9a5d82e646883502e89364"
+    },
+    "app/tools/health_explanation.py": {
+      "sha256": "8227e075ae75822a86521db103315dbe024cda71a87652537caa37ec183be9e9",
+      "sha256_lf": "8227e075ae75822a86521db103315dbe024cda71a87652537caa37ec183be9e9"
+    },
+    "app/tools/health_history.py": {
+      "sha256": "b471c3a5f4984343dac2f4ddeccc8ff8f29ace5bba5a81140da3ee6d01bf9c52",
+      "sha256_lf": "b471c3a5f4984343dac2f4ddeccc8ff8f29ace5bba5a81140da3ee6d01bf9c52"
+    },
+    "app/tools/health_insights.py": {
+      "sha256": "4c36c85a215c2b41a3eacb1d47c64ecbbab78383f190ff053a17bd6213a86bec",
+      "sha256_lf": "92adfcb26709bd2f955715611714121c985ee76326aa34ad7208e5834ded12cf"
+    },
+    "app/tools/health_tools.py": {
+      "sha256": "d4252da96bab17bad6a442bb1704f7bcb72aecd13b65791bb5534a24136f013c",
+      "sha256_lf": "d4252da96bab17bad6a442bb1704f7bcb72aecd13b65791bb5534a24136f013c"
+    },
+    "app/tools/mail_filter.py": {
+      "sha256": "7ff3c6e3145b46dcbabd90f0c5983df79d96892f519a3b35a82b8449af234b09",
+      "sha256_lf": "f826f65bb7814358710a2531016067a852f1f78103acada41b7553ce83cf2c8b"
+    },
+    "app/tools/memory_tools.py": {
+      "sha256": "54cd1c8d7ad71dafa98c005c62c1fd8c8901fd6af7849643b6703c4cc5422de6",
+      "sha256_lf": "67d7baa7fdb7ca12cb21764b92cb1d0d8d1e4df6dac006bb831697804a2a23be"
+    },
+    "app/tools/planner_tools.py": {
+      "sha256": "fcd6695352401a133166317ef1cf11a05a33bde47c934092ddbbe842ab3c0510",
+      "sha256_lf": "fcd6695352401a133166317ef1cf11a05a33bde47c934092ddbbe842ab3c0510"
+    },
+    "main.py": {
+      "sha256": "0a546b387088b07a403dd7aeb77fa2f734dac0d613dfb0adff0e54d5a57b23d6",
+      "sha256_lf": "dba5c52525e162700064b85fcb503bbed2942b1bab722af0df7e8a242878ee40"
+    }
+  },
+  "checks": {
+    "pytest": {
+      "passed": 558,
+      "skipped": 1,
+      "coverage_percent": 82.69
+    },
+    "postgresql_migration_tests": {
+      "passed": 3,
+      "skipped": 0
+    },
+    "alembic_cycle": "upgrade/check/downgrade base/upgrade/check passed",
+    "bootstrap": {
+      "first_created": 2,
+      "second_created": 0,
+      "users": 2,
+      "households": 1
+    },
+    "http": {
+      "start_telegram": false,
+      "published_ports": false,
+      "statuses": {
+        "/live": 200,
+        "/health": 200,
+        "/": 200,
+        "/privacy": 200
+      }
+    },
+    "pip_check": "passed",
+    "pip_audit": {
+      "runtime_packages": 58,
+      "dev_packages": 95,
+      "vulnerabilities": 0
+    },
+    "trivy": {
+      "version": "0.70.0",
+      "severities": [
+        "HIGH",
+        "CRITICAL"
+      ],
+      "ignore_unfixed": true,
+      "vex": ".vex/pip.openvex.json",
+      "remaining_vulnerabilities": 0
+    },
+    "gitleaks": {
+      "version": "8.24.3",
+      "source_export_findings_after_assessment": 0,
+      "branch_history_findings_after_assessment": 0,
+      "false_positive_digest_rows": 55,
+      "historical_invalid_test_fixture_fingerprints": 1,
+      "negative_controls": "passed"
+    },
+    "ruff": "passed",
+    "mypy": {
+      "result": "passed",
+      "source_files": 51
+    },
+    "bandit": "passed"
+  },
+  "evidence": {
+    "directory": "outputs/release-validation",
+    "files": {
+      "build-final.log": "5bd38cd5f1f3d5bfaabc94563285c1d96dd1c1c56be0b05e914c493ca61339d2",
+      "complete-pytest.xml": "ddee5aff05cbf9caa07055cfeb721266b0fd7f71dec139c3584b0d0a9ef39635",
+      "complete-coverage.xml": "bb8dc008ef367bf012b5bc3a7e1ad4689f7cfe34347b53a26a1741c742a23468",
+      "pytest-complete.log": "19d5a05d75202695c7002b93ea263326c6a5968aa77da73fbeb689a79697483e",
+      "pytest-migrations-final.log": "4b376b12db4d51b30969ff64879414a030403029528ccd312f074e13f9a3de59",
+      "migrations-final.log": "cd43e1bd5f422fe4a7176d857a2ee69fb20672c8a6f6b89439b1c18a213987fb",
+      "http-smoke.json": "e2197a21f513f3ad4a4da63b00b10a51550dced31f84e1561ca42e14dcbb59f7",
+      "pip-audit-final.json": "c41cc45f5c18a5f22c821a8d6d08e8fa0ffbc0dfc687b8d24e2244084f636c2a",
+      "pip-audit-dev.json": "e924aada0093facaffc048131b35e7bf19ad9b83914883fbaedc031d3539ab40",
+      "trivy-ci-environment.json": "99cfac2504569a4ba4c909b5c16de98cdd6b2e531d17a161ff8f94677087cce7",
+      "gitleaks-assessed.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "gitleaks-history-assessed.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "gitleaks-controls.json": "5281a4457e179fe539ea0f9c89942fba6567500a45380b02cfe9f0614c72cd5c"
+    }
+  },
+  "trivy_artifact_cache_id": "sha256:a5bee1034b903ee56f93bb75b1ace95520978cf3a4650b7fc1c771455be77b0c",
+  "preserved_original_and_snapshot_files_verified": 1096,
+  "validation_resources": {
+    "postgresql_container": "family-life-os-validation-pg-20261109",
+    "state": "stopped",
+    "data_storage": "tmpfs",
+    "published_ports": false,
+    "production_database_used": false
+  },
+  "candidate_source_revision": "Git commit containing this manifest; base 786ca0d"
+}

@@ -1,0 +1,29 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "urn:uuid:b7108878-034d-4ca5-b19d-62a7d4dce421",
+  "author": "Family Life OS local release validation",
+  "timestamp": "2026-11-09T22:12:37Z",
+  "version": 1,
+  "statements": [
+    {
+      "vulnerability": {"name": "CVE-2025-47273"},
+      "products": [
+        {
+          "@id": "pkg:oci/family-life-os",
+          "subcomponents": [
+            {"@id": "pkg:pypi/setuptools@70.3.0"}
+          ]
+        },
+        {
+          "@id": "pkg:oci/family-ai-life-os",
+          "subcomponents": [
+            {"@id": "pkg:pypi/setuptools@70.3.0"}
+          ]
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "pip 26.3 retains only pkg_resources from setuptools. setuptools and the vulnerable setuptools/package_index.py are absent from the candidate image. scripts/check_pip_vendor_surface.py verifies these conditions before CI scanning. This statement does not cover an independently installed setuptools or another pip version. See the pip vendoring policy and GHSA-5rjg-fvgr-3xxf."
+    }
+  ]
+}

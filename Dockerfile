@@ -4,6 +4,8 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1
 WORKDIR /build
 
+RUN python -m pip install --upgrade "pip==26.3"
+
 COPY pyproject.toml README.md ./
 COPY app ./app
 RUN python -m pip wheel --wheel-dir /wheels .
@@ -16,14 +18,18 @@ ENV PATH=/home/appuser/.local/bin:$PATH \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 WORKDIR /app
 
-RUN apt-get update \
+# Refresh this value when reviewing OS security updates, including on Railway.
+ARG SYSTEM_PACKAGES_REFRESH=2026-11-10
+RUN test -n "$SYSTEM_PACKAGES_REFRESH" \
+    && apt-get update \
     && apt-get upgrade -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 10001 appuser \
     && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin appuser
 
 COPY --from=builder /wheels /wheels
-RUN python -m pip install --no-index --find-links=/wheels family-ai-life-os \
+RUN python -m pip install --upgrade "pip==26.3" \
+    && python -m pip install --no-index --find-links=/wheels family-ai-life-os \
     && rm -rf /wheels
 
 COPY --chown=appuser:appuser alembic.ini main.py ./
