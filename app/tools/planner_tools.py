@@ -1,3 +1,4 @@
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -137,6 +138,100 @@ class PlannerTools:
             }
             for task in result.scalars().all()
         ]
+
+    @staticmethod
+    def _task_tokens(value: str) -> list[str]:
+        """Normalize Russian task words enough to match infinitive and past tense."""
+        tokens: list[str] = []
+        for raw_token in re.findall(r"[0-9A-Za-zА-Яа-яЁё]+", value.casefold()):
+            token = raw_token.replace("ё", "е")
+            if token.endswith("ться"):
+                token = token[:-4]
+            elif token.endswith("тся"):
+                token = token[:-3]
+            elif token.endswith("ся"):
+                token = token[:-2]
+                if token.endswith("л"):
+                    token = token[:-1]
+            else:
+                for suffix in (
+                    "или",
+                    "ила",
+                    "ил",
+                    "али",
+                    "ала",
+                    "али",
+                    "ал",
+                    "ели",
+                    "ела",
+                    "ел",
+                    "ули",
+                    "ула",
+                    "ул",
+                ):
+                    if token.endswith(suffix) and len(token) > len(suffix) + 2:
+                        token = token[: -len(suffix)]
+                        break
+                else:
+                    for suffix in ("ить", "ать", "ять", "еть", "уть", "ыть"):
+                        if token.endswith(suffix) and len(token) > len(suffix) + 2:
+                            token = token[: -len(suffix)]
+                            break
+            if token:
+                tokens.append(token)
+        return tokens
+
+    @classmethod
+    def _task_matches_completion(cls, task: Task, message_tokens: set[str], action_counts: dict[str, int]) -> bool:
+        task_tokens = cls._task_tokens(task.title)
+        if not task_tokens:
+            return False
+        action = task_tokens[0]
+        if action not in message_tokens:
+            return False
+        content_overlap = set(task_tokens[1:]) & message_tokens
+        return bool(content_overlap) or action_counts[action] == 1
+
+    @classmethod
+    async def complete_tasks_from_text(
+        cls,
+        session: AsyncSession,
+        *,
+        owner_id: uuid.UUID,
+        assignee_id: uuid.UUID,
+        message_text: str,
+    ) -> list[str]:
+        """Mark uncompleted tasks as done only when the message matches safely."""
+        # Token overlap cannot establish which clause a negation applies to.
+        # Leave every task unchanged for negative or mixed statements; the
+        # caller asks for clarification and explicit task buttons remain usable.
+        words = set(re.findall(r"\w+", message_text.casefold()))
+        if words & {"не", "нет", "ні", "not", "no", "never"}:
+            return []
+        result = await session.execute(
+            select(Task)
+            .where(
+                Task.owner_id == owner_id,
+                Task.is_completed.is_(False),
+                or_(Task.assignee_id == assignee_id, Task.assignee_id.is_(None)),
+            )
+            .order_by(Task.due_date.asc().nullslast(), Task.created_at, Task.id)
+        )
+        tasks = list(result.scalars().all())
+        message_tokens = set(cls._task_tokens(message_text))
+        action_counts: dict[str, int] = {}
+        for task in tasks:
+            task_tokens = cls._task_tokens(task.title)
+            if task_tokens:
+                action_counts[task_tokens[0]] = action_counts.get(task_tokens[0], 0) + 1
+
+        completed_titles: list[str] = []
+        for task in tasks:
+            if cls._task_matches_completion(task, message_tokens, action_counts):
+                task.is_completed = True
+                completed_titles.append(task.title)
+        await session.flush()
+        return completed_titles
 
     @staticmethod
     async def create_reminder(

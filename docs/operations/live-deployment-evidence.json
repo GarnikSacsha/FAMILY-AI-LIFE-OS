@@ -1,0 +1,130 @@
+[
+  {
+    "id": "a6b37a8e-07dd-45d7-9702-7beef42270ac",
+    "instances": [
+      {
+        "id": "b16e20eb-3da5-4028-8944-09a4ebe1590d",
+        "status": "REMOVED"
+      },
+      {
+        "id": "712e70b5-c195-40db-9f6c-9b50dbdf003d",
+        "status": "RUNNING"
+      }
+    ],
+    "snapshotId": "4f6498f4-f81e-4e71-baa1-41a3ab8eb14c",
+    "status": "SUCCESS",
+    "meta_keys": [
+      "branch",
+      "buildOnly",
+      "commitAuthor",
+      "commitHash",
+      "commitMessage",
+      "configFile",
+      "duration",
+      "fileServiceManifest",
+      "ignoreWatchPatterns",
+      "imageDigest",
+      "logsV2",
+      "nixpacksProviders",
+      "patchId",
+      "plan",
+      "propertyFileMapping",
+      "reason",
+      "repo",
+      "rootDirectory",
+      "runtime",
+      "serviceManifest",
+      "volumeMounts"
+    ],
+    "meta": {
+      "branch": "main",
+      "commitHash": "3312fa3c97bc9e41e86bcacdcc801b6279935679",
+      "commitMessage": "Fix birthday calendar routing and private chat guidance",
+      "imageDigest": "sha256:28ee7a5a831cc3d0e869da8fe1aba6b653f95e49090827110c5c25e13a53531f",
+      "reason": "deploy",
+      "repo": "GarnikSacsha/FAMILY-AI-LIFE-OS",
+      "rootDirectory": null,
+      "runtime": "V2"
+    }
+  },
+  {
+    "id": "4415237c-7797-4adb-b3b6-91d345d1831a",
+    "instances": [
+      {
+        "id": "69b3a441-71b2-4967-907b-ecfc9c3cff72",
+        "status": "REMOVED"
+      },
+      {
+        "id": "ce49d3de-b058-4e31-b6a0-ed7da9fcc987",
+        "status": "REMOVED"
+      }
+    ],
+    "snapshotId": "37449fe1-234e-4d98-80e5-1beb68e516e1",
+    "status": "REMOVED",
+    "meta_keys": [
+      "buildOnly",
+      "cliAgentSessionId",
+      "cliCaller",
+      "cliMessage",
+      "configFile",
+      "duration",
+      "fileServiceManifest",
+      "imageDigest",
+      "isDraining",
+      "logsV2",
+      "nixpacksProviders",
+      "propertyFileMapping",
+      "reason",
+      "rootDirectory",
+      "runtime",
+      "serviceManifest",
+      "volumeMounts"
+    ],
+    "meta": {
+      "imageDigest": "sha256:9124fb77bd61758636d4d4498f9bae2233b24a3bdb1c1de20afbb1841bb5083d",
+      "reason": "deploy",
+      "rootDirectory": null,
+      "runtime": "V2"
+    }
+  },
+  {
+    "id": "2215a6be-4cc1-43ab-a59a-c6cad9945f7e",
+    "instances": [
+      {
+        "id": "62ad6fd6-1db4-4d80-b003-4aac5bc17da0",
+        "status": "REMOVED"
+      },
+      {
+        "id": "48654215-ff8e-43ce-8b55-fc85df681a1b",
+        "status": "REMOVED"
+      }
+    ],
+    "snapshotId": "f1c9316e-c796-4fd7-ba52-ffc1d28be3d4",
+    "status": "REMOVED",
+    "meta_keys": [
+      "buildOnly",
+      "cliAgentSessionId",
+      "cliCaller",
+      "cliMessage",
+      "configFile",
+      "duration",
+      "fileServiceManifest",
+      "imageDigest",
+      "isDraining",
+      "logsV2",
+      "nixpacksProviders",
+      "propertyFileMapping",
+      "reason",
+      "rootDirectory",
+      "runtime",
+      "serviceManifest",
+      "volumeMounts"
+    ],
+    "meta": {
+      "imageDigest": "sha256:9124fb77bd61758636d4d4498f9bae2233b24a3bdb1c1de20afbb1841bb5083d",
+      "reason": "deploy",
+      "rootDirectory": null,
+      "runtime": "V2"
+    }
+  }
+]
