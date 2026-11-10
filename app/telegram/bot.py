@@ -5,7 +5,7 @@ import time
 import uuid
 from typing import Any, cast
 
-from aiogram import Bot, Dispatcher, types
+from aiogram import Bot, Dispatcher, F, types
 from aiogram.client.session.middlewares.base import (
     BaseRequestMiddleware,
     NextRequestMiddlewareType,
@@ -15,7 +15,7 @@ from aiogram.exceptions import TelegramConflictError
 from aiogram.filters import Command, CommandStart
 from aiogram.methods import GetUpdates, Response, TelegramMethod
 from aiogram.methods.base import TelegramType
-from aiogram.types import BotCommand
+from aiogram.types import BotCommand, CopyTextButton, InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.config.settings import settings
 from app.domains.identity.service import (
@@ -25,6 +25,7 @@ from app.domains.identity.service import (
 )
 from app.infrastructure.database.session import unit_of_work
 from app.integrations.google.oauth import GoogleOAuthClient
+from app.integrations.google.sheets import MONTHLY_BUDGET_HEADERS
 from app.integrations.openai.transcription import (
     AudioTranscriptionError,
     OpenAITranscriptionClient,
@@ -32,6 +33,8 @@ from app.integrations.openai.transcription import (
 from app.integrations.oura.client import OuraClient
 from app.orchestration.orchestrator import MainOrchestrator
 from app.security.oauth import OAuthStateManager
+from app.telegram.planner import register_planner_handlers
+from app.tools.expense_selection import select_expense_category
 from app.tools.google_tools import GoogleWorkspaceError, GoogleWorkspaceTools
 from app.tools.health_tools import HealthTools
 from app.tools.memory_tools import SharedMemoryTools
@@ -50,14 +53,44 @@ TELEGRAM_COMMANDS = (
     ("tasks", "📋 Текущие задачи"),
     ("shopping", "🛒 Семейный список покупок"),
     ("budget", "💳 Расходы за месяц"),
-    ("health", "🥗 Сводка здоровья и питания"),
+    ("weekly_health", "📊 Weekly health — здоровье за неделю"),
+    ("monthly_health", "📈 Monthly health — здоровье за месяц"),
 )
-TELEGRAM_COMMAND_NAMES = frozenset(command for command, _ in TELEGRAM_COMMANDS)
+TELEGRAM_COMMAND_NAMES = frozenset(command for command, _ in TELEGRAM_COMMANDS) | {"health"}
 _TELEGRAM_COMMAND_TOKEN = re.compile(
     r"^(?P<command>/[A-Za-z0-9_]+)(?:@(?P<username>[A-Za-z0-9_]+))?(?P<rest>(?:\s|$).*)",
     flags=re.DOTALL,
 )
 _telegram_bot_username: str | None = None
+_INLINE_CONFIRMATION_COMMAND = re.compile(
+    r"`(?P<command>подтвердить [A-Za-z0-9_-]{6,32})`",
+    re.IGNORECASE,
+)
+
+
+def _confirmation_copy_markup(response_text: str) -> InlineKeyboardMarkup | None:
+    selection = re.search(r"`категория ([A-Za-z0-9_-]{6,32}) (\d+)`", response_text)
+    if selection:
+        code, index = selection.groups()
+        return InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text=category, callback_data=f"expense:{code}:{index}:{number}")]
+                for number, category in enumerate(MONTHLY_BUDGET_HEADERS)
+            ]
+        )
+    match = _INLINE_CONFIRMATION_COMMAND.search(response_text)
+    if match is None:
+        return None
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Скопировать команду",
+                    copy_text=CopyTextButton(text=match.group("command")),
+                )
+            ]
+        ]
+    )
 
 
 def normalize_telegram_command(text: str, *, bot_username: str | None) -> tuple[str, bool]:
@@ -130,6 +163,49 @@ bot = Bot(token=_secret_value(settings.TELEGRAM_BOT_TOKEN))
 dp = Dispatcher()
 
 
+@dp.callback_query(F.data.startswith("expense:"))
+async def handle_expense_category(callback: types.CallbackQuery) -> None:
+    if not isinstance(callback.message, types.Message):
+        await callback.answer("Сообщение недоступно.")
+        return
+    match = re.fullmatch(r"expense:([A-Za-z0-9_-]{6,32}):(\d+):(\d+)", callback.data or "")
+    if match is None:
+        await callback.answer("Некорректная кнопка.")
+        return
+    await callback.answer()
+    try:
+        async with unit_of_work() as session:
+            actor = await IdentityService.resolve_actor(
+                session,
+                telegram_user_id=callback.from_user.id,
+                chat_id=callback.message.chat.id,
+                chat_type=str(getattr(callback.message.chat.type, "value", callback.message.chat.type)),
+            )
+            IdentityService.validate_domain_access(actor, "finance")
+            response = await select_expense_category(
+                session,
+                user_id=actor.user_id,
+                household_id=actor.household_id,
+                telegram_chat_id=actor.chat_id,
+                code=match.group(1),
+                index=int(match.group(2)),
+                category_index=int(match.group(3)),
+            )
+    except PermissionDeniedError:
+        await _answer_access_denied(callback.message)
+        return
+    except Exception:
+        logger.error("Expense category selection failed before commit.")
+        await callback.message.answer("Не удалось сохранить расход. Нажмите категорию ещё раз.")
+        return
+    markup = _confirmation_copy_markup(response)
+    visible = re.sub(r"\n`категория [A-Za-z0-9_-]+ \d+`", "", response)
+    if response.startswith("💳 Расход сохранён"):
+        await callback.message.edit_text(visible, reply_markup=markup)
+    else:
+        await callback.message.answer(visible, reply_markup=markup)
+
+
 class _PollingHealthMiddleware(BaseRequestMiddleware):
     async def __call__(
         self,
@@ -182,12 +258,21 @@ def _message_coordinates(message: types.Message) -> tuple[int, int, str]:
 
 async def _resolve_actor(session: Any, message: types.Message) -> ActorContext:
     telegram_id, chat_id, chat_type = _message_coordinates(message)
-    return await IdentityService.resolve_actor(
+    actor = await IdentityService.resolve_actor(
         session,
         telegram_user_id=telegram_id,
         chat_id=chat_id,
         chat_type=chat_type,
     )
+    # Keep the authenticated actor at the tool boundary as well as the router.
+    # The session is scoped to this update; no process-global user state exists.
+    session_info = getattr(session, "info", None)
+    if isinstance(session_info, dict):
+        session_info["actor_context"] = actor
+        message_id = getattr(message, "message_id", None)
+        if isinstance(message_id, int):
+            session_info["telegram_request_key"] = f"telegram:{actor.chat_id}:{message_id}"
+    return actor
 
 
 async def _answer_access_denied(message: types.Message) -> None:
@@ -267,10 +352,12 @@ async def cmd_help(message: types.Message) -> None:
         "• **/google** — подключение личных Gmail и Calendar\n"
         "• **/mail** — последние письма в личном чате\n"
         "• **/calendar** — ближайшие события в личном чате\n"
-        "• **/shopping** — семейный список покупок\n"
-        "• **/tasks** — текущие задачи\n"
+        "• **/shopping** — покупки и кнопки «Куплено»\n"
+        "• **/tasks** — задачи: завершение, название и срок\n"
         "• **/budget** — расходы текущего месяца\n"
         "• **/health** — личная сводка здоровья\n"
+        "• `/weekly_health` — история и динамика за 7 дней\n"
+        "• `/monthly_health` — история и динамика за 30 дней\n"
         "• напишите «напомни завтра в 10:00…» — пришлю напоминание прямо в этот чат\n"
         "• отправьте фото еды для приблизительной оценки состава",
         parse_mode=ParseMode.MARKDOWN,
@@ -443,6 +530,9 @@ async def cmd_calendar(message: types.Message) -> None:
     await message.answer("📅 Ближайшие события:\n\n" + "\n\n".join(lines))
 
 
+register_planner_handlers(dp)
+
+
 @dp.message()
 async def handle_user_message(message: types.Message) -> None:
     if message.from_user is None:
@@ -520,6 +610,12 @@ async def handle_user_message(message: types.Message) -> None:
                 # group may be analyzed, but it is not added to personal health
                 # history or used as private context.
                 domain = "general"
+            if domain == "calendar" and actor.chat_type != "private":
+                await message.answer(
+                    "📅 Запись в личный Google Calendar доступна в личном чате с ботом. "
+                    "Отправьте эту просьбу мне в личку. Событие пока не создано."
+                )
+                return
             IdentityService.validate_domain_access(actor, domain)
             if shared_context_enabled:
                 if transcript is not None:
@@ -580,7 +676,16 @@ async def handle_user_message(message: types.Message) -> None:
         return
 
     # A success response is sent only after the Unit of Work has committed.
-    sent_message = await message.answer(response_text, parse_mode=ParseMode.MARKDOWN)
+    confirmation_markup = _confirmation_copy_markup(response_text)
+    response_text = re.sub(r"\n`категория [A-Za-z0-9_-]+ \d+`", "", response_text)
+    if confirmation_markup is None:
+        sent_message = await message.answer(response_text, parse_mode=ParseMode.MARKDOWN)
+    else:
+        sent_message = await message.answer(
+            response_text,
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=confirmation_markup,
+        )
     if shared_response_coordinates is not None:
         household_id, chat_id = shared_response_coordinates
         try:

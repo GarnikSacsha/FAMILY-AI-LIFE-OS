@@ -28,6 +28,7 @@ class OuraClient:
             "daily_activity",
             "daily_spo2",
             "daily_stress",
+            "daily_resilience",
             "sleep",
         }
     )
@@ -144,6 +145,7 @@ class OuraClient:
         access_token: str,
         start_date: date,
         end_date: date,
+        next_token: str | None = None,
     ) -> dict[str, Any]:
         """Read one allowlisted date-based Oura V2 collection without leaking responses."""
         if collection not in cls.DATE_COLLECTIONS:
@@ -160,6 +162,8 @@ class OuraClient:
             "end_date": end_date.isoformat(),
         }
         headers = {"Authorization": f"Bearer {access_token.strip()}"}
+        if next_token is not None:
+            params["next_token"] = next_token
         try:
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.get(
@@ -184,3 +188,33 @@ class OuraClient:
         if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
             raise OuraOAuthError("Oura returned an invalid data response.")
         return payload
+
+    @classmethod
+    async def get_collection_range(
+        cls,
+        collection: str,
+        *,
+        access_token: str,
+        start_date: date,
+        end_date: date,
+    ) -> dict[str, Any]:
+        """Read all pages, failing rather than reporting a truncated period as complete."""
+        rows: list[Any] = []
+        seen: set[str] = set()
+        page_cursor = None
+        for _ in range(20):
+            payload = await cls.get_daily_collection(
+                collection,
+                access_token=access_token,
+                start_date=start_date,
+                end_date=end_date,
+                next_token=page_cursor,
+            )
+            rows.extend(payload["data"])
+            page_cursor = payload.get("next_token")
+            if page_cursor is None or page_cursor == "":
+                return {"data": rows}
+            if not isinstance(page_cursor, str) or page_cursor in seen:
+                raise OuraOAuthError("Oura returned invalid pagination.")
+            seen.add(page_cursor)
+        raise OuraOAuthError("Oura pagination limit exceeded.")

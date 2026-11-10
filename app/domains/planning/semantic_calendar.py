@@ -90,6 +90,15 @@ class SemanticCalendarPlan(BaseModel):
         }
 
 
+def is_day_or_birthday_request(message_text: str) -> bool:
+    """Recognize explicit scheduling requests without treating every number as a date."""
+    normalized = (message_text or "").casefold().replace("ё", "е")
+    has_action = re.search(r"\b(?:запиш\w*|записать|добав\w*|созда\w*|постав\w*|записати|додай\w*)\b", normalized)
+    has_day = re.search(r"(?<!\d)(?:0?[1-9]|[12]\d|3[01])\s+числ[ао]\b", normalized)
+    has_birthday = re.search(r"\b(?:др|день\s+рождения|день\s+народження)\b", normalized)
+    return bool(has_action and (has_day or has_birthday))
+
+
 def looks_like_planning_message(message_text: str, *, has_pending_action: bool = False) -> bool:
     if has_pending_action:
         return True
@@ -169,7 +178,8 @@ def looks_like_planning_message(message_text: str, *, has_pending_action: bool =
         is not None
     )
     return (
-        any(marker in normalized for marker in planning_markers)
+        is_day_or_birthday_request(message_text)
+        or any(marker in normalized for marker in planning_markers)
         or any(marker in normalized for marker in temporal_markers)
         or has_clock
         or has_numeric_date

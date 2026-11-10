@@ -114,6 +114,32 @@ class ConfirmationTools:
         return confirmation
 
     @staticmethod
+    async def find_pending_for_natural_reply(
+        session: AsyncSession,
+        *,
+        household_id: uuid.UUID,
+        telegram_chat_id: int,
+        initiated_by_user_id: uuid.UUID,
+        now: datetime | None = None,
+    ) -> list[PendingConfirmation]:
+        """Return at most two current candidates for an unambiguous reply."""
+        current = _utc(now or datetime.now(timezone.utc))
+        result = await session.execute(
+            select(PendingConfirmation)
+            .where(
+                PendingConfirmation.household_id == household_id,
+                PendingConfirmation.telegram_chat_id == telegram_chat_id,
+                PendingConfirmation.initiated_by_user_id == initiated_by_user_id,
+                PendingConfirmation.status == "pending",
+                PendingConfirmation.expires_at > current,
+            )
+            .order_by(PendingConfirmation.created_at.desc(), PendingConfirmation.id.desc())
+            .limit(2)
+            .with_for_update()
+        )
+        return list(result.scalars().all())
+
+    @staticmethod
     async def cancel(confirmation: PendingConfirmation) -> bool:
         if confirmation.status != "pending":
             return False

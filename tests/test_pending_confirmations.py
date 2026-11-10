@@ -60,7 +60,7 @@ async def test_finance_confirmation_is_bound_to_chat_user_and_single_use() -> No
         )
     async with factory() as session:
         confirmation = (await session.execute(select(PendingConfirmation))).scalar_one()
-    assert "Подтвердите запись расхода" in initial
+    assert "Выберите категорию" in initial
     assert confirmation.status == "pending"
     assert confirmation.payload["expenses"][0]["external_id"] == "telegram:-100123:77:expense:1"
 
@@ -106,13 +106,140 @@ async def test_finance_confirmation_is_bound_to_chat_user_and_single_use() -> No
                 telegram_chat_id=chat_id,
                 pending_actions_enabled=True,
             )
-    assert "Расход сохранён" in confirmed
-    assert "уже не ожидает" in replayed
-    assert log.await_count == 1
-    assert log.await_args.kwargs["external_id"] == "telegram:-100123:77:expense:1"
+    assert "Выберите категорию" in confirmed
+    assert "Выберите категорию" in replayed
+    log.assert_not_awaited()
     async with factory() as session:
         confirmation = (await session.execute(select(PendingConfirmation))).scalar_one()
-    assert confirmation.status == "completed"
+    assert confirmation.status == "pending"
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("reply_kind", ("natural", "punctuated_code"))
+async def test_unique_finance_confirmation_accepts_natural_or_punctuated_reply(reply_kind: str) -> None:
+    engine, factory = await _database()
+    household_id, user_id, _ = await _seed(factory)
+    chat_id = -100123
+    async with factory.begin() as session:
+        confirmation = await ConfirmationTools.create_or_get(
+            session,
+            household_id=household_id,
+            telegram_chat_id=chat_id,
+            initiated_by_user_id=user_id,
+            action_type="finance_log",
+            payload={
+                "expenses": [
+                    {
+                        "amount": 560,
+                        "merchant": "отдых",
+                        "description": "560 гривен в отдых",
+                        "external_id": "telegram:-100123:81:expense:1",
+                    }
+                ]
+            },
+            request_key="telegram:-100123:81:finance_log",
+        )
+
+    reply = "Подтверждаю." if reply_kind == "natural" else f"Подтвердить {confirmation.confirmation_code}."
+    transaction = {
+        "status": "SUCCESS",
+        "amount": "560.00",
+        "currency": "UAH",
+        "merchant": "отдых",
+        "category": "Entertainment",
+    }
+    with (
+        patch(
+            "app.agents.finance.agent.FinanceAgent.categorize_and_log_transaction",
+            new=AsyncMock(return_value=transaction),
+        ) as log,
+        patch(
+            "app.orchestration.orchestrator.CalendarIntentInterpreter.interpret",
+            new=AsyncMock(return_value=None),
+        ),
+        patch(
+            "app.integrations.llm.provider.TerraReasoningProvider.generate_text",
+            new=AsyncMock(return_value="Обычный ответ."),
+        ),
+    ):
+        async with factory.begin() as session:
+            response = await MainOrchestrator.process_user_message(
+                session=session,
+                user_id=user_id,
+                household_id=household_id,
+                user_name="Денис",
+                message_text=reply,
+                telegram_chat_id=chat_id,
+                pending_actions_enabled=True,
+            )
+
+    assert "Отправьте расход заново" in response
+    log.assert_not_awaited()
+    async with factory() as session:
+        persisted = (await session.execute(select(PendingConfirmation))).scalar_one()
+    assert persisted.status == "pending"
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_natural_affirmation_refuses_ambiguous_pending_confirmations() -> None:
+    engine, factory = await _database()
+    household_id, user_id, _ = await _seed(factory)
+    chat_id = -100123
+    async with factory.begin() as session:
+        for message_id, amount, merchant in ((82, 560, "отдых"), (83, 95, "кофе")):
+            await ConfirmationTools.create_or_get(
+                session,
+                household_id=household_id,
+                telegram_chat_id=chat_id,
+                initiated_by_user_id=user_id,
+                action_type="finance_log",
+                payload={
+                    "expenses": [
+                        {
+                            "amount": amount,
+                            "merchant": merchant,
+                            "description": f"{amount} грн {merchant}",
+                            "external_id": f"telegram:-100123:{message_id}:expense:1",
+                        }
+                    ]
+                },
+                request_key=f"telegram:-100123:{message_id}:finance_log",
+            )
+
+    with (
+        patch(
+            "app.agents.finance.agent.FinanceAgent.categorize_and_log_transaction",
+            new=AsyncMock(),
+        ) as log,
+        patch(
+            "app.orchestration.orchestrator.CalendarIntentInterpreter.interpret",
+            new=AsyncMock(return_value=None),
+        ),
+        patch(
+            "app.integrations.llm.provider.TerraReasoningProvider.generate_text",
+            new=AsyncMock(return_value="Обычный ответ."),
+        ),
+    ):
+        async with factory.begin() as session:
+            response = await MainOrchestrator.process_user_message(
+                session=session,
+                user_id=user_id,
+                household_id=household_id,
+                user_name="Денис",
+                message_text="Подтверждаю.",
+                telegram_chat_id=chat_id,
+                pending_actions_enabled=True,
+            )
+
+    log.assert_not_awaited()
+    assert "подтвердить" in response.casefold()
+    assert "код" in response.casefold()
+    async with factory() as session:
+        confirmations = list((await session.execute(select(PendingConfirmation))).scalars().all())
+    assert len(confirmations) == 2
+    assert all(confirmation.status == "pending" for confirmation in confirmations)
     await engine.dispose()
 
 

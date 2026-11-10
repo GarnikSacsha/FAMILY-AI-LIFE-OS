@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domains.identity.models import User
-from app.domains.memory.models import PendingSharedAction
+from app.domains.memory.models import PendingConfirmation, PendingSharedAction
 from app.domains.planning.calendar_parser import (
     calendar_clock,
     daily_recurrence,
@@ -22,11 +22,18 @@ from app.domains.planning.reminder_parser import (
     parse_reminder_request,
     reminder_title,
 )
-from app.domains.planning.semantic_calendar import CalendarIntentInterpreter, SemanticCalendarPlan
+from app.domains.planning.semantic_calendar import (
+    CalendarIntentInterpreter,
+    SemanticCalendarPlan,
+    is_day_or_birthday_request,
+)
 from app.orchestration.router import IntentRouter
 from app.tools.confirmation_tools import ConfirmationTools
+from app.tools.expense_selection import expense_timestamp, selection_prompt
 from app.tools.finance_tools import FinanceTools
 from app.tools.google_tools import GoogleWorkspaceError, GoogleWorkspaceTools
+from app.tools.health_archive import get_saved_daily_summary
+from app.tools.health_history import format_health_history, get_health_history
 from app.tools.health_tools import HealthIntegrationError, HealthTools
 from app.tools.memory_tools import SharedMemoryTools
 from app.tools.planner_tools import PlannerTools
@@ -35,13 +42,15 @@ from app.tools.planner_tools import PlannerTools
 class MainOrchestrator:
     """Main Orchestrator Agent for Family AI Life OS."""
 
+    _EXPENSE_CURRENCY = r"(?:грн\.?|uah|₴|грив(?:на|ны|ен|ну|ня|ні|ень|ню))"
+    _EXPENSE_CURRENCY_END = r"(?=$|[\s,.;:!?…)\]}—-])"
     _EXPENSE_AMOUNT = re.compile(
-        r"(?P<amount>\d+(?:[.,]\d{1,2})?)\s*(?:грн(?:\.|ивен|ивні)?|uah|₴)\b",
+        rf"(?P<amount>\d+(?:[.,]\d{{1,2}})?)\s*{_EXPENSE_CURRENCY}{_EXPENSE_CURRENCY_END}",
         re.IGNORECASE,
     )
     _EXPENSE_LINE = re.compile(
         r"^\s*(?P<amount>\d+(?:[.,]\d{1,2})?)\s*"
-        r"(?:(?P<currency>грн(?:\.|ивен|ивні)?|uah|₴)(?=\s|$))?\s+"
+        rf"(?:(?P<currency>{_EXPENSE_CURRENCY}){_EXPENSE_CURRENCY_END})?\s+"
         r"(?P<merchant>.+?)\s*$",
         re.IGNORECASE,
     )
@@ -51,7 +60,11 @@ class MainOrchestrator:
         re.IGNORECASE,
     )
     _CONFIRMATION_REPLY = re.compile(
-        r"^\s*(?P<verb>подтвердить|отмена|отменить)\s+(?P<code>[A-Za-z0-9_-]{6,32})\s*$",
+        r"^\s*(?P<verb>подтвердить|отмена|отменить)\s+(?P<code>[A-Za-z0-9_-]{6,32})\s*[.!?]?\s*$",
+        re.IGNORECASE,
+    )
+    _NATURAL_CONFIRMATION_REPLY = re.compile(
+        r"^\s*(?:подтверждаю|підтверджую)\s*[.!?]?\s*$",
         re.IGNORECASE,
     )
     _CATEGORY_NAMES = {
@@ -93,22 +106,39 @@ class MainOrchestrator:
         message_text: str,
     ) -> str | None:
         parsed = cls._CONFIRMATION_REPLY.match(message_text)
-        if parsed is None:
+        natural_confirmation = cls._NATURAL_CONFIRMATION_REPLY.match(message_text)
+        if parsed is None and natural_confirmation is None:
             return None
-        confirmation = await ConfirmationTools.find_for_reply(
-            session,
-            household_id=household_id,
-            telegram_chat_id=telegram_chat_id,
-            initiated_by_user_id=user_id,
-            confirmation_code=parsed.group("code"),
-        )
-        if confirmation is None:
-            return "Не нашёл активного подтверждения с таким кодом."
-        if parsed.group("verb").lower() in {"отмена", "отменить"}:
+        confirmation: PendingConfirmation | None
+        if natural_confirmation is not None:
+            candidates = await ConfirmationTools.find_pending_for_natural_reply(
+                session,
+                household_id=household_id,
+                telegram_chat_id=telegram_chat_id,
+                initiated_by_user_id=user_id,
+            )
+            if not candidates:
+                return "Нет активной операции, которую можно подтвердить."
+            if len(candidates) > 1:
+                return "Нашёл несколько активных операций. Напишите точную команду `подтвердить <код>`."
+            confirmation = candidates[0]
+        else:
+            confirmation = await ConfirmationTools.find_for_reply(
+                session,
+                household_id=household_id,
+                telegram_chat_id=telegram_chat_id,
+                initiated_by_user_id=user_id,
+                confirmation_code=cast(re.Match[str], parsed).group("code"),
+            )
+            if confirmation is None:
+                return "Не нашёл активного подтверждения с таким кодом."
+        if parsed is not None and parsed.group("verb").casefold() in {"отмена", "отменить"}:
             if await ConfirmationTools.cancel(confirmation):
                 await session.flush()
                 return "Операция отменена."
             return "Эта операция уже не ожидает подтверждения."
+        if confirmation.action_type == "finance_log" and confirmation.status == "pending":
+            return selection_prompt(confirmation)
         if not await ConfirmationTools.claim(session, confirmation):
             return "Эта операция уже не ожидает подтверждения или срок кода истёк."
 
@@ -174,6 +204,8 @@ class MainOrchestrator:
             "/shopping": "список покупок",
             "/tasks": "задача",
             "/health": "здоровье",
+            "/weekly_health": "здоровье",
+            "/monthly_health": "здоровье",
         }.get(command)
         if command_route:
             return command_route
@@ -189,10 +221,14 @@ class MainOrchestrator:
     @classmethod
     def _is_explicit_task_request(cls, message_text: str) -> bool:
         normalized = (message_text or "").lower().replace("ё", "е")
-        return cls._is_explicit_task_list_request(message_text) or re.search(
-            r"\b(?:созда\w*|добав\w*|запиш\w*)\s+задач\w*\b",
-            normalized,
-        ) is not None
+        return (
+            cls._is_explicit_task_list_request(message_text)
+            or re.search(
+                r"\b(?:созда\w*|добав\w*|запиш\w*)\s+задач\w*\b",
+                normalized,
+            )
+            is not None
+        )
 
     @staticmethod
     def domain_for_message(
@@ -205,6 +241,8 @@ class MainOrchestrator:
         normalized = (message_text or "").lower()
         if MainOrchestrator._is_explicit_task_request(message_text):
             return "planner"
+        if MainOrchestrator._EXPENSE_AMOUNT.search(message_text):
+            return "finance"
         if (
             "календар" in normalized
             or normalized.startswith("/calendar")
@@ -328,12 +366,26 @@ class MainOrchestrator:
         merchant_parts = [part.strip() for part in re.split(r"[,;:\n]", merchant_source) if part.strip()]
         merchant = merchant_parts[-1] if merchant_parts else merchant_source
         merchant = cls._clean_expense_merchant(merchant)
+        if not merchant:
+            merchant = cls._clean_expense_suffix(message_text[amount_match.end() :])
         return amount, merchant or "Расход"
 
     @classmethod
     def _clean_expense_merchant(cls, merchant: str) -> str:
         merchant = cls._EXPENSE_PREFIX.sub(" ", merchant)
         return " ".join(merchant.split()).strip(" \t\n,;:—-")
+
+    @staticmethod
+    def _clean_expense_suffix(suffix: str) -> str:
+        suffix = re.split(
+            r"[.,;:!?…\n]|\bпотому\s+что\b",
+            suffix,
+            maxsplit=1,
+            flags=re.IGNORECASE,
+        )[0]
+        suffix = re.sub(r"^\s*(?:в|на|за)\s+", "", suffix, count=1, flags=re.IGNORECASE)
+        suffix = re.sub(r"\s+(?:ещё|еще)\s*$", "", suffix, count=1, flags=re.IGNORECASE)
+        return " ".join(suffix.split()).strip(" \t\n,;:—-")
 
     @classmethod
     def _extract_expenses(cls, message_text: str) -> list[tuple[float, str]]:
@@ -345,10 +397,14 @@ class MainOrchestrator:
         has_explicit_currency = cls._EXPENSE_AMOUNT.search(message_text) is not None
         expenses: list[tuple[float, str]] = []
         for line in lines:
-            line_match = cls._EXPENSE_LINE.match(line)
+            normalized_line = cls._EXPENSE_PREFIX.sub(" ", line)
+            normalized_line = " ".join(normalized_line.split())
+            line_match = cls._EXPENSE_LINE.match(normalized_line)
             if line_match is not None and (line_match.group("currency") or has_explicit_currency):
                 amount = float(line_match.group("amount").replace(",", "."))
                 merchant = cls._clean_expense_merchant(line_match.group("merchant"))
+                if line_match.group("currency"):
+                    merchant = cls._clean_expense_suffix(merchant)
                 if merchant:
                     expenses.append((amount, merchant))
                     continue
@@ -590,6 +646,8 @@ class MainOrchestrator:
         normalized = (message_text or "").lower().replace("ё", "е")
         if MainOrchestrator._is_recurring_calendar_request(message_text):
             return False
+        if is_day_or_birthday_request(message_text) and "список покупок" not in normalized:
+            return True
         has_action = any(marker in normalized for marker in ("добав", "созда", "постав", "запиш", "записать"))
         has_date_or_calendar = any(
             marker in normalized
@@ -959,6 +1017,9 @@ class MainOrchestrator:
                 sleep_lines.append(f"• {label}: {duration}")
         if summary.get("sleep_efficiency") is not None:
             sleep_lines.append(f"• Эффективность: {value_text(summary['sleep_efficiency'], '%')}")
+        latency = cls._format_duration(summary.get("sleep_latency_seconds"))
+        if latency is not None:
+            sleep_lines.append(f"• Засыпание: {latency}")
 
         readiness_lines = [f"• Readiness: {value_text(summary.get('readiness_score'))}"]
         if summary.get("average_hrv_ms") is not None:
@@ -970,6 +1031,8 @@ class MainOrchestrator:
             readiness_lines.append(f"• Температура: {temperature:+g}°C")
         if summary.get("spo2_average_percent") is not None:
             readiness_lines.append(f"• SpO₂: {value_text(summary['spo2_average_percent'], '%')}")
+        if summary.get("average_breath_per_minute") is not None:
+            readiness_lines.append(f"• Дыхание: {value_text(summary['average_breath_per_minute'], ' /мин')}")
 
         activity_values = (
             summary.get("activity_score"),
@@ -1029,6 +1092,8 @@ class MainOrchestrator:
         analysis = summary.get("analysis")
         if isinstance(analysis, str) and analysis:
             blocks.append(f"🤖 Анализ\n{analysis}")
+        if summary.get("archive_status"):
+            blocks.append(str(summary["archive_status"]))
         return "\n\n".join(blocks)
 
     @classmethod
@@ -1049,6 +1114,10 @@ class MainOrchestrator:
     ) -> str:
         """Processes incoming user input, delegates to deterministic tools, and returns response."""
         has_photo = photo_bytes is not None
+        message_text = {"/weekly_health": "/health week", "/monthly_health": "/health month"}.get(
+            message_text.strip().lower(),
+            message_text,
+        )
         has_doc = document_bytes is not None
         if pending_actions_enabled is None:
             pending_actions_enabled = shared_context_enabled
@@ -1284,15 +1353,35 @@ class MainOrchestrator:
                         f"Пришлю прямо в этот чат: {formatted_times}."
                     )
 
-        routing = IntentRouter.classify_intent(
-            cls._routing_text(message_text),
-            has_photo=has_photo,
-            has_document=has_doc,
-        )
+        if cls._EXPENSE_AMOUNT.search(message_text):
+            routing = {"intent": "FINANCIAL_QUERY_OR_LOG"}
+        elif is_day_or_birthday_request(message_text) and not cls._is_explicit_task_request(message_text):
+            routing = {"intent": "PLANNING_OR_REMINDER"}
+        else:
+            routing = IntentRouter.classify_intent(
+                cls._routing_text(message_text),
+                has_photo=has_photo,
+                has_document=has_doc,
+            )
         intent = routing["intent"]
 
         if intent == "HEALTH_BIOMETRICS_QUERY":
             normalized = message_text.lower()
+            period = normalized.strip().split(maxsplit=1)
+            days = None
+            if len(period) == 2 and period[0] == "/health":
+                days = {"week": 7, "7": 7, "неделя": 7, "month": 30, "30": 30, "месяц": 30}.get(period[1].strip())
+                if days is None:
+                    return "Используйте /health — сегодня, /health week — 7 дней, /health month — 30 дней."
+            if days is not None:
+                try:
+                    history = await get_health_history(session, user_id=user_id, days=days, timezone_name=timezone_name)
+                except HealthIntegrationError:
+                    return (
+                        "Не удалось загрузить историю Oura. Попробуйте позже; "
+                        "если доступ истёк, переподключитесь через /oura."
+                    )
+                return format_health_history(history)
             status_terms = (
                 "подключ",
                 "работает ли",
@@ -1310,7 +1399,7 @@ class MainOrchestrator:
                 return "💍 Oura Ring пока не подключена. Используйте команду /oura в личном чате."
 
             try:
-                summary = await HealthTools.get_oura_daily_summary(
+                summary = await get_saved_daily_summary(
                     session,
                     user_id=user_id,
                     timezone_name=timezone_name,
@@ -1421,6 +1510,17 @@ class MainOrchestrator:
 
             if expenses:
                 if pending_actions_enabled and telegram_chat_id is not None:
+                    expense_lines = [line for line in message_text.splitlines() if cls._extract_expenses(line)]
+                    try:
+                        timestamps = [
+                            expense_timestamp(
+                                expense_lines[index] if len(expense_lines) == len(expenses) else message_text,
+                                timezone_name,
+                            ).isoformat()
+                            for index in range(len(expenses))
+                        ]
+                    except ValueError:
+                        return "Некорректная дата расхода. Укажите дату в формате ДД.ММ или ДД.ММ.ГГГГ."
                     confirmation = await ConfirmationTools.create_or_get(
                         session,
                         household_id=household_id,
@@ -1433,9 +1533,13 @@ class MainOrchestrator:
                             action_type="finance_log",
                         ),
                         payload={
+                            "category_selection": True,
+                            "timezone": timezone_name,
+                            "next_expense": 0,
                             "expenses": [
                                 {
                                     "amount": amount,
+                                    "occurred_at": timestamps[line_number - 1],
                                     "merchant": merchant,
                                     "description": message_text if len(expenses) == 1 else merchant,
                                     "external_id": (
@@ -1445,15 +1549,11 @@ class MainOrchestrator:
                                     ),
                                 }
                                 for line_number, (amount, merchant) in enumerate(expenses, start=1)
-                            ]
+                            ],
                         },
                     )
                     if confirmation.status == "pending":
-                        preview = ", ".join(f"{amount:g} грн — {merchant}" for amount, merchant in expenses)
-                        return (
-                            f"💳 Подтвердите запись расхода: {preview}.\n"
-                            f"Напишите: `подтвердить {confirmation.confirmation_code}`"
-                        )
+                        return selection_prompt(confirmation)
                     return "Этот запрос на расход уже был обработан."
                 from app.agents.finance.agent import FinanceAgent
 
@@ -1551,7 +1651,8 @@ class MainOrchestrator:
                 if not titles:
                     return "📋 Укажите хотя бы одну задачу отдельной строкой."
                 results = []
-                for title in titles:
+                batch_created_at = datetime.now(timezone.utc)
+                for position, title in enumerate(titles):
                     results.append(
                         await PlannerTools.create_task(
                             session,
@@ -1561,6 +1662,7 @@ class MainOrchestrator:
                             assignee_id=assignee_id,
                             due_date=due_date,
                             title=title,
+                            created_at=batch_created_at + timedelta(microseconds=position),
                         )
                     )
                 if len(results) == 1:

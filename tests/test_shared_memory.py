@@ -333,7 +333,7 @@ async def test_shared_message_recording_is_idempotent_for_repeated_telegram_upda
 
 
 @pytest.mark.asyncio
-async def test_idle_chat_creates_and_delivers_persisted_summary(monkeypatch) -> None:
+async def test_idle_chat_does_not_create_or_deliver_conversation_summary(monkeypatch) -> None:
     engine, factory = await _memory_database()
     household_id, user_id = await _seed_family(factory)
     chat_id = -100123
@@ -366,16 +366,8 @@ async def test_idle_chat_creates_and_delivers_persisted_summary(monkeypatch) -> 
         first.created_at = old
         second.created_at = old + timedelta(minutes=1)
 
-    summary_data = {
-        "decisions": [],
-        "actions": ["Уточнить бронь"],
-        "money": [],
-        "open_questions": ["Когда напомнить про бронь"],
-        "facts": [],
-        "suggestions": ["Назначить время напоминания"],
-    }
     agent = SharedMemoryAgent()
-    agent.summarize_messages = AsyncMock(return_value=summary_data)
+    agent.summarize_messages = AsyncMock()
     bot = AsyncMock()
     monkeypatch.setattr(
         "app.infrastructure.integrations.conversation_summary_worker.AsyncSessionLocal",
@@ -389,14 +381,79 @@ async def test_idle_chat_creates_and_delivers_persisted_summary(monkeypatch) -> 
         agent=agent,
     )
 
-    assert delivered == 1
-    bot.send_message.assert_awaited_once()
-    assert "Уточнить бронь" in bot.send_message.await_args.kwargs["text"]
+    assert delivered == 0
+    agent.summarize_messages.assert_not_awaited()
+    bot.send_message.assert_not_awaited()
     async with factory() as session:
-        summary = (await session.execute(select(SharedConversationSummary))).scalar_one()
+        summaries = (await session.execute(select(SharedConversationSummary))).scalars().all()
         memories = (await session.execute(select(SharedMemoryItem))).scalars().all()
-    assert summary.delivery_status == "delivered"
-    assert {item.kind for item in memories} == {"action", "open_question", "suggestion"}
+    assert summaries == []
+    assert memories == []
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_idle_finance_exchange_does_not_create_or_deliver_conversation_summary(monkeypatch) -> None:
+    engine, factory = await _memory_database()
+    household_id, user_id = await _seed_family(factory)
+    chat_id = -100123
+    old = datetime(2026, 8, 5, 10, tzinfo=timezone.utc)
+    async with factory.begin() as session:
+        user_message = await SharedMemoryTools.record_message(
+            session,
+            household_id=household_id,
+            author_user_id=user_id,
+            telegram_chat_id=chat_id,
+            telegram_message_id=1,
+            role="user",
+            author_name="Саша",
+            message_type="text",
+            content="85 грн отдых",
+        )
+        assistant_message = await SharedMemoryTools.record_message(
+            session,
+            household_id=household_id,
+            author_user_id=None,
+            telegram_chat_id=chat_id,
+            telegram_message_id=2,
+            role="assistant",
+            author_name="Family",
+            message_type="text",
+            content="Расход сохранён.",
+        )
+        user_message.created_at = old
+        assistant_message.created_at = old + timedelta(minutes=1)
+
+    agent = SharedMemoryAgent()
+    agent.summarize_messages = AsyncMock(
+        return_value={
+            "decisions": [],
+            "actions": ["Подтвердить GQxamlvp"],
+            "money": [],
+            "open_questions": [],
+            "facts": ["Отмечен отдых по высшей математике за 85 грн"],
+            "suggestions": [],
+        }
+    )
+    bot = AsyncMock()
+    monkeypatch.setattr(
+        "app.infrastructure.integrations.conversation_summary_worker.AsyncSessionLocal",
+        factory,
+    )
+    monkeypatch.setattr(settings, "FAMILY_GROUP_CHAT_ID", None)
+
+    delivered = await deliver_due_shared_summaries(
+        bot,
+        now=old + timedelta(hours=2),
+        agent=agent,
+    )
+
+    assert delivered == 0
+    agent.summarize_messages.assert_not_awaited()
+    bot.send_message.assert_not_awaited()
+    async with factory() as session:
+        summaries = (await session.execute(select(SharedConversationSummary))).scalars().all()
+    assert summaries == []
     await engine.dispose()
 
 

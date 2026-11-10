@@ -1,3 +1,4 @@
+import re
 from typing import Any
 
 
@@ -28,10 +29,44 @@ class IntentRouter:
                 "secondary_agents": ["health", "finance"],
             }
 
-        # Health Domain Patterns
-        if any(
-            w in text
-            for w in ["сон", "оура", "oura", "пульс", "готовность", "readiness", "здоровье", "самочувствие", "анализ"]
+        # Health Domain Patterns. A company/brand mention alone is not a
+        # request for the user's private Oura biometrics.
+        health_markers = (
+            "сон",
+            "пульс",
+            "готовность",
+            "readiness",
+            "здоровье",
+            "самочувствие",
+            "анализ",
+        )
+        oura_mentioned = any(marker in text for marker in ("оура", "oura"))
+        oura_health_markers = (
+            "мой",
+            "моя",
+            "моё",
+            "у меня",
+            "кольц",
+            "подключ",
+            "синхрон",
+            "статус",
+            "данн",
+            "показател",
+            "метрик",
+            "спал",
+            "спала",
+            "сегодня",
+            "вчера",
+            "sleep",
+            "score",
+            "heart",
+            "hrv",
+            "spo2",
+            "connect",
+            "sync",
+        )
+        if any(marker in text for marker in health_markers) or (
+            oura_mentioned and any(marker in text for marker in oura_health_markers)
         ):
             return {
                 "intent": "HEALTH_BIOMETRICS_QUERY",
@@ -98,6 +133,15 @@ class IntentRouter:
             }
 
         # Planning Domain Patterns
+        explicit_plan_request = (
+            re.search(
+                r"\bплан(?:ы|а|у|ом|е|и|ів)?\b"
+                r"|\b(?:с|за)планируй(?:те)?\b"
+                r"|\b(?:с|за)плануй(?:те)?\b",
+                text,
+            )
+            is not None
+        )
         if (
             any(
                 w in text
@@ -111,12 +155,12 @@ class IntentRouter:
                     "задач",
                     "список покупок",
                     "купить",
-                    "план",
                     "встреча",
                     "стоматолог",
                     "календарь",
                 ]
             )
+            or explicit_plan_request
             or (
                 any(marker in text for marker in ("каждый день", "ежедневно", "ежедневный"))
                 and any(marker in text for marker in ("добав", "созда", "постав", "запиш", "не забыть"))

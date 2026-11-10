@@ -227,11 +227,9 @@ async def test_oura_biometrics_query_uses_provider_data_not_llm_fallback():
     llm_fallback = AsyncMock(return_value="Generic health response")
 
     with (
-        patch.object(
-            HealthTools,
-            "get_oura_daily_summary",
+        patch(
+            "app.orchestration.orchestrator.get_saved_daily_summary",
             new=daily_summary,
-            create=True,
         ),
         patch.object(
             MainOrchestrator,

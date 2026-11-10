@@ -34,6 +34,16 @@ class FinanceAgent:
         )
         if any(term in normalized for term in monthly_payment_terms):
             return "Utilities"
+        pet_terms = (
+            "булка дол",
+            "корм",
+            "ветеринар",
+            "зоомагаз",
+            "кот",
+            "собак",
+        )
+        if any(term in normalized for term in pet_terms):
+            return "Pets"
         return None
 
     @staticmethod

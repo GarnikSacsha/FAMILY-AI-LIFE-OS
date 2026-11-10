@@ -152,6 +152,36 @@ docker-compose up -d --build
 docker-compose exec app alembic upgrade head
 ```
 
+## Planner controls and health history
+
+- `/tasks` lists active household tasks in pages of eight. Use ✓ to complete,
+  ✏️ to rename, or 📅 to change the due date. For edits, use Telegram's **Reply**
+  on the bot's prompt and send the new value. Dates use `DD.MM.YYYY HH:MM` in
+  your account timezone; `-` removes the due date. The prompt has a Cancel button.
+- `/shopping` lists household purchases with **Куплено** buttons. Completed
+  records remain in the database and disappear from the active list. Existing
+  task and shopping creation messages still work.
+- The menu has two health entries: `/weekly_health` and `/monthly_health`.
+  `/health` remains available by typing it; `/health week` and `/health month`
+  remain compatible aliases. All health commands require a private chat.
+- Health requests synchronize up to 90 completed days plus today, using seven
+  Oura collections: daily sleep, readiness, activity, detailed sleep, SpO2,
+  stress and resilience. Repeated requests within five minutes reuse a successful
+  sync. There is no automatic delivery or background polling.
+- The existing `oura_daily_metrics` table stores one row per user/day. Provider
+  snapshots and derived daily summaries are AES-GCM encrypted in `raw_json`,
+  bound to the user and date; the existing encryption key must remain available.
+  Historical rows are retained beyond the 90-day refresh window. Empty or failed
+  collections do not erase saved readings. A provider outage falls back to saved
+  history with a freshness warning. No new migrations or OAuth scopes are added.
+- Weekly/monthly comparisons exclude today, show coverage per metric, and use
+  at least 70% coverage in both periods for the short comparison text. Daily
+  commentary compares three consecutive days with the preceding 30-day baseline
+  (at least 14 available days). Watch flags use application heuristics: sleep
+  45 minutes shorter, minimum sleeping pulse 5 bpm higher, or HRV 20% lower.
+  These are descriptive, non-clinical rules, not diagnoses or medical cutoffs.
+  No health data is sent to an LLM for these summaries.
+
 ## 📄 Documentation sitemap
 
 - [AGENTS.md](./AGENTS.md): domain and agent contracts.
