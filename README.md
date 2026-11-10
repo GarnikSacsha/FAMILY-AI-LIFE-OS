@@ -92,7 +92,7 @@ See [SECURITY.md](SECURITY.md) for additional controls and limitations.
 ## Run a separate development instance
 
 Prerequisites: Git and Docker with Compose v2. The checked Docker runtime uses
-Python 3.12. Use a **separate development Telegram bot**, accounts, databases,
+Python 3.14; CI also checks Python 3.12. Use a **separate development Telegram bot**, accounts, databases,
 and integration resources. A second polling process using the production token
 can disrupt the working bot.
 
