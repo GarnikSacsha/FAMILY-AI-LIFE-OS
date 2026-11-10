@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "label": "task-list-fixed",
+  "captured_at": "2026-08-10T20:26:00.913101+00:00",
+  "command": [
+    "C:\\Users\\\u0414\u0435\u043d\u0438\u0441\\Desktop\\\u0412\u0441\u044f\u043a\u043e\u0435 \u0432\u0430\u0439\u0431\u043a\u043e\u0434\u0438\u043d\u0433\\\u041f\u0440\u043e\u0441\u0442\u043e \u0442\u0435\u0441\u0442 \u0432\u0441\u044f\u043a\u043e\u0435\\FAMILY-AI-LIFE-OS\\.venv\\Scripts\\python.exe",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_task_list_routing_regression.py"
+  ],
+  "cwd": "C:\\Users\\\u0414\u0435\u043d\u0438\u0441\\Desktop\\\u0412\u0441\u044f\u043a\u043e\u0435 \u0432\u0430\u0439\u0431\u043a\u043e\u0434\u0438\u043d\u0433\\\u041f\u0440\u043e\u0441\u0442\u043e \u0442\u0435\u0441\u0442 \u0432\u0441\u044f\u043a\u043e\u0435\\FAMILY-AI-LIFE-OS",
+  "runtime": "Python 3.14.6 on Windows AMD64",
+  "duration_ms": 8296.978,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "...                                                                      [100%]\r\n============================== warnings summary ===============================\r\n.venv\\Lib\\site-packages\\google\\genai\\types.py:42\r\n  C:\\Users\\\ufffd\ufffd\ufffd\ufffd\ufffd\\Desktop\\\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd \ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\\\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd \ufffd\ufffd\ufffd\ufffd \ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\\FAMILY-AI-LIFE-OS\\.venv\\Lib\\site-packages\\google\\genai\\types.py:42: DeprecationWarning: '_UnionGenericAlias' is deprecated and slated for removal in Python 3.17\r\n    VersionedUnionType = Union[builtin_types.UnionType, _UnionGenericAlias]\r\n\r\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\r\n3 passed, 1 warning in 6.69s\r\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "secrets_redacted": true
+}

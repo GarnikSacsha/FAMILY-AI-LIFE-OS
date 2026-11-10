@@ -90,3 +90,85 @@ async def test_invalid_finance_input_is_rejected(session):
             merchant="",
             currency="INVALID",
         )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"owner_id": "not-a-uuid"},
+        {"direction": "transfer"},
+        {"amount": "not-a-number"},
+        {"amount": -1},
+        {"amount": 10_000_000_000},
+        {"merchant": ""},
+        {"category": ""},
+        {"source": ""},
+        {"account_id": ""},
+        {"external_id": "x" * 256},
+        {"description": "x" * 501},
+        {"currency": "US"},
+        {"occurred_at": datetime(2026, 8, 5)},
+    ],
+)
+async def test_log_transaction_rejects_each_invalid_normalized_field(session, overrides):
+    values = {
+        "owner_type": "user",
+        "owner_id": uuid.uuid4(),
+        "amount": 10,
+        "merchant": "Test",
+    }
+    values.update(overrides)
+
+    with pytest.raises(ValueError):
+        await FinanceTools.log_transaction(session, **values)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"owner_id": "not-a-uuid"},
+        {"date_from": datetime(2026, 8, 5)},
+        {"date_to": datetime(2026, 8, 5)},
+        {
+            "date_from": datetime(2026, 8, 6, tzinfo=timezone.utc),
+            "date_to": datetime(2026, 8, 5, tzinfo=timezone.utc),
+        },
+        {"currency": "US"},
+    ],
+)
+async def test_spending_summary_rejects_invalid_filters(session, kwargs):
+    values = {"owner_id": uuid.uuid4()}
+    values.update(kwargs)
+
+    with pytest.raises(ValueError):
+        await FinanceTools.get_spending_summary(session, **values)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"owner_id": "not-a-uuid"},
+        {"date_from": datetime(2026, 8, 5)},
+        {"date_to": datetime(2026, 8, 6)},
+        {"query": "   "},
+    ],
+)
+async def test_find_expenses_rejects_invalid_filters(session, kwargs):
+    values = {
+        "owner_id": uuid.uuid4(),
+        "query": "food",
+        "date_from": datetime(2026, 8, 1, tzinfo=timezone.utc),
+        "date_to": datetime(2026, 8, 6, tzinfo=timezone.utc),
+    }
+    values.update(kwargs)
+
+    with pytest.raises(ValueError):
+        await FinanceTools.find_expenses(session, **values)
+
+
+@pytest.mark.asyncio
+async def test_latest_sheet_sync_status_is_none_for_unknown_owner(session):
+    assert await FinanceTools.get_latest_sheet_sync_status(session, owner_id=uuid.uuid4()) is None

@@ -1,9 +1,11 @@
 import io
 import logging
+import re
 import time
+import uuid
 from typing import Any, cast
 
-from aiogram import Bot, Dispatcher, types
+from aiogram import Bot, Dispatcher, F, types
 from aiogram.client.session.middlewares.base import (
     BaseRequestMiddleware,
     NextRequestMiddlewareType,
@@ -13,7 +15,7 @@ from aiogram.exceptions import TelegramConflictError
 from aiogram.filters import Command, CommandStart
 from aiogram.methods import GetUpdates, Response, TelegramMethod
 from aiogram.methods.base import TelegramType
-from aiogram.types import BotCommand
+from aiogram.types import BotCommand, CopyTextButton, InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.config.settings import settings
 from app.domains.identity.service import (
@@ -23,14 +25,95 @@ from app.domains.identity.service import (
 )
 from app.infrastructure.database.session import unit_of_work
 from app.integrations.google.oauth import GoogleOAuthClient
+from app.integrations.google.sheets import MONTHLY_BUDGET_HEADERS
+from app.integrations.openai.transcription import (
+    AudioTranscriptionError,
+    OpenAITranscriptionClient,
+)
 from app.integrations.oura.client import OuraClient
 from app.orchestration.orchestrator import MainOrchestrator
 from app.security.oauth import OAuthStateManager
+from app.telegram.planner import register_planner_handlers
+from app.tools.expense_selection import select_expense_category
 from app.tools.google_tools import GoogleWorkspaceError, GoogleWorkspaceTools
+from app.tools.health_tools import HealthTools
+from app.tools.memory_tools import SharedMemoryTools
 
 logger = logging.getLogger(__name__)
 
 POLLING_STALE_AFTER_SECONDS = 45.0
+
+TELEGRAM_COMMANDS = (
+    ("start", "🌿 Запустить семейного ассистента"),
+    ("help", "📖 Справка и возможности"),
+    ("oura", "💍 Подключить Oura Ring"),
+    ("google", "🔗 Подключить Gmail и Calendar"),
+    ("mail", "✉️ Последние письма"),
+    ("calendar", "📅 Ближайшие события"),
+    ("tasks", "📋 Текущие задачи"),
+    ("shopping", "🛒 Семейный список покупок"),
+    ("budget", "💳 Расходы за месяц"),
+    ("weekly_health", "📊 Weekly health — здоровье за неделю"),
+    ("monthly_health", "📈 Monthly health — здоровье за месяц"),
+)
+TELEGRAM_COMMAND_NAMES = frozenset(command for command, _ in TELEGRAM_COMMANDS) | {"health"}
+_TELEGRAM_COMMAND_TOKEN = re.compile(
+    r"^(?P<command>/[A-Za-z0-9_]+)(?:@(?P<username>[A-Za-z0-9_]+))?(?P<rest>(?:\s|$).*)",
+    flags=re.DOTALL,
+)
+_telegram_bot_username: str | None = None
+_INLINE_CONFIRMATION_COMMAND = re.compile(
+    r"`(?P<command>подтвердить [A-Za-z0-9_-]{6,32})`",
+    re.IGNORECASE,
+)
+
+
+def _confirmation_copy_markup(response_text: str) -> InlineKeyboardMarkup | None:
+    selection = re.search(r"`категория ([A-Za-z0-9_-]{6,32}) (\d+)`", response_text)
+    if selection:
+        code, index = selection.groups()
+        return InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text=category, callback_data=f"expense:{code}:{index}:{number}")]
+                for number, category in enumerate(MONTHLY_BUDGET_HEADERS)
+            ]
+        )
+    match = _INLINE_CONFIRMATION_COMMAND.search(response_text)
+    if match is None:
+        return None
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Скопировать команду",
+                    copy_text=CopyTextButton(text=match.group("command")),
+                )
+            ]
+        ]
+    )
+
+
+def normalize_telegram_command(text: str, *, bot_username: str | None) -> tuple[str, bool]:
+    """Normalize a known command addressed to this bot and reject foreign mentions."""
+    match = _TELEGRAM_COMMAND_TOKEN.match(text)
+    if match is None:
+        return text, False
+
+    command_name = match.group("command")[1:].lower()
+    mentioned_username = match.group("username")
+    if command_name not in TELEGRAM_COMMAND_NAMES or mentioned_username is None:
+        return text, False
+    if bot_username is None or mentioned_username.casefold() != bot_username.casefold():
+        return text, True
+
+    return f"/{command_name}{match.group('rest')}", False
+
+
+def _has_known_command_mention(text: str) -> bool:
+    match = _TELEGRAM_COMMAND_TOKEN.match(text)
+    if match is None or match.group("username") is None:
+        return False
+    return match.group("command")[1:].lower() in TELEGRAM_COMMAND_NAMES
 
 
 class TelegramPollingHealth:
@@ -78,6 +161,49 @@ def _secret_value(value: Any) -> str:
 
 bot = Bot(token=_secret_value(settings.TELEGRAM_BOT_TOKEN))
 dp = Dispatcher()
+
+
+@dp.callback_query(F.data.startswith("expense:"))
+async def handle_expense_category(callback: types.CallbackQuery) -> None:
+    if not isinstance(callback.message, types.Message):
+        await callback.answer("Сообщение недоступно.")
+        return
+    match = re.fullmatch(r"expense:([A-Za-z0-9_-]{6,32}):(\d+):(\d+)", callback.data or "")
+    if match is None:
+        await callback.answer("Некорректная кнопка.")
+        return
+    await callback.answer()
+    try:
+        async with unit_of_work() as session:
+            actor = await IdentityService.resolve_actor(
+                session,
+                telegram_user_id=callback.from_user.id,
+                chat_id=callback.message.chat.id,
+                chat_type=str(getattr(callback.message.chat.type, "value", callback.message.chat.type)),
+            )
+            IdentityService.validate_domain_access(actor, "finance")
+            response = await select_expense_category(
+                session,
+                user_id=actor.user_id,
+                household_id=actor.household_id,
+                telegram_chat_id=actor.chat_id,
+                code=match.group(1),
+                index=int(match.group(2)),
+                category_index=int(match.group(3)),
+            )
+    except PermissionDeniedError:
+        await _answer_access_denied(callback.message)
+        return
+    except Exception:
+        logger.error("Expense category selection failed before commit.")
+        await callback.message.answer("Не удалось сохранить расход. Нажмите категорию ещё раз.")
+        return
+    markup = _confirmation_copy_markup(response)
+    visible = re.sub(r"\n`категория [A-Za-z0-9_-]+ \d+`", "", response)
+    if response.startswith("💳 Расход сохранён"):
+        await callback.message.edit_text(visible, reply_markup=markup)
+    else:
+        await callback.message.answer(visible, reply_markup=markup)
 
 
 class _PollingHealthMiddleware(BaseRequestMiddleware):
@@ -132,12 +258,21 @@ def _message_coordinates(message: types.Message) -> tuple[int, int, str]:
 
 async def _resolve_actor(session: Any, message: types.Message) -> ActorContext:
     telegram_id, chat_id, chat_type = _message_coordinates(message)
-    return await IdentityService.resolve_actor(
+    actor = await IdentityService.resolve_actor(
         session,
         telegram_user_id=telegram_id,
         chat_id=chat_id,
         chat_type=chat_type,
     )
+    # Keep the authenticated actor at the tool boundary as well as the router.
+    # The session is scoped to this update; no process-global user state exists.
+    session_info = getattr(session, "info", None)
+    if isinstance(session_info, dict):
+        session_info["actor_context"] = actor
+        message_id = getattr(message, "message_id", None)
+        if isinstance(message_id, int):
+            session_info["telegram_request_key"] = f"telegram:{actor.chat_id}:{message_id}"
+    return actor
 
 
 async def _answer_access_denied(message: types.Message) -> None:
@@ -150,20 +285,29 @@ async def _answer_service_unavailable(message: types.Message) -> None:
     await message.answer("⚠️ Семейный сервис временно недоступен. Попробуйте ещё раз через несколько минут.")
 
 
+def _escape_markdown_text(value: str) -> str:
+    for character in ("\\", "*", "_", "[", "]", "`"):
+        value = value.replace(character, f"\\{character}")
+    return value
+
+
+def _message_audio(message: types.Message) -> tuple[Any, str, str] | None:
+    voice = getattr(message, "voice", None)
+    audio = getattr(message, "audio", None)
+    if voice is not None:
+        return voice, "voice.ogg", voice.mime_type or "audio/ogg"
+    if audio is not None:
+        return (
+            audio,
+            audio.file_name or "audio.mp3",
+            audio.mime_type or "audio/mpeg",
+        )
+    return None
+
+
 async def setup_bot_commands(bot_instance: Bot) -> None:
     """Register the public Telegram command menu."""
-    commands = [
-        BotCommand(command="start", description="🌿 Запустить семейного ассистента"),
-        BotCommand(command="help", description="📖 Справка и возможности"),
-        BotCommand(command="oura", description="💍 Подключить Oura Ring"),
-        BotCommand(command="google", description="🔗 Подключить Gmail и Calendar"),
-        BotCommand(command="mail", description="✉️ Последние письма"),
-        BotCommand(command="calendar", description="📅 Ближайшие события"),
-        BotCommand(command="tasks", description="📋 Текущие задачи"),
-        BotCommand(command="shopping", description="🛒 Семейный список покупок"),
-        BotCommand(command="budget", description="💳 Расходы за месяц"),
-        BotCommand(command="health", description="🥗 Сводка здоровья и питания"),
-    ]
+    commands = [BotCommand(command=command, description=description) for command, description in TELEGRAM_COMMANDS]
     await bot_instance.set_my_commands(commands)
     logger.info("Telegram bot commands registered.")
 
@@ -208,10 +352,13 @@ async def cmd_help(message: types.Message) -> None:
         "• **/google** — подключение личных Gmail и Calendar\n"
         "• **/mail** — последние письма в личном чате\n"
         "• **/calendar** — ближайшие события в личном чате\n"
-        "• **/shopping** — семейный список покупок\n"
-        "• **/tasks** — текущие задачи\n"
+        "• **/shopping** — покупки и кнопки «Куплено»\n"
+        "• **/tasks** — задачи: завершение, название и срок\n"
         "• **/budget** — расходы текущего месяца\n"
         "• **/health** — личная сводка здоровья\n"
+        "• `/weekly_health` — история и динамика за 7 дней\n"
+        "• `/monthly_health` — история и динамика за 30 дней\n"
+        "• напишите «напомни завтра в 10:00…» — пришлю напоминание прямо в этот чат\n"
         "• отправьте фото еды для приблизительной оценки состава",
         parse_mode=ParseMode.MARKDOWN,
     )
@@ -219,22 +366,42 @@ async def cmd_help(message: types.Message) -> None:
 
 @dp.message(Command("oura"))
 async def cmd_oura_setup(message: types.Message) -> None:
+    auth_url: str | None = None
+    command_parts = (message.text or "").strip().lower().split(maxsplit=1)
+    force_reconnect = len(command_parts) == 2 and command_parts[1] in {
+        "reconnect",
+        "переподключить",
+    }
     try:
         async with unit_of_work() as session:
             actor = await _resolve_actor(session, message)
             IdentityService.validate_domain_access(actor, "oauth")
-            raw_state, _ = await OAuthStateManager.create_state(
+            connection = await HealthTools.get_oura_connection_status(
                 session,
                 user_id=actor.user_id,
-                provider="oura",
             )
-            auth_url = OuraClient.get_authorization_url(state=raw_state)
+            if force_reconnect or not connection["connected"]:
+                raw_state, _ = await OAuthStateManager.create_state(
+                    session,
+                    user_id=actor.user_id,
+                    provider="oura",
+                )
+                auth_url = OuraClient.get_authorization_url(state=raw_state)
     except PermissionDeniedError:
         await _answer_access_denied(message)
         return
     except Exception:
         logger.error("Failed to initialize Oura authorization.")
         await message.answer("❌ Не удалось начать авторизацию Oura. Попробуйте ещё раз позже.")
+        return
+
+    if auth_url is None:
+        await message.answer(
+            "💍 Oura Ring уже подключена к вашему личному аккаунту.\n"
+            "Чтобы получить сегодняшнюю сводку, отправьте /health "
+            "или спросите: «Как я сегодня спал по Oura?»\n"
+            "Если доступ был отозван, используйте /oura reconnect."
+        )
         return
 
     # The transaction containing the one-time state has committed at this point.
@@ -250,10 +417,24 @@ async def cmd_oura_setup(message: types.Message) -> None:
 
 @dp.message(Command("google"))
 async def cmd_google_setup(message: types.Message) -> None:
+    command_parts = (message.text or "").strip().lower().split(maxsplit=1)
+    force_reconnect = len(command_parts) == 2 and command_parts[1] in {
+        "reconnect",
+        "переподключить",
+    }
     try:
         async with unit_of_work() as session:
             actor = await _resolve_actor(session, message)
             IdentityService.validate_domain_access(actor, "oauth")
+            if not force_reconnect and await GoogleWorkspaceTools.is_google_connected(
+                session,
+                user_id=actor.user_id,
+            ):
+                await message.answer(
+                    "🔗 Google уже подключён к вашему личному аккаунту.\n"
+                    "Для повторного подключения используйте /google reconnect."
+                )
+                return
             raw_state, _ = await OAuthStateManager.create_state(
                 session,
                 user_id=actor.user_id,
@@ -284,7 +465,7 @@ async def cmd_mail(message: types.Message) -> None:
         async with unit_of_work() as session:
             actor = await _resolve_actor(session, message)
             IdentityService.validate_domain_access(actor, "email")
-            messages = await GoogleWorkspaceTools.list_recent_mail(
+            messages = await GoogleWorkspaceTools.list_important_mail(
                 session,
                 user_id=actor.user_id,
             )
@@ -302,8 +483,11 @@ async def cmd_mail(message: types.Message) -> None:
     if not messages:
         await message.answer("✉️ Во входящих письмах ничего не найдено.")
         return
-    lines = [f"{index}. {item['subject']}\nОт: {item['from']}" for index, item in enumerate(messages, start=1)]
-    await message.answer("✉️ Последние письма:\n\n" + "\n\n".join(lines))
+    lines = [
+        f"{index}. [{item['category']}] {item['subject']}\nОт: {item['from']}\nПочему важно: {item['reason']}"
+        for index, item in enumerate(messages, start=1)
+    ]
+    await message.answer("✉️ Важные письма за последние 30 дней:\n\n" + "\n\n".join(lines))
 
 
 @dp.message(Command("calendar"))
@@ -319,8 +503,20 @@ async def cmd_calendar(message: types.Message) -> None:
     except PermissionDeniedError:
         await _answer_access_denied(message)
         return
-    except GoogleWorkspaceError:
-        await message.answer("📅 Сначала подключите личный Google-аккаунт командой /google.")
+    except GoogleWorkspaceError as error:
+        if error.error_code == "GOOGLE_CALENDAR_SCOPE_MISSING":
+            await message.answer(
+                "📅 Почта подключена, но разрешения на Calendar в текущем токене нет. "
+                "Переподключите Google командой /google и подтвердите доступ к календарю."
+            )
+        elif error.error_code == "GOOGLE_PERMISSION_OR_API_DISABLED":
+            await message.answer(
+                "📅 Google-аккаунт подключён, но Calendar API отклонил запрос. "
+                "Проверьте, что Google Calendar API включён в Google Cloud Console, "
+                "затем выполните /google ещё раз."
+            )
+        else:
+            await message.answer("📅 Сначала подключите личный Google-аккаунт командой /google.")
         return
     except Exception as error:
         logger.error("Calendar listing failed (%s).", type(error).__name__)
@@ -334,6 +530,9 @@ async def cmd_calendar(message: types.Message) -> None:
     await message.answer("📅 Ближайшие события:\n\n" + "\n\n".join(lines))
 
 
+register_planner_handlers(dp)
+
+
 @dp.message()
 async def handle_user_message(message: types.Message) -> None:
     if message.from_user is None:
@@ -342,17 +541,52 @@ async def handle_user_message(message: types.Message) -> None:
 
     user_name = message.from_user.first_name or "Пользователь"
     text = message.text or message.caption or ""
+    if _has_known_command_mention(text):
+        global _telegram_bot_username
+        if _telegram_bot_username is None:
+            identity = await bot.me()
+            _telegram_bot_username = identity.username
+        text, addressed_to_other_bot = normalize_telegram_command(
+            text,
+            bot_username=_telegram_bot_username,
+        )
+        if addressed_to_other_bot:
+            return
     response_text: str
+    transcript: str | None = None
+    shared_response_coordinates: tuple[uuid.UUID, int] | None = None
 
     try:
         async with unit_of_work() as session:
             actor = await _resolve_actor(session, message)
-            domain = MainOrchestrator.domain_for_message(
-                text,
-                has_photo=bool(message.photo),
-                has_document=bool(message.document),
-            )
-            IdentityService.validate_domain_access(actor, domain)
+
+            audio_attachment = _message_audio(message)
+            if audio_attachment is not None:
+                audio, filename, mime_type = audio_attachment
+                if audio.duration > settings.AUDIO_MAX_DURATION_SECONDS:
+                    raise AudioTranscriptionError(
+                        "The audio message is too long.",
+                        error_code="AUDIO_TOO_LONG",
+                    )
+                if audio.file_size is not None and audio.file_size > settings.AUDIO_MAX_BYTES:
+                    raise AudioTranscriptionError(
+                        "The audio message is too large.",
+                        error_code="AUDIO_TOO_LARGE",
+                    )
+                file_info = await bot.get_file(audio.file_id)
+                if not file_info.file_path:
+                    raise AudioTranscriptionError(
+                        "Telegram returned an empty audio path.",
+                        error_code="TELEGRAM_AUDIO_UNAVAILABLE",
+                    )
+                audio_buffer = io.BytesIO()
+                await bot.download_file(file_info.file_path, destination=audio_buffer)
+                transcript = await OpenAITranscriptionClient.transcribe(
+                    audio_buffer.getvalue(),
+                    filename=filename,
+                    mime_type=mime_type,
+                )
+                text = transcript
 
             photo_bytes = None
             if message.photo:
@@ -364,6 +598,46 @@ async def handle_user_message(message: types.Message) -> None:
                 await bot.download_file(file_info.file_path, destination=photo_buffer)
                 photo_bytes = photo_buffer.getvalue()
 
+            shared_context_enabled = settings.SHARED_CHAT_MEMORY_ENABLED and actor.chat_type in {"group", "supergroup"}
+
+            domain = MainOrchestrator.domain_for_message(
+                text,
+                has_photo=bool(message.photo),
+                has_document=bool(message.document),
+            )
+            if shared_context_enabled and message.photo and domain == "health":
+                # A food photo intentionally posted in the authorized family
+                # group may be analyzed, but it is not added to personal health
+                # history or used as private context.
+                domain = "general"
+            if domain == "calendar" and actor.chat_type != "private":
+                await message.answer(
+                    "📅 Запись в личный Google Calendar доступна в личном чате с ботом. "
+                    "Отправьте эту просьбу мне в личку. Событие пока не создано."
+                )
+                return
+            IdentityService.validate_domain_access(actor, domain)
+            if shared_context_enabled:
+                if transcript is not None:
+                    message_type = "voice"
+                elif message.photo:
+                    message_type = "photo"
+                elif message.document:
+                    message_type = "document"
+                else:
+                    message_type = "text"
+                await SharedMemoryTools.record_message(
+                    session,
+                    household_id=actor.household_id,
+                    author_user_id=actor.user_id,
+                    telegram_chat_id=actor.chat_id,
+                    telegram_message_id=getattr(message, "message_id", None),
+                    role="user",
+                    author_name=user_name,
+                    message_type=message_type,
+                    content=text or f"[{message_type}]",
+                )
+
             response_text = await MainOrchestrator.process_user_message(
                 session=session,
                 user_id=actor.user_id,
@@ -371,9 +645,29 @@ async def handle_user_message(message: types.Message) -> None:
                 user_name=user_name,
                 message_text=text,
                 photo_bytes=photo_bytes,
+                timezone_name=actor.timezone,
+                telegram_chat_id=actor.chat_id,
+                telegram_message_id=getattr(message, "message_id", None),
+                shared_context_enabled=shared_context_enabled,
+                pending_actions_enabled=True,
             )
+            if shared_context_enabled:
+                shared_response_coordinates = (
+                    actor.household_id,
+                    actor.chat_id,
+                )
     except PermissionDeniedError:
         await _answer_access_denied(message)
+        return
+    except AudioTranscriptionError as error:
+        if error.error_code in {"AUDIO_TOO_LONG", "AUDIO_TOO_LARGE"}:
+            await message.answer("🎙 Голосовое слишком длинное или большое. Отправьте запись короче 5 минут.")
+        elif error.error_code == "OPENAI_NOT_CONFIGURED":
+            await message.answer("🎙 Распознавание голоса пока не настроено: отсутствует OPENAI_API_KEY.")
+        elif error.error_code == "AUDIO_NO_SPEECH":
+            await message.answer("🎙 Не смог разобрать речь. Попробуйте записать голосовое ещё раз.")
+        else:
+            await message.answer("🎙 Сейчас не удалось распознать голосовое. Попробуйте немного позже.")
         return
     except Exception:
         # Never echo provider payloads, authorization codes, or traceback text.
@@ -382,13 +676,64 @@ async def handle_user_message(message: types.Message) -> None:
         return
 
     # A success response is sent only after the Unit of Work has committed.
-    await message.answer(response_text, parse_mode=ParseMode.MARKDOWN)
+    confirmation_markup = _confirmation_copy_markup(response_text)
+    response_text = re.sub(r"\n`категория [A-Za-z0-9_-]+ \d+`", "", response_text)
+    if confirmation_markup is None:
+        sent_message = await message.answer(response_text, parse_mode=ParseMode.MARKDOWN)
+    else:
+        sent_message = await message.answer(
+            response_text,
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=confirmation_markup,
+        )
+    if shared_response_coordinates is not None:
+        household_id, chat_id = shared_response_coordinates
+        try:
+            async with unit_of_work() as session:
+                await SharedMemoryTools.record_message(
+                    session,
+                    household_id=household_id,
+                    author_user_id=None,
+                    telegram_chat_id=chat_id,
+                    telegram_message_id=getattr(sent_message, "message_id", None),
+                    role="assistant",
+                    author_name="Family",
+                    message_type="text",
+                    content=response_text,
+                )
+        except Exception as error:
+            logger.warning(
+                "Telegram response was delivered but shared context persistence failed (%s).",
+                type(error).__name__,
+            )
+            sent_message_id = getattr(sent_message, "message_id", None)
+            if sent_message_id is None:
+                logger.error("Shared-context retry outbox skipped because Telegram message ID is missing.")
+                return
+            try:
+                async with unit_of_work() as retry_session:
+                    await SharedMemoryTools.queue_message_for_retry(
+                        retry_session,
+                        household_id=household_id,
+                        telegram_chat_id=chat_id,
+                        telegram_message_id=sent_message_id,
+                        author_name="Family",
+                        message_type="text",
+                        content=response_text,
+                    )
+            except Exception as queue_error:
+                logger.error(
+                    "Shared-context retry outbox persistence failed (%s).",
+                    type(queue_error).__name__,
+                )
 
 
 async def start_bot() -> None:
+    global _telegram_bot_username
     polling_health.mark_starting()
     logger.info("Starting Telegram polling.")
     identity = await bot.get_me()
+    _telegram_bot_username = identity.username
     logger.info(
         "Telegram bot identity verified: @%s (id=%d).",
         identity.username or "<none>",
