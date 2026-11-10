@@ -150,10 +150,12 @@ it does not validate live providers or replace PostgreSQL migration checks.
 pytest with an 80% coverage threshold, Bandit, dependency auditing, Docker/Trivy,
 and Gitleaks.
 
-Recorded candidate validation: **558 tests passed, one skipped**; the separate
-PostgreSQL migration module passed all three tests. Branch-inclusive coverage
-was **82.69%**. See the validation report for versions and scoped scanner
-exceptions. Dependency ranges are not a lockfile: rebuilds need fresh checks.
+After the task-negation fix, the local offline suite recorded **561 tests passed,
+one skipped**. The earlier container artifact recorded 558 passed, one skipped,
+and **82.69%** branch-inclusive coverage; its separate PostgreSQL migration module
+passed all three tests. These results describe different validation runs. See the
+[validation report](docs/operations/RELEASE_VALIDATION.md) for versions and scoped
+scanner exceptions. Dependency ranges are not a lockfile: rebuilds need fresh checks.
 
 ## Repository guide
 
@@ -162,6 +164,8 @@ exceptions. Dependency ranges are not a lockfile: rebuilds need fresh checks.
 - `app/domains/`, `alembic/`: models and schema migrations.
 - `tests/`: regression and integration tests.
 - `docs/operations/`: provenance, validation, Sheets operations, and releases.
+- [Repository maintenance status](docs/operations/REPOSITORY_STATUS.md): remaining
+  pull requests, release dependencies, and historical privacy limitations.
 - [CONTEXT.md](CONTEXT.md), [REQ.md](REQ.md), [STATE.md](STATE.md),
   [STATUS.md](STATUS.md): product vision and historical implementation records.
 
