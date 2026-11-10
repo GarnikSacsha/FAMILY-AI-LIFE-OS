@@ -1,7 +1,7 @@
 {
   "generated_at_utc": "2026-11-09T16:53:51.840767+00:00",
-  "repository": "C:\\Users\\\u0414\u0435\u043d\u0438\u0441\\Desktop\\\u0412\u0441\u044f\u043a\u043e\u0435 \u0432\u0430\u0439\u0431\u043a\u043e\u0434\u0438\u043d\u0433\\\u041f\u0440\u043e\u0441\u0442\u043e \u0442\u0435\u0441\u0442 \u0432\u0441\u044f\u043a\u043e\u0435\\FAMILY-AI-LIFE-OS",
-  "local_main_worktree": "C:\\Users\\\u0414\u0435\u043d\u0438\u0441\\Documents\\Codex\\2026-10-16\\family-life-os-ide-family-life\\work\\main-integration\\main",
+  "repository": "<WORKSPACE>/FAMILY-AI-LIFE-OS",
+  "local_main_worktree": "<LEGACY_MAIN_WORKTREE>",
   "scope": "Local source/build files and Git metadata only; no fetch or live service access.",
   "limitations": [
     "Local main and origin refs do not establish the deployed version.",
@@ -10,7 +10,7 @@
   ],
   "directories": [
     {
-      "path": "C:\\Users\\\u0414\u0435\u043d\u0438\u0441\\Desktop\\\u0412\u0441\u044f\u043a\u043e\u0435 \u0432\u0430\u0439\u0431\u043a\u043e\u0434\u0438\u043d\u0433\\\u041f\u0440\u043e\u0441\u0442\u043e \u0442\u0435\u0441\u0442 \u0432\u0441\u044f\u043a\u043e\u0435\\FAMILY-AI-LIFE-OS",
+      "path": "<WORKSPACE>/FAMILY-AI-LIFE-OS",
       "runtime_file_count": 71,
       "source_sha256_lf": {
         "alembic/env.py": "6bb5dd78aad16d8155deb616ceae1e35359782800d6245ef7d00143234213c8a",
@@ -415,7 +415,7 @@
       }
     },
     {
-      "path": "C:\\Users\\\u0414\u0435\u043d\u0438\u0441\\Desktop\\\u0412\u0441\u044f\u043a\u043e\u0435 \u0432\u0430\u0439\u0431\u043a\u043e\u0434\u0438\u043d\u0433\\\u041f\u0440\u043e\u0441\u0442\u043e \u0442\u0435\u0441\u0442 \u0432\u0441\u044f\u043a\u043e\u0435\\FAMILY-AI-LIFE-OS-audit-8059665",
+      "path": "<WORKSPACE>/FAMILY-AI-LIFE-OS-audit-8059665",
       "runtime_file_count": 29,
       "source_sha256_lf": {
         "alembic/env.py": "bcc6734fb913ec40fb967aad8277181a2b995e935a47305d424f19e7a7fbcc6a",
@@ -523,7 +523,7 @@
       }
     },
     {
-      "path": "C:\\Users\\\u0414\u0435\u043d\u0438\u0441\\Desktop\\\u0412\u0441\u044f\u043a\u043e\u0435 \u0432\u0430\u0439\u0431\u043a\u043e\u0434\u0438\u043d\u0433\\\u041f\u0440\u043e\u0441\u0442\u043e \u0442\u0435\u0441\u0442 \u0432\u0441\u044f\u043a\u043e\u0435\\FAMILY-AI-LIFE-OS-expense-release",
+      "path": "<WORKSPACE>/FAMILY-AI-LIFE-OS-expense-release",
       "runtime_file_count": 66,
       "source_sha256_lf": {
         "alembic/env.py": "6bb5dd78aad16d8155deb616ceae1e35359782800d6245ef7d00143234213c8a",
@@ -611,7 +611,7 @@
       }
     },
     {
-      "path": "C:\\Users\\\u0414\u0435\u043d\u0438\u0441\\Desktop\\\u0412\u0441\u044f\u043a\u043e\u0435 \u0432\u0430\u0439\u0431\u043a\u043e\u0434\u0438\u043d\u0433\\\u041f\u0440\u043e\u0441\u0442\u043e \u0442\u0435\u0441\u0442 \u0432\u0441\u044f\u043a\u043e\u0435\\FAMILY-AI-LIFE-OS-oura-explanation-release",
+      "path": "<WORKSPACE>/FAMILY-AI-LIFE-OS-oura-explanation-release",
       "runtime_file_count": 71,
       "source_sha256_lf": {
         "alembic/env.py": "6bb5dd78aad16d8155deb616ceae1e35359782800d6245ef7d00143234213c8a",
@@ -715,7 +715,7 @@
       }
     },
     {
-      "path": "C:\\Users\\\u0414\u0435\u043d\u0438\u0441\\Desktop\\\u0412\u0441\u044f\u043a\u043e\u0435 \u0432\u0430\u0439\u0431\u043a\u043e\u0434\u0438\u043d\u0433\\\u041f\u0440\u043e\u0441\u0442\u043e \u0442\u0435\u0441\u0442 \u0432\u0441\u044f\u043a\u043e\u0435\\FAMILY-AI-LIFE-OS-oura-fix",
+      "path": "<WORKSPACE>/FAMILY-AI-LIFE-OS-oura-fix",
       "runtime_file_count": 72,
       "source_sha256_lf": {
         "alembic/env.py": "6bb5dd78aad16d8155deb616ceae1e35359782800d6245ef7d00143234213c8a",
@@ -988,7 +988,7 @@
       }
     },
     {
-      "path": "C:\\Users\\\u0414\u0435\u043d\u0438\u0441\\Desktop\\\u0412\u0441\u044f\u043a\u043e\u0435 \u0432\u0430\u0439\u0431\u043a\u043e\u0434\u0438\u043d\u0433\\\u041f\u0440\u043e\u0441\u0442\u043e \u0442\u0435\u0441\u0442 \u0432\u0441\u044f\u043a\u043e\u0435\\FAMILY-AI-LIFE-OS-oura-release",
+      "path": "<WORKSPACE>/FAMILY-AI-LIFE-OS-oura-release",
       "runtime_file_count": 70,
       "source_sha256_lf": {
         "alembic/env.py": "6bb5dd78aad16d8155deb616ceae1e35359782800d6245ef7d00143234213c8a",
@@ -1090,7 +1090,7 @@
       }
     },
     {
-      "path": "C:\\Users\\\u0414\u0435\u043d\u0438\u0441\\Desktop\\\u0412\u0441\u044f\u043a\u043e\u0435 \u0432\u0430\u0439\u0431\u043a\u043e\u0434\u0438\u043d\u0433\\\u041f\u0440\u043e\u0441\u0442\u043e \u0442\u0435\u0441\u0442 \u0432\u0441\u044f\u043a\u043e\u0435\\FAMILY-AI-LIFE-OS-oura-strict-release",
+      "path": "<WORKSPACE>/FAMILY-AI-LIFE-OS-oura-strict-release",
       "runtime_file_count": 71,
       "source_sha256_lf": {
         "alembic/env.py": "6bb5dd78aad16d8155deb616ceae1e35359782800d6245ef7d00143234213c8a",
@@ -1195,7 +1195,7 @@
       }
     },
     {
-      "path": "C:\\Users\\\u0414\u0435\u043d\u0438\u0441\\Desktop\\\u0412\u0441\u044f\u043a\u043e\u0435 \u0432\u0430\u0439\u0431\u043a\u043e\u0434\u0438\u043d\u0433\\\u041f\u0440\u043e\u0441\u0442\u043e \u0442\u0435\u0441\u0442 \u0432\u0441\u044f\u043a\u043e\u0435\\FAMILY-AI-LIFE-OS-public-pages-release",
+      "path": "<WORKSPACE>/FAMILY-AI-LIFE-OS-public-pages-release",
       "runtime_file_count": 67,
       "source_sha256_lf": {
         "alembic/env.py": "6bb5dd78aad16d8155deb616ceae1e35359782800d6245ef7d00143234213c8a",
@@ -1282,7 +1282,7 @@
       }
     },
     {
-      "path": "C:\\Users\\\u0414\u0435\u043d\u0438\u0441\\Desktop\\\u0412\u0441\u044f\u043a\u043e\u0435 \u0432\u0430\u0439\u0431\u043a\u043e\u0434\u0438\u043d\u0433\\\u041f\u0440\u043e\u0441\u0442\u043e \u0442\u0435\u0441\u0442 \u0432\u0441\u044f\u043a\u043e\u0435\\FAMILY-AI-LIFE-OS\\.worktrees\\health-platform",
+      "path": "<WORKSPACE>/FAMILY-AI-LIFE-OS/.worktrees/health-platform",
       "runtime_file_count": 70,
       "source_sha256_lf": {
         "alembic/env.py": "6bb5dd78aad16d8155deb616ceae1e35359782800d6245ef7d00143234213c8a",
@@ -1563,7 +1563,7 @@
       }
     },
     {
-      "path": "C:\\Users\\\u0414\u0435\u043d\u0438\u0441\\Desktop\\\u0412\u0441\u044f\u043a\u043e\u0435 \u0432\u0430\u0439\u0431\u043a\u043e\u0434\u0438\u043d\u0433\\\u041f\u0440\u043e\u0441\u0442\u043e \u0442\u0435\u0441\u0442 \u0432\u0441\u044f\u043a\u043e\u0435\\FAMILY-AI-LIFE-OS\\.worktrees\\telegram-context-repro",
+      "path": "<WORKSPACE>/FAMILY-AI-LIFE-OS/.worktrees/telegram-context-repro",
       "runtime_file_count": 59,
       "source_sha256_lf": {
         "alembic/env.py": "6bb5dd78aad16d8155deb616ceae1e35359782800d6245ef7d00143234213c8a",
@@ -1696,7 +1696,7 @@
       }
     },
     {
-      "path": "C:\\Users\\\u0414\u0435\u043d\u0438\u0441\\Desktop\\\u0412\u0441\u044f\u043a\u043e\u0435 \u0432\u0430\u0439\u0431\u043a\u043e\u0434\u0438\u043d\u0433\\\u041f\u0440\u043e\u0441\u0442\u043e \u0442\u0435\u0441\u0442 \u0432\u0441\u044f\u043a\u043e\u0435\\family-video-tools",
+      "path": "<LOCAL_PATH>/family-video-tools",
       "runtime_file_count": 0,
       "source_sha256_lf": {},
       "kind": "non_runtime_directory",
@@ -1774,7 +1774,7 @@
       }
     },
     {
-      "path": "C:\\Users\\\u0414\u0435\u043d\u0438\u0441\\Documents\\Codex\\2026-10-16\\family-life-os-ide-family-life\\work\\main-integration\\main",
+      "path": "<LEGACY_MAIN_WORKTREE>",
       "runtime_file_count": 66,
       "source_sha256_lf": {
         "alembic/env.py": "6bb5dd78aad16d8155deb616ceae1e35359782800d6245ef7d00143234213c8a",
@@ -1937,5 +1937,6 @@
         "different": []
       }
     }
-  ]
+  ],
+  "privacy_note": "Machine-specific absolute paths were replaced by placeholders on 2026-11-10; source hashes describe the original snapshot."
 }

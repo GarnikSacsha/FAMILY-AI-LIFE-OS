@@ -58,7 +58,7 @@
 Ветка `main` находится **за пределами этой рабочей папки**:
 
 ```text
-C:\Users\Денис\Documents\Codex\2026-10-16\family-life-os-ide-family-life\work\main-integration\main
+<LEGACY_MAIN_WORKTREE>
 ```
 
 Её HEAD — `5a3f9bc` от 16 октября; локальный `origin/main` — `5fc8b4f`.
@@ -119,10 +119,10 @@ rtk proxy ..\FAMILY-AI-LIFE-OS\.venv\Scripts\python.exe -B -X utf8 scripts/works
 ## Основания
 
 - `git worktree list`, `git status`, локальные ветки и сравнение исходников.
-- [Прежняя выкладка публичных страниц](../../../FAMILY-AI-LIFE-OS/outputs/public-pages-deployment.md).
-- [Подготовка Oura-пакета](../../../FAMILY-AI-LIFE-OS-oura-fix/outputs/prepare_oura_release.py).
-- [История strict-релиза](../../../FAMILY-AI-LIFE-OS-oura-fix/outputs/oura-strict-format-fix.md).
+- Локальные диагностические материалы сохранены вне публикуемого дерева Git.
 - Railway: чтение последних трёх deployments 9 ноября 2026 года.
 
 Пути к соседним каталогам из этого документа зависят от сохранения текущей
 структуры. При будущем переносе нужно обновить ссылки.
+
+Абсолютные пути к личным каталогам заменены обозначениями. Текущий путь worktree можно получить через `git worktree list`. Старые локальные отчёты outputs не публикуются.
