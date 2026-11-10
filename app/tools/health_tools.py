@@ -17,6 +17,10 @@ from app.security.token_cipher import TokenCipher, get_token_cipher
 class HealthIntegrationError(Exception):
     """Safe health-integration failure without tokens or provider response bodies."""
 
+    def __init__(self, message: str, *, user_message: str | None = None):
+        super().__init__(message)
+        self.user_message = user_message or "Не удалось загрузить данные Oura. Попробуйте позже."
+
 
 class HealthTools:
     """Deterministic health domain tools adhering to Unit of Work (no explicit commit inside tools)."""

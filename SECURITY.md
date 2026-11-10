@@ -13,9 +13,9 @@
 ## 2. Identity & Access Guard (`IdentityService`)
 
 - **Actor Context Resolution**: Maps Telegram User ID (`BigInteger`) strictly to internal DB `UUID` (`user_id` and `household_id`).
-- **Allowlist Guard**: Only authorized Telegram IDs (Denys & Oleksandra) can communicate with the bot.
+- **Allowlist Guard**: Only authorized Telegram IDs (two configured household members) can communicate with the bot.
 - **Chat Policy Enforcement**:
-  - `private` chats: Restricted strictly to registered Denys & Oleksandra IDs.
+  - `private` chats: Restricted strictly to the two registered household member IDs.
   - `group`/`supergroup`: Restricted strictly to matching `FAMILY_GROUP_CHAT_ID`.
   - Sensitive domains (`health`, `oauth`, `medical_docs`, `personal_memory`): Enforced to operate **exclusively in private 1-on-1 chats**.
 

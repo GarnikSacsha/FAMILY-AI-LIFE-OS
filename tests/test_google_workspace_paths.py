@@ -690,7 +690,7 @@ async def test_google_telegram_commands_success_empty_and_access_errors():
         patch("app.telegram.bot._resolve_actor", new=AsyncMock(return_value=actor)),
         patch(
             "app.telegram.bot.GoogleWorkspaceTools.list_upcoming_events",
-            new=AsyncMock(side_effect=GoogleWorkspaceError("not connected")),
+            new=AsyncMock(side_effect=GoogleWorkspaceError("not connected", error_code="GOOGLE_NOT_CONNECTED")),
         ),
     ):
         await telegram_module.cmd_calendar(disconnected)
