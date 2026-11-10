@@ -1,5 +1,6 @@
 import base64
 import binascii
+from datetime import datetime
 from typing import Literal
 
 from pydantic import AliasChoices, Field, SecretStr, field_validator, model_validator
@@ -57,6 +58,10 @@ class Settings(BaseSettings):
     # AI & LLM Providers
     OPENAI_API_KEY: str | None = None
     GEMINI_API_KEY: str | None = None
+    AUDIO_TRANSCRIPTION_MODEL: str = "gpt-4o-mini-transcribe"
+    AUDIO_TRANSCRIPTION_TIMEOUT_SECONDS: float = 60.0
+    AUDIO_MAX_DURATION_SECONDS: int = 300
+    AUDIO_MAX_BYTES: int = 20 * 1024 * 1024
 
     # Model Assignments
     OPENAI_FAST_MODEL: str = "gpt-5.6-terra"
@@ -77,6 +82,26 @@ class Settings(BaseSettings):
     GOOGLE_SHEETS_SPREADSHEET_ID: str | None = None
     GOOGLE_CREDENTIALS_JSON_PATH: str | None = None
     GOOGLE_CREDENTIALS_JSON: SecretStr | None = None
+    GOOGLE_SHEETS_RANGE: str = "A:I"
+    # "ledger" preserves the original append-only projection. "monthly_budget"
+    # projects UAH expenses into the configured month grid and keeps a hidden
+    # idempotency ledger in the same spreadsheet.
+    GOOGLE_SHEETS_LAYOUT: Literal["ledger", "monthly_budget"] = "ledger"
+    GOOGLE_SHEETS_PERIOD: str | None = None
+    GOOGLE_SHEETS_MONTHLY_SHEET_ID: int = 0
+    GOOGLE_SHEETS_OPERATION_TIMEOUT_SECONDS: float = 45.0
+
+    # Shared family-chat memory and proactive summaries
+    SHARED_CHAT_MEMORY_ENABLED: bool = True
+    CHAT_SUMMARY_IDLE_MINUTES: int = 30
+    CHAT_SUMMARY_POLL_SECONDS: float = 30.0
+    CHAT_SUMMARY_DAILY_HOUR: int = 21
+    CHAT_SUMMARY_MAX_MESSAGES: int = 100
+
+    # Google user OAuth (personal Gmail and Calendar accounts)
+    GOOGLE_OAUTH_CLIENT_ID: str | None = None
+    GOOGLE_OAUTH_CLIENT_SECRET: SecretStr | None = None
+    GOOGLE_OAUTH_REDIRECT_URI: str = "http://localhost:8000/oauth/google/callback"
 
     # S3 Object Storage
     S3_ENDPOINT_URL: str | None = None
@@ -121,8 +146,59 @@ class Settings(BaseSettings):
             raise ValueError("OURA_SCOPES contains unsupported scopes.")
         return " ".join(scopes)
 
+    @field_validator("CHAT_SUMMARY_IDLE_MINUTES")
+    @classmethod
+    def validate_summary_idle_minutes(cls, value: int) -> int:
+        if value < 5 or value > 24 * 60:
+            raise ValueError("CHAT_SUMMARY_IDLE_MINUTES must be between 5 and 1440.")
+        return value
+
+    @field_validator("GOOGLE_SHEETS_OPERATION_TIMEOUT_SECONDS")
+    @classmethod
+    def validate_sheets_operation_timeout(cls, value: float) -> float:
+        if value < 5 or value > 300:
+            raise ValueError("GOOGLE_SHEETS_OPERATION_TIMEOUT_SECONDS must be between 5 and 300.")
+        return value
+
+    @field_validator("GOOGLE_SHEETS_PERIOD")
+    @classmethod
+    def validate_sheets_period(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        period = value.strip()
+        try:
+            parsed = datetime.strptime(period, "%Y-%m")
+        except ValueError as exc:
+            raise ValueError("GOOGLE_SHEETS_PERIOD must use YYYY-MM.") from exc
+        if parsed.strftime("%Y-%m") != period:
+            raise ValueError("GOOGLE_SHEETS_PERIOD must use YYYY-MM.")
+        return period
+
+    @field_validator("CHAT_SUMMARY_POLL_SECONDS")
+    @classmethod
+    def validate_summary_poll_seconds(cls, value: float) -> float:
+        if value < 5 or value > 3600:
+            raise ValueError("CHAT_SUMMARY_POLL_SECONDS must be between 5 and 3600.")
+        return value
+
+    @field_validator("CHAT_SUMMARY_DAILY_HOUR")
+    @classmethod
+    def validate_summary_daily_hour(cls, value: int) -> int:
+        if value < 0 or value > 23:
+            raise ValueError("CHAT_SUMMARY_DAILY_HOUR must be between 0 and 23.")
+        return value
+
+    @field_validator("CHAT_SUMMARY_MAX_MESSAGES")
+    @classmethod
+    def validate_summary_max_messages(cls, value: int) -> int:
+        if value < 10 or value > 500:
+            raise ValueError("CHAT_SUMMARY_MAX_MESSAGES must be between 10 and 500.")
+        return value
+
     @model_validator(mode="after")
     def validate_production_configuration(self) -> "Settings":
+        if self.GOOGLE_SHEETS_LAYOUT == "monthly_budget" and self.GOOGLE_SHEETS_PERIOD is None:
+            raise ValueError("GOOGLE_SHEETS_PERIOD is required for the monthly_budget layout.")
         if self.ENVIRONMENT != "production":
             return self
 
@@ -160,6 +236,24 @@ class Settings(BaseSettings):
             raise ValueError("OURA_REDIRECT_URI must use HTTPS in production.")
         if not redirect_uri.endswith("/oauth/oura/callback"):
             raise ValueError("OURA_REDIRECT_URI must end with /oauth/oura/callback.")
+
+        google_oauth_values = (
+            self.GOOGLE_OAUTH_CLIENT_ID,
+            self.GOOGLE_OAUTH_CLIENT_SECRET,
+        )
+        if any(value is not None for value in google_oauth_values):
+            if not self.GOOGLE_OAUTH_CLIENT_ID or not self.GOOGLE_OAUTH_CLIENT_ID.strip():
+                raise ValueError("GOOGLE_OAUTH_CLIENT_ID is required when Google OAuth is configured.")
+            if (
+                self.GOOGLE_OAUTH_CLIENT_SECRET is None
+                or not self.GOOGLE_OAUTH_CLIENT_SECRET.get_secret_value().strip()
+            ):
+                raise ValueError("GOOGLE_OAUTH_CLIENT_SECRET is required when Google OAuth is configured.")
+            google_redirect_uri = self.GOOGLE_OAUTH_REDIRECT_URI.strip().lower()
+            if not google_redirect_uri.startswith("https://"):
+                raise ValueError("GOOGLE_OAUTH_REDIRECT_URI must use HTTPS in production.")
+            if not google_redirect_uri.endswith("/oauth/google/callback"):
+                raise ValueError("GOOGLE_OAUTH_REDIRECT_URI must end with /oauth/google/callback.")
         return self
 
     model_config = SettingsConfigDict(

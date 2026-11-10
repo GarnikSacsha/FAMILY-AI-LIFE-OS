@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "status": "FIX_PROVEN",
+  "reason": "The multiline expense and replay-idempotency regressions changed from failing to passing, and the full suite passed.",
+  "before": {
+    "command": ".\\.venv\\Scripts\\python.exe -m pytest tests/test_multiline_expenses.py tests/test_finance_input_regressions.py -q",
+    "exit_code": 1,
+    "result": "2 failed",
+    "signals": [
+      "Only 3900.0 was sent to Finance Agent instead of six line amounts.",
+      "A replayed manual expense returned SUCCESS instead of DUPLICATE."
+    ]
+  },
+  "after": {
+    "targeted_command": ".\\.venv\\Scripts\\python.exe -m pytest tests/test_multiline_expenses.py tests/test_finance_input_regressions.py tests/test_orchestrator_agent_regressions.py -q",
+    "targeted_exit_code": 0,
+    "targeted_result": "5 passed",
+    "full_command": ".\\.venv\\Scripts\\python.exe -m pytest -q",
+    "full_exit_code": 0,
+    "full_result": "214 passed, 1 skipped, 1 warning",
+    "mypy": "Success: no issues found in 43 source files",
+    "ruff_changed_files": "All checks passed"
+  },
+  "changed_files": [
+    "app/orchestration/orchestrator.py",
+    "app/agents/finance/agent.py",
+    "app/telegram/bot.py",
+    "tests/test_multiline_expenses.py",
+    "tests/test_finance_input_regressions.py"
+  ],
+  "known_unrelated_check": "Full-project Ruff still reports the pre-existing E501 at app/tools/mail_filter.py:148."
+}
